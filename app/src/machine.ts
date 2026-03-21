@@ -5,6 +5,18 @@ import { and, assign, not, setup, type SnapshotFrom, stateIn } from "xstate"
 // Types
 // ============================================================
 
+// Injury types per SWADE Injury Table (2d6)
+export type InjuryType =
+  | "unmentionables" // 2
+  | "arm" // 3-4
+  | "guts_broken" // 5-9, sub 1-2: Agility reduced
+  | "guts_battered" // 5-9, sub 3-4: Vigor reduced
+  | "guts_busted" // 5-9, sub 5-6: Strength reduced
+  | "leg" // 10-11
+  | "head_scar" // 12, sub 1-3: Ugly hindrance
+  | "head_blinded" // 12, sub 4-5: One Eye/Blind
+  | "head_brain_damage" // 12, sub 6: Smarts reduced
+
 export interface SavageContext {
   wounds: number
   distractedTimer: number // -1 = inactive, >= 0 = turns until expiry
@@ -14,10 +26,11 @@ export interface SavageContext {
   ownTurn: boolean // mirrors turnPhase state for use in guards/actions
   onHold: boolean // mirrors turnPhase onHold state for use in guards/actions
   interruptedSuccessfully: boolean // true when last interrupt roll succeeded (acts before interruptee)
+  injuries: InjuryType[] // permanent injuries from Injury Table
 }
 
 export type SavageEvent =
-  | { type: "TAKE_DAMAGE"; margin: number; soakSuccesses: number; incapRoll: number }
+  | { type: "TAKE_DAMAGE"; margin: number; soakSuccesses: number; incapRoll: number; injuryRoll?: number }
   | { type: "START_OF_TURN"; vigorRoll: number; spiritRoll: number }
   | { type: "END_OF_TURN" }
   | { type: "SPEND_BENNY" }
@@ -67,6 +80,26 @@ function asHeal(event: SavageEvent) {
 }
 function asInterrupt(event: SavageEvent) {
   return event as Extract<SavageEvent, { type: "INTERRUPT" }>
+}
+
+// Resolve 2d6 Injury Table roll to InjuryType
+// injuryRoll encodes both 2d6 and sub-roll: tableRoll * 10 + subRoll
+// e.g., 52 = table roll 5, sub roll 2 → guts_broken
+export function resolveInjury(injuryRoll: number): InjuryType {
+  const tableRoll = Math.floor(injuryRoll / 10)
+  const subRoll = injuryRoll % 10
+  if (tableRoll <= 2) return "unmentionables"
+  if (tableRoll <= 4) return "arm"
+  if (tableRoll <= 9) {
+    if (subRoll <= 2) return "guts_broken"
+    if (subRoll <= 4) return "guts_battered"
+    return "guts_busted"
+  }
+  if (tableRoll <= 11) return "leg"
+  // 12
+  if (subRoll <= 3) return "head_scar"
+  if (subRoll <= 5) return "head_blinded"
+  return "head_brain_damage"
 }
 function asEscape(event: SavageEvent) {
   return event as Extract<SavageEvent, { type: "ESCAPE_ATTEMPT" }>
@@ -197,7 +230,12 @@ export const savageMachine = setup({
     setOnHold: assign({ onHold: true, ownTurn: false }),
     clearOnHold: assign({ onHold: false }),
     setInterruptSuccess: assign({ interruptedSuccessfully: true }),
-    setInterruptFail: assign({ interruptedSuccessfully: false })
+    setInterruptFail: assign({ interruptedSuccessfully: false }),
+    appendInjury: assign(({ context, event }) => {
+      const roll = asDamage(event).injuryRoll ?? 0
+      if (roll === 0) return {}
+      return { injuries: [...context.injuries, resolveInjury(roll)] }
+    })
   }
 }).createMachine({
   id: "savage",
@@ -210,7 +248,8 @@ export const savageMachine = setup({
     maxWounds: (input.isWildCard ?? true) ? 3 : 1,
     ownTurn: false,
     onHold: false,
-    interruptedSuccessfully: false
+    interruptedSuccessfully: false,
+    injuries: []
   }),
   states: {
     alive: {
@@ -238,12 +277,12 @@ export const savageMachine = setup({
                       {
                         guard: and(["exceedsMax", "incapFail"]),
                         target: "#savage.alive.damageTrack.incapacitated.bleedingOut",
-                        actions: ["setWoundsToMax"]
+                        actions: ["setWoundsToMax", "appendInjury"]
                       },
                       {
                         guard: and(["exceedsMax", "incapSuccess"]),
                         target: "#savage.alive.damageTrack.incapacitated.stable",
-                        actions: ["setWoundsToMax"]
+                        actions: ["setWoundsToMax", "appendInjury"]
                       },
                       { guard: "allSoaked" }, // All soaked from unshaken — no effect
                       { guard: "woundsNotExceedMax", target: "shaken", actions: ["addWounds"] },
@@ -265,12 +304,12 @@ export const savageMachine = setup({
                       {
                         guard: and(["exceedsMaxShaken", "incapFail"]),
                         target: "#savage.alive.damageTrack.incapacitated.bleedingOut",
-                        actions: ["setWoundsToMax"]
+                        actions: ["setWoundsToMax", "appendInjury"]
                       },
                       {
                         guard: and(["exceedsMaxShaken", "incapSuccess"]),
                         target: "#savage.alive.damageTrack.incapacitated.stable",
-                        actions: ["setWoundsToMax"]
+                        actions: ["setWoundsToMax", "appendInjury"]
                       },
                       { guard: and(["allSoakedShaken", "hasWounds"]), target: "wounded" }, // Soak clears shaken, wounds remain
                       { guard: "allSoakedShaken", target: "unshaken" }, // Soak clears shaken, no wounds
@@ -306,12 +345,12 @@ export const savageMachine = setup({
                       {
                         guard: and(["exceedsMax", "incapFail"]),
                         target: "#savage.alive.damageTrack.incapacitated.bleedingOut",
-                        actions: ["setWoundsToMax"]
+                        actions: ["setWoundsToMax", "appendInjury"]
                       },
                       {
                         guard: and(["exceedsMax", "incapSuccess"]),
                         target: "#savage.alive.damageTrack.incapacitated.stable",
-                        actions: ["setWoundsToMax"]
+                        actions: ["setWoundsToMax", "appendInjury"]
                       },
                       { guard: "allSoaked" }, // All soaked — stay wounded (no shaken to clear)
                       { guard: "woundsNotExceedMax", target: "shaken", actions: ["addWounds"] },
@@ -624,8 +663,7 @@ export const savageMachine = setup({
                 },
                 APPLY_BOUND: {
                   guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
-                  target: "bound",
-                  actions: ["setDistractedTimer", "setVulnerableTimer"]
+                  target: "bound"
                 }
               }
             },
@@ -633,8 +671,7 @@ export const savageMachine = setup({
               on: {
                 APPLY_BOUND: {
                   guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
-                  target: "bound",
-                  actions: ["setDistractedTimer", "setVulnerableTimer"]
+                  target: "bound"
                 },
                 ESCAPE_ATTEMPT: {
                   guard: "escapeSuccess",
@@ -733,6 +770,23 @@ export function canAct(snap: SavageSnapshot): boolean {
 
 export function canMove(snap: SavageSnapshot): boolean {
   return isActive(snap) && !isStunned(snap)
+}
+
+export function hasInjury(snap: SavageSnapshot, type: InjuryType): boolean {
+  return snap.context.injuries.includes(type)
+}
+
+export function injuryPenalty(snap: SavageSnapshot): number {
+  // Each injury that reduces a die type counts as -1 penalty for display purposes
+  // In practice, injuries affect specific attributes, not a global penalty
+  // This counts the number of die-reducing injuries for a summary
+  return snap.context.injuries.filter(
+    (i) =>
+      i === "guts_broken" ||
+      i === "guts_battered" ||
+      i === "guts_busted" ||
+      i === "head_brain_damage"
+  ).length
 }
 
 export function totalPenalty(snap: SavageSnapshot): number {

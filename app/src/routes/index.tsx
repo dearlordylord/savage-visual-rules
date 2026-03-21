@@ -17,6 +17,8 @@ import {
   isShaken,
   isStunned,
   isVulnerable,
+  type InjuryType,
+  injuryPenalty,
   type SavageEvent,
   savageMachine,
   type SavageSnapshot,
@@ -468,7 +470,13 @@ function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
     { label: "Can Act", value: canAct(snapshot) },
     { label: "Can Move", value: canMove(snapshot) },
     { label: "Active", value: isActive(snapshot) },
-    { label: "Wild Card", value: ctx.isWildCard }
+    { label: "Wild Card", value: ctx.isWildCard },
+    { label: "Injuries", value: ctx.injuries.length.toString() },
+    {
+      label: "Injury Penalty",
+      value: injuryPenalty(snapshot).toString(),
+      title: "Number of die-reducing injuries (Guts/Head Brain Damage)"
+    }
   ]
 
   return (
@@ -494,8 +502,39 @@ function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
           </div>
         ))}
       </div>
+      {ctx.injuries.length > 0 && (
+        <div className="mt-3 border-t border-[var(--line)] pt-2">
+          <p className="mb-1 text-xs font-semibold text-[var(--sea-ink-soft)]">Injuries</p>
+          <div className="flex flex-wrap gap-1">
+            {ctx.injuries.map((inj, i) => (
+              <span
+                key={`${inj}-${i}`}
+                className="rounded-md bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-700"
+              >
+                {injuryLabel(inj)}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   )
+}
+
+const INJURY_LABELS: Record<InjuryType, string> = {
+  unmentionables: "Unmentionables",
+  arm: "Arm",
+  guts_broken: "Guts: Broken (Agi-)",
+  guts_battered: "Guts: Battered (Vig-)",
+  guts_busted: "Guts: Busted (Str-)",
+  leg: "Leg (Slow)",
+  head_scar: "Head: Scar (Ugly)",
+  head_blinded: "Head: Blinded (One Eye)",
+  head_brain_damage: "Head: Brain Damage (Sma-)"
+}
+
+function injuryLabel(type: InjuryType): string {
+  return INJURY_LABELS[type]
 }
 
 // ============================================================
@@ -506,6 +545,7 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
   const [margin, setMargin] = useState(4)
   const [soak, setSoak] = useState(0)
   const [incapRoll, setIncapRoll] = useState(0)
+  const [injuryRoll, setInjuryRoll] = useState(52)
   const [vigorRoll, setVigorRoll] = useState(1)
   const [spiritRoll, setSpiritRoll] = useState(1)
   const [healAmount, setHealAmount] = useState(1)
@@ -549,10 +589,18 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
               max={3}
               title="Vigor roll at the moment of becoming incapacitated. Only used if this hit pushes wounds past max. -1 = crit fail (dead). 0 = fail (bleeding out). 1+ = success (stable with injury)."
             />
+            <NumInput
+              label="injuryRoll"
+              value={injuryRoll}
+              onChange={setInjuryRoll}
+              min={0}
+              max={126}
+              title="Injury Table roll: tableRoll*10 + subRoll. E.g. 52 = table 5, sub 2. Only used on incapacitation. 0 = no injury."
+            />
           </div>
           <EventBtn
             disabled={dead}
-            onClick={() => send({ type: "TAKE_DAMAGE", margin, soakSuccesses: soak, incapRoll })}
+            onClick={() => send({ type: "TAKE_DAMAGE", margin, soakSuccesses: soak, incapRoll, injuryRoll })}
           >
             Fire
           </EventBtn>

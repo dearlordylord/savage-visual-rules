@@ -183,7 +183,7 @@
 - [ ] Injuries only added on incapacitation with success/raise
 - [ ] Injuries persist through healing
 
-### Slice 4.2: XState port for injuries
+### Slice 4.2: XState port for injuries [DONE]
 
 - Add `injuries: InjuryType[]` to context
 - Add `resolveInjury(tableRoll)` pure function
@@ -193,18 +193,18 @@
 - Mirror Quint tests
 
 **Acceptance criteria:**
-- [ ] All existing tests pass (injuryRoll defaults to 0 or is ignored when not incapacitated)
-- [ ] Injury tests pass
-- [ ] `injuryPenalty()` computes correct cumulative penalty
+- [x] All existing tests pass (injuryRoll defaults to 0 or is ignored when not incapacitated)
+- [x] Injury tests pass
+- [x] `injuryPenalty()` computes correct cumulative penalty
 
-### Slice 4.3: UI for injuries
+### Slice 4.3: UI for injuries [DONE]
 
 - Injury list on character sheet
 - Penalty display incorporating injury modifiers
 
 **Acceptance criteria:**
-- [ ] Injuries listed with descriptions
-- [ ] Penalty total updated to include injury penalties
+- [x] Injuries listed with descriptions
+- [x] Penalty total updated to include injury penalties
 
 ---
 
