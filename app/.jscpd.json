@@ -1,0 +1,7 @@
+{
+  "threshold": 2,
+  "reporters": ["console"],
+  "ignore": ["**/node_modules/**", "**/dist/**", "**/.tanstack/**"],
+  "format": ["typescript", "tsx"],
+  "gitignore": true
+}
