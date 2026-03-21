@@ -99,9 +99,9 @@
 - Mirror Quint tests
 
 **Acceptance criteria:**
-- [ ] All existing tests pass
-- [ ] Hold/interrupt tests pass
-- [ ] Cross-region guard (lose hold on shaken/stunned) works
+- [x] All existing tests pass
+- [x] Hold/interrupt tests pass
+- [x] Cross-region guard (lose hold on shaken/stunned) works
 
 ### Slice 2.3: UI indicator for hold [DONE]
 
@@ -109,7 +109,7 @@
 - Interrupt action button (visible when on hold)
 
 **Acceptance criteria:**
-- [ ] Hold status visible, interrupt button functional
+- [x] Hold status visible, interrupt button functional
 
 ---
 
