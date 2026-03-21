@@ -39,15 +39,41 @@ function stateLabel(snap: SavageSnapshot): string {
 }
 
 // ============================================================
+// Replay helper — creates a fresh actor, replays events, returns snapshot
+// ============================================================
+
+function replayEvents(
+  wc: boolean,
+  events: SavageEvent[],
+): { actor: ReturnType<typeof createActor<typeof savageMachine>>; snapshot: SavageSnapshot } {
+  const actor = createActor(savageMachine, { input: { isWildCard: wc } })
+  actor.start()
+  for (const ev of events) {
+    actor.send(ev)
+  }
+  return { actor, snapshot: actor.getSnapshot() }
+}
+
+// ============================================================
 // Main app
 // ============================================================
 
 function App() {
   const actorRef = useRef<ReturnType<typeof createActor<typeof savageMachine>> | null>(null)
   const [snapshot, setSnapshot] = useState<SavageSnapshot | null>(null)
+  // Log stored in chronological order (index 0 = first event)
   const [log, setLog] = useState<LogEntry[]>([])
+  // Cursor: index of the last applied event. -1 = initial state (no events applied).
+  const [cursor, setCursor] = useState(-1)
   const [isWildCard, setIsWildCard] = useState(true)
   const logIdRef = useRef(0)
+  const cursorRef = useRef(-1)
+
+  // Keep ref in sync with state
+  const updateCursor = useCallback((val: number) => {
+    cursorRef.current = val
+    setCursor(val)
+  }, [])
 
   const initActor = useCallback(
     (wc: boolean) => {
@@ -58,9 +84,10 @@ function App() {
       actorRef.current = actor
       setSnapshot(actor.getSnapshot())
       setLog([])
+      updateCursor(-1)
       logIdRef.current = 0
     },
-    [],
+    [updateCursor],
   )
 
   useEffect(() => {
@@ -74,13 +101,42 @@ function App() {
       const before = stateLabel(actorRef.current.getSnapshot())
       actorRef.current.send(event)
       const after = stateLabel(actorRef.current.getSnapshot())
-      setLog((prev) => [
-        { id: ++logIdRef.current, event, fromState: before, toState: after },
-        ...prev.slice(0, 49),
-      ])
+      const newEntry: LogEntry = {
+        id: ++logIdRef.current,
+        event,
+        fromState: before,
+        toState: after,
+      }
+      setLog((prev) => {
+        // Truncate any future entries beyond cursor, then append
+        const base = prev.slice(0, cursorRef.current + 1)
+        return [...base, newEntry]
+      })
+      updateCursor(cursorRef.current + 1)
     },
-    [],
+    [updateCursor],
   )
+
+  const jumpTo = useCallback(
+    (targetIndex: number) => {
+      // targetIndex: -1 = initial state, 0..log.length-1 = after that event
+      setLog((currentLog) => {
+        if (targetIndex < -1 || targetIndex >= currentLog.length) return currentLog
+        actorRef.current?.stop()
+        const eventsToReplay = currentLog.slice(0, targetIndex + 1).map((e) => e.event)
+        const { actor, snapshot: newSnap } = replayEvents(isWildCard, eventsToReplay)
+        actor.subscribe((s) => setSnapshot(s))
+        actorRef.current = actor
+        setSnapshot(newSnap)
+        updateCursor(targetIndex)
+        return currentLog
+      })
+    },
+    [isWildCard, updateCursor],
+  )
+
+  const canUndo = cursor >= 0
+  const canRedo = cursor < log.length - 1
 
   const reset = useCallback(
     (wc: boolean) => {
@@ -121,7 +177,15 @@ function App() {
         {/* Right column: events + log */}
         <div className="flex flex-col gap-4">
           <EventPanel send={send} snapshot={snapshot} />
-          <TransitionLog log={log} />
+          <TransitionLog
+            log={log}
+            cursor={cursor}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            onJumpTo={jumpTo}
+            onUndo={() => jumpTo(cursor - 1)}
+            onRedo={() => jumpTo(cursor + 1)}
+          />
         </div>
       </div>
     </main>
@@ -435,10 +499,51 @@ function EventBtn({
 // Transition log
 // ============================================================
 
-function TransitionLog({ log }: { log: LogEntry[] }) {
+function TransitionLog({
+  log,
+  cursor,
+  canUndo,
+  canRedo,
+  onJumpTo,
+  onUndo,
+  onRedo,
+}: {
+  log: LogEntry[]
+  cursor: number
+  canUndo: boolean
+  canRedo: boolean
+  onJumpTo: (index: number) => void
+  onUndo: () => void
+  onRedo: () => void
+}) {
+  // Display in reverse chronological order (most recent first)
+  const reversed = [...log].reverse()
+
   return (
     <section className="island-shell rounded-2xl p-5">
-      <p className="island-kicker mb-3">Transition Log</p>
+      <div className="mb-3 flex items-center justify-between">
+        <p className="island-kicker">Transition Log</p>
+        {log.length > 0 && (
+          <div className="flex gap-1">
+            <button
+              onClick={onUndo}
+              disabled={!canUndo}
+              title="Undo — roll back to previous event"
+              className="rounded border border-[var(--line)] px-2 py-0.5 text-xs font-semibold text-[var(--sea-ink-soft)] transition hover:bg-[var(--surface)] disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              Undo
+            </button>
+            <button
+              onClick={onRedo}
+              disabled={!canRedo}
+              title="Redo — replay next event"
+              className="rounded border border-[var(--line)] px-2 py-0.5 text-xs font-semibold text-[var(--sea-ink-soft)] transition hover:bg-[var(--surface)] disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              Redo
+            </button>
+          </div>
+        )}
+      </div>
       {log.length === 0 ? (
         <p className="text-xs text-[var(--sea-ink-soft)]">No events yet.</p>
       ) : (
@@ -453,18 +558,35 @@ function TransitionLog({ log }: { log: LogEntry[] }) {
               </tr>
             </thead>
             <tbody>
-              {log.map((entry) => (
-                <tr key={entry.id} className="border-t border-[var(--line)]">
-                  <td className="py-1 pr-2 text-[var(--sea-ink-soft)]">{entry.id}</td>
-                  <td className="py-1 pr-2 font-mono">{formatEvent(entry.event)}</td>
-                  <td className="py-1 pr-2">{entry.fromState}</td>
-                  <td
-                    className={`py-1 ${entry.fromState !== entry.toState ? 'font-semibold text-[var(--lagoon-deep)]' : ''}`}
+              {reversed.map((entry, revIdx) => {
+                const chronIdx = log.length - 1 - revIdx
+                const isCurrent = chronIdx === cursor
+                const isFuture = chronIdx > cursor
+                return (
+                  <tr
+                    key={entry.id}
+                    onClick={() => onJumpTo(chronIdx)}
+                    className={`cursor-pointer border-t border-[var(--line)] transition-colors ${
+                      isCurrent
+                        ? 'bg-[rgba(79,184,178,0.12)]'
+                        : isFuture
+                          ? 'opacity-35'
+                          : ''
+                    } hover:bg-[rgba(79,184,178,0.08)]`}
                   >
-                    {entry.toState}
-                  </td>
-                </tr>
-              ))}
+                    <td className="py-1 pr-2 text-[var(--sea-ink-soft)]">
+                      {isCurrent ? '\u25B6' : ''} {entry.id}
+                    </td>
+                    <td className="py-1 pr-2 font-mono">{formatEvent(entry.event)}</td>
+                    <td className="py-1 pr-2">{entry.fromState}</td>
+                    <td
+                      className={`py-1 ${entry.fromState !== entry.toState ? 'font-semibold text-[var(--lagoon-deep)]' : ''}`}
+                    >
+                      {entry.toState}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
