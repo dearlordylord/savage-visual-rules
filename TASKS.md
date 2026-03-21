@@ -38,7 +38,7 @@
 - [ ] `quint test --main savageTest` passes with all existing + new tests
 - [ ] `quint verify --invariant safetyInv` passes (safetyInv extended with proneImpliesActive)
 
-### Slice 1.2: XState port for prone
+### Slice 1.2: XState port for prone [DONE]
 
 - Add `positionTrack` parallel region inside `alive`: states `standing | prone`
 - Events: `DROP_PRONE`, `STAND_UP`
@@ -48,18 +48,18 @@
 - Mirror all Quint tests in vitest
 
 **Acceptance criteria:**
-- [ ] All existing 27+ tests still pass
-- [ ] New prone tests pass
-- [ ] `isProne()` returns correct values in all states
+- [x] All existing 27+ tests still pass
+- [x] New prone tests pass
+- [x] `isProne()` returns correct values in all states
 
-### Slice 1.3: UI indicator for prone
+### Slice 1.3: UI indicator for prone [DONE]
 
 - Add prone badge/indicator to character status display
 - Wire to `isProne()` derived helper
 
 **Acceptance criteria:**
-- [ ] Prone status visible in UI when character is prone
-- [ ] Prone indicator disappears on stand up, death, or incapacitation
+- [x] Prone status visible in UI when character is prone
+- [x] Prone indicator disappears on stand up, death, or incapacitation
 
 ---
 

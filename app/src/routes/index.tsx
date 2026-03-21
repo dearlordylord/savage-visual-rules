@@ -9,6 +9,7 @@ import {
   isActive,
   isDead,
   isDistracted,
+  isProne,
   isShaken,
   isStunned,
   isVulnerable,
@@ -386,6 +387,13 @@ function StateTree({ snapshot }: { snapshot: SavageSnapshot }) {
               <StateLeaf label="ownTurn" active={snapshot.matches({ alive: { turnPhase: "ownTurn" } })} />
             </div>
           </StateRegion>
+
+          <StateRegion title="Position">
+            <div className="flex gap-3">
+              <StateLeaf label="standing" active={snapshot.matches({ alive: { positionTrack: "standing" } })} />
+              <StateLeaf label="prone" active={isProne(snapshot)} />
+            </div>
+          </StateRegion>
         </div>
       )}
     </section>
@@ -441,6 +449,7 @@ function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
     { label: "Stunned", value: isStunned(snapshot) },
     { label: "Distracted", value: isDistracted(snapshot) },
     { label: "Vulnerable", value: isVulnerable(snapshot) },
+    { label: "Prone", value: isProne(snapshot) },
     { label: "Can Act", value: canAct(snapshot) },
     { label: "Can Move", value: canMove(snapshot) },
     { label: "Active", value: isActive(snapshot) },
@@ -582,6 +591,12 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
           </EventBtn>
           <EventBtn disabled={dead} onClick={() => send({ type: "RECOVER_FATIGUE" })}>
             Recover Fatigue
+          </EventBtn>
+          <EventBtn disabled={dead} onClick={() => send({ type: "DROP_PRONE" })}>
+            Drop Prone
+          </EventBtn>
+          <EventBtn disabled={dead} onClick={() => send({ type: "STAND_UP" })}>
+            Stand Up
           </EventBtn>
           {incapacitated && <EventBtn onClick={() => send({ type: "FINISHING_MOVE" })}>Finishing Move</EventBtn>}
         </div>

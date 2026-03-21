@@ -26,6 +26,8 @@ export type SavageEvent =
   | { type: "RECOVER_FATIGUE" }
   | { type: "HEAL"; amount: number }
   | { type: "FINISHING_MOVE" }
+  | { type: "DROP_PRONE" }
+  | { type: "STAND_UP" }
 
 // ============================================================
 // Helpers (mirror Quint spec pure functions)
@@ -494,6 +496,35 @@ export const savageMachine = setup({
               }
             }
           }
+        },
+
+        // ========================================
+        // POSITION TRACK (prone/standing)
+        // ========================================
+        positionTrack: {
+          initial: "standing",
+          states: {
+            standing: {
+              on: {
+                DROP_PRONE: {
+                  guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
+                  target: "prone"
+                }
+              }
+            },
+            prone: {
+              on: {
+                STAND_UP: {
+                  guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
+                  target: "standing"
+                }
+              },
+              always: {
+                guard: not(stateIn(DAMAGE_ACTIVE)),
+                target: "standing"
+              }
+            }
+          }
         }
       }
     },
@@ -532,6 +563,10 @@ export function isDistracted(snap: SavageSnapshot): boolean {
 
 export function isVulnerable(snap: SavageSnapshot): boolean {
   return snap.matches({ alive: { conditionTrack: { vulnerability: "vulnerable" } } }) || isStunned(snap)
+}
+
+export function isProne(snap: SavageSnapshot): boolean {
+  return snap.matches({ alive: { positionTrack: "prone" } })
 }
 
 export function isActive(snap: SavageSnapshot): boolean {

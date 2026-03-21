@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { createActor } from "xstate"
 
-import { isDead, isShaken, savageMachine } from "./machine"
+import { isDead, isProne, isShaken, savageMachine } from "./machine"
 
 // ============================================================
 // Helpers
@@ -402,5 +402,85 @@ describe("invariants", () => {
         }
       }
     }
+  })
+})
+
+// ============================================================
+// Prone tests
+// ============================================================
+
+describe("prone", () => {
+  it("drop prone and stand up cycle", () => {
+    const a = createWC()
+    expect(isProne(snap(a))).toBe(false)
+
+    a.send({ type: "DROP_PRONE" })
+    expect(isProne(snap(a))).toBe(true)
+
+    a.send({ type: "STAND_UP" })
+    expect(isProne(snap(a))).toBe(false)
+  })
+
+  it("prone blocked when incapacitated", () => {
+    const a = createWC()
+    // Incapacitate: 3 wounds + shaken, then shaken-on-shaken → incap
+    a.send({ type: "TAKE_DAMAGE", margin: 12, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 1 })
+    expect(snap(a).matches({ alive: { damageTrack: "incapacitated" } })).toBe(true)
+
+    a.send({ type: "DROP_PRONE" })
+    expect(isProne(snap(a))).toBe(false)
+  })
+
+  it("prone blocked when incapacitated by fatigue", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_FATIGUE" })
+    a.send({ type: "APPLY_FATIGUE" })
+    a.send({ type: "APPLY_FATIGUE" })
+    expect(snap(a).matches({ alive: { fatigueTrack: "incapByFatigue" } })).toBe(true)
+
+    a.send({ type: "DROP_PRONE" })
+    expect(isProne(snap(a))).toBe(false)
+  })
+
+  it("prone clears on death", () => {
+    const a = createWC()
+    a.send({ type: "DROP_PRONE" })
+    expect(isProne(snap(a))).toBe(true)
+
+    // Kill: extra dies from any wound
+    const b = createExtra()
+    b.send({ type: "DROP_PRONE" })
+    expect(isProne(snap(b))).toBe(true)
+    b.send({ type: "TAKE_DAMAGE", margin: 4, soakSuccesses: 0, incapRoll: 0 })
+    expect(isDead(snap(b))).toBe(true)
+    expect(isProne(snap(b))).toBe(false)
+  })
+
+  it("prone persists across turns", () => {
+    const a = createWC()
+    a.send({ type: "DROP_PRONE" })
+    expect(isProne(snap(a))).toBe(true)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    expect(isProne(snap(a))).toBe(true)
+
+    a.send({ type: "END_OF_TURN" })
+    expect(isProne(snap(a))).toBe(true)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    expect(isProne(snap(a))).toBe(true)
+  })
+
+  it("prone clears when incapacitated (enters non-active state)", () => {
+    const a = createWC()
+    a.send({ type: "DROP_PRONE" })
+    expect(isProne(snap(a))).toBe(true)
+
+    // Incapacitate via damage
+    a.send({ type: "TAKE_DAMAGE", margin: 12, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 1 })
+    expect(snap(a).matches({ alive: { damageTrack: "incapacitated" } })).toBe(true)
+    expect(isProne(snap(a))).toBe(false)
   })
 })
