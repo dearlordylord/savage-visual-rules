@@ -52,6 +52,11 @@
 - [x] New prone tests pass
 - [x] `isProne()` returns correct values in all states
 
+**Review notes (commit 1ef13b6):**
+- **BUG**: `always` transition on `prone` state only checks `not(stateIn(DAMAGE_ACTIVE))` but misses `stateIn(FATIGUE_INCAP)`. A fatigue-incapacitated character stays prone, violating `proneImpliesActive`. Fix: change guard to `not(and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]))`.
+- Added test: "prone clears when fatigue-incapacitated"
+- **Reference worktree (DO NOT cherry-pick — apply fix on master)**: `worktree-agent-a2b7e6f3` at `.claude/worktrees/agent-a2b7e6f3`
+
 ### Slice 1.3: UI indicator for prone [DONE]
 
 - Add prone badge/indicator to character status display
@@ -103,6 +108,12 @@
 - [x] Hold/interrupt tests pass
 - [x] Cross-region guard (lose hold on shaken/stunned) works
 
+**Review notes (commits c8acd6b, d8c9742):**
+- **No machine bugs** — implementation correct.
+- **TEST BUG**: "cannot go on hold when stunned" test actually tested recovery path (vigorRoll: 1 recovers before GO_ON_HOLD). The stunned guard was never exercised. Fix: split into two tests — one that genuinely blocks, one for recovery path.
+- **Missing tests added**: GO_ON_HOLD from othersTurn no-op, START_OF_TURN while on hold ignored, GO_ON_HOLD blocked when fatigue-incap, onHold context sync through cycle.
+- **Reference worktree (DO NOT cherry-pick — apply fix on master)**: `worktree-agent-a15bd9dc` at `.claude/worktrees/agent-a15bd9dc`
+
 ### Slice 2.3: UI indicator for hold [DONE]
 
 - Hold badge on character status
@@ -152,6 +163,12 @@
 - [x] Restraint + escape tests pass
 - [x] Bound correctly triggers distracted + vulnerable timers
 
+**Review notes (commit c9ed88f):**
+- **BUG**: `boundImpliesConditions` invariant violated. Bound sets distracted/vulnerable timers on entry, but timers tick down and expire independently via `always` transitions. After one turn cycle, conditions clear while character is still bound. Fix: add `not(stateIn(BOUND_STATE))` to distracted and vulnerable `always` guards so conditions persist while bound.
+- Added 4 tests: boundImpliesConditions invariant across turns, fatigue-incap blocking restraint, conditions clearing after escape (raise + success).
+- Also noted: Ralph skipped Quint spec (Slice 3.1) — process deviation from Quint-first workflow.
+- **Reference worktree (DO NOT cherry-pick — apply fix on master)**: `worktree-agent-aa2aeca3` at `.claude/worktrees/agent-aa2aeca3`
+
 ### Slice 3.3: UI for restraint [DONE]
 
 - Restraint status indicator (entangled/bound)
@@ -196,6 +213,12 @@
 - [x] All existing tests pass (injuryRoll defaults to 0 or is ignored when not incapacitated)
 - [x] Injury tests pass
 - [x] `injuryPenalty()` computes correct cumulative penalty
+
+**Review notes (commit 2973936):**
+- **BUG**: `appendInjury` action attached to `incapFail` transitions (bleedingOut). Spec says injuries only on incapSuccess/raise. Fix: remove `"appendInjury"` from all 3 `incapFail` transition action arrays (unshaken, shaken, wounded states). Note: actual SWADE rules DO give injuries on fail too — if rules-accurate behavior desired, revert this fix.
+- **ZERO TESTS added** despite claiming "54 tests passing". Classic AI antipattern: compliance by not breaking existing tests. Fix: added 18 tests covering resolveInjury mapping, injury on incapSuccess, no injury on incapFail, persistence through healing, accumulation, helpers, injuriesNeverShrink invariant.
+- Also: `totalPenalty()` doesn't incorporate `injuryPenalty()`, death doesn't clear injuries (acceptable design choice but should be explicit).
+- **Reference worktree (DO NOT cherry-pick — apply fix on master)**: `worktree-agent-ac4b7435` at `.claude/worktrees/agent-ac4b7435`
 
 ### Slice 4.3: UI for injuries [DONE]
 
@@ -245,6 +268,13 @@
 - [x] Grapple tests pass
 - [x] Mutual exclusion with entangled/bound enforced
 
+**Review notes (commits 41a6337, 79c1cd0):**
+- **BUG (confirmed, same pattern as Phase 3)**: distracted+vulnerable expire while grabbed/pinned. Fix: add `not(stateIn(GRABBED_STATE))` and `not(stateIn(PINNED_STATE))` to distracted/vulnerable `always` guards (alongside existing `not(stateIn(BOUND_STATE))`).
+- Added 6 tests: grabbed/pinned condition persistence across turns, conditions clear on escape, grapple blocked by fatigue-incap, death clears grappledBy, bound persistence (pre-existing bug).
+- Also: `grappledBy` context field is declared but never set (no `attacker` field on GRAPPLE_ATTEMPT event) — dead context.
+- 69 tests passing (63 + 6 new).
+- **Reference worktree (DO NOT cherry-pick — apply fix on master)**: `worktree-agent-a4977822` at `.claude/worktrees/agent-a4977822`
+
 ### Slice 5.3: UI for grapple [DONE]
 
 - Grapple indicator showing grabbed/pinned + opponent
@@ -293,6 +323,9 @@
 - [x] Blinded tests pass
 - [x] Recovery uses same vigorRoll as stunned (no new event params needed)
 
+**Review notes (commit 7629d31):**
+- **NOT YET REVIEWED** — review was not launched before Ralph was stopped. Needs review on next run.
+
 ### Slice 6.3: UI for blinded [DONE]
 
 - Blinded indicator with severity level
@@ -308,6 +341,8 @@
 > Fear table results auto-dispatch as existing machine events.
 
 ### Slice 7.1: Fear table pure function
+
+> **Note**: Ralph started this but was killed mid-implementation. Partial work (resolveFear function + tests) was discarded from working tree. Start fresh.
 
 - Implement `resolveFear(tableRoll: number, modifier: number): SavageEvent[]` as exported pure function (not a machine region)
 - Mapping (tableRoll + modifier):
