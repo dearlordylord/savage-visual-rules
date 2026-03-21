@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest"
 import { createActor } from "xstate"
 
-import { isDead, isOnHold, isProne, isShaken, savageMachine } from "./machine"
+import {
+  isBound,
+  isDead,
+  isDistracted,
+  isEntangled,
+  isOnHold,
+  isProne,
+  isRestrained,
+  isShaken,
+  isVulnerable,
+  savageMachine
+} from "./machine"
 
 // ============================================================
 // Helpers
@@ -580,5 +591,95 @@ describe("hold/interrupt", () => {
     a.send({ type: "END_OF_TURN" })
     expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
     expect(isOnHold(snap(a))).toBe(false)
+  })
+})
+
+// ============================================================
+// Restraint tests (entangled/bound)
+// ============================================================
+
+describe("restraint", () => {
+  it("apply entangled", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_ENTANGLED" })
+    expect(isEntangled(snap(a))).toBe(true)
+    expect(isRestrained(snap(a))).toBe(true)
+    expect(isBound(snap(a))).toBe(false)
+  })
+
+  it("apply bound → also distracted + vulnerable", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_BOUND" })
+    expect(isBound(snap(a))).toBe(true)
+    expect(isRestrained(snap(a))).toBe(true)
+    expect(isDistracted(snap(a))).toBe(true)
+    expect(isVulnerable(snap(a))).toBe(true)
+  })
+
+  it("entangled upgraded to bound", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_ENTANGLED" })
+    expect(isEntangled(snap(a))).toBe(true)
+    a.send({ type: "APPLY_BOUND" })
+    expect(isBound(snap(a))).toBe(true)
+    expect(isEntangled(snap(a))).toBe(false)
+  })
+
+  it("escape from entangled: success → free", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_ENTANGLED" })
+    a.send({ type: "ESCAPE_ATTEMPT", rollResult: 1 })
+    expect(isRestrained(snap(a))).toBe(false)
+  })
+
+  it("escape from entangled: fail → still entangled", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_ENTANGLED" })
+    a.send({ type: "ESCAPE_ATTEMPT", rollResult: 0 })
+    expect(isEntangled(snap(a))).toBe(true)
+  })
+
+  it("escape from bound: success → entangled", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_BOUND" })
+    a.send({ type: "ESCAPE_ATTEMPT", rollResult: 1 })
+    expect(isEntangled(snap(a))).toBe(true)
+    expect(isBound(snap(a))).toBe(false)
+  })
+
+  it("escape from bound: raise → free", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_BOUND" })
+    a.send({ type: "ESCAPE_ATTEMPT", rollResult: 2 })
+    expect(isRestrained(snap(a))).toBe(false)
+  })
+
+  it("restraint blocked when incapacitated", () => {
+    const a = createWC()
+    a.send({ type: "TAKE_DAMAGE", margin: 12, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 1 })
+    expect(snap(a).matches({ alive: { damageTrack: "incapacitated" } })).toBe(true)
+    a.send({ type: "APPLY_ENTANGLED" })
+    expect(isRestrained(snap(a))).toBe(false)
+  })
+
+  it("restraint clears on incapacitation", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_BOUND" })
+    expect(isBound(snap(a))).toBe(true)
+    // Incapacitate
+    a.send({ type: "TAKE_DAMAGE", margin: 12, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 1 })
+    expect(snap(a).matches({ alive: { damageTrack: "incapacitated" } })).toBe(true)
+    expect(isRestrained(snap(a))).toBe(false)
+  })
+
+  it("restraint clears on death", () => {
+    const b = createExtra()
+    b.send({ type: "APPLY_ENTANGLED" })
+    expect(isEntangled(snap(b))).toBe(true)
+    b.send({ type: "TAKE_DAMAGE", margin: 4, soakSuccesses: 0, incapRoll: 0 })
+    expect(isDead(snap(b))).toBe(true)
+    expect(isRestrained(snap(b))).toBe(false)
   })
 })

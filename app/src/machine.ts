@@ -32,6 +32,9 @@ export type SavageEvent =
   | { type: "STAND_UP" }
   | { type: "GO_ON_HOLD" }
   | { type: "INTERRUPT"; athleticsRoll: number }
+  | { type: "APPLY_ENTANGLED" }
+  | { type: "APPLY_BOUND" }
+  | { type: "ESCAPE_ATTEMPT"; rollResult: number }
 
 // ============================================================
 // Helpers (mirror Quint spec pure functions)
@@ -64,6 +67,9 @@ function asHeal(event: SavageEvent) {
 }
 function asInterrupt(event: SavageEvent) {
   return event as Extract<SavageEvent, { type: "INTERRUPT" }>
+}
+function asEscape(event: SavageEvent) {
+  return event as Extract<SavageEvent, { type: "ESCAPE_ATTEMPT" }>
 }
 
 // ============================================================
@@ -149,7 +155,11 @@ export const savageMachine = setup({
     vulnerableTimerExpired: ({ context }) => context.vulnerableTimer === -1,
 
     // --- Interrupt guards ---
-    interruptSuccess: ({ event }) => asInterrupt(event).athleticsRoll >= 1
+    interruptSuccess: ({ event }) => asInterrupt(event).athleticsRoll >= 1,
+
+    // --- Escape guards ---
+    escapeSuccess: ({ event }) => asEscape(event).rollResult >= 1,
+    escapeRaise: ({ event }) => asEscape(event).rollResult >= 2
   },
   actions: {
     addWounds: assign(({ context, event }) => {
@@ -405,6 +415,11 @@ export const savageMachine = setup({
                       guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
                       target: "distracted",
                       actions: ["setDistractedTimer"]
+                    },
+                    APPLY_BOUND: {
+                      guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
+                      target: "distracted",
+                      actions: ["setDistractedTimer"]
                     }
                   }
                 },
@@ -415,6 +430,10 @@ export const savageMachine = setup({
                       actions: ["setDistractedTimer"]
                     },
                     APPLY_STUNNED: {
+                      guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
+                      actions: ["setDistractedTimer"]
+                    },
+                    APPLY_BOUND: {
                       guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
                       actions: ["setDistractedTimer"]
                     }
@@ -437,6 +456,11 @@ export const savageMachine = setup({
                       target: "vulnerable",
                       actions: ["setVulnerableTimer"]
                     },
+                    APPLY_BOUND: {
+                      guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
+                      target: "vulnerable",
+                      actions: ["setVulnerableTimer"]
+                    },
                     // Stunned recovery also triggers vulnerability
                     START_OF_TURN: [
                       {
@@ -455,6 +479,10 @@ export const savageMachine = setup({
                 vulnerable: {
                   on: {
                     APPLY_VULNERABLE: {
+                      guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
+                      actions: ["setVulnerableTimer"]
+                    },
+                    APPLY_BOUND: {
                       guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
                       actions: ["setVulnerableTimer"]
                     }
@@ -580,6 +608,57 @@ export const savageMachine = setup({
               }
             }
           }
+        },
+
+        // ========================================
+        // RESTRAINT TRACK (entangled/bound)
+        // ========================================
+        restraintTrack: {
+          initial: "free",
+          states: {
+            free: {
+              on: {
+                APPLY_ENTANGLED: {
+                  guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
+                  target: "entangled"
+                },
+                APPLY_BOUND: {
+                  guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
+                  target: "bound",
+                  actions: ["setDistractedTimer", "setVulnerableTimer"]
+                }
+              }
+            },
+            entangled: {
+              on: {
+                APPLY_BOUND: {
+                  guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
+                  target: "bound",
+                  actions: ["setDistractedTimer", "setVulnerableTimer"]
+                },
+                ESCAPE_ATTEMPT: {
+                  guard: "escapeSuccess",
+                  target: "free"
+                }
+              },
+              always: {
+                guard: not(stateIn(DAMAGE_ACTIVE)),
+                target: "free"
+              }
+            },
+            bound: {
+              on: {
+                ESCAPE_ATTEMPT: [
+                  { guard: "escapeRaise", target: "free" },
+                  { guard: "escapeSuccess", target: "entangled" }
+                ]
+              },
+              always: {
+                guard: not(stateIn(DAMAGE_ACTIVE)),
+                target: "free"
+              }
+            }
+          }
         }
       }
     },
@@ -628,6 +707,18 @@ export function isOnHold(snap: SavageSnapshot): boolean {
 
 export function isProne(snap: SavageSnapshot): boolean {
   return snap.matches({ alive: { positionTrack: "prone" } })
+}
+
+export function isBound(snap: SavageSnapshot): boolean {
+  return snap.matches({ alive: { restraintTrack: "bound" } })
+}
+
+export function isEntangled(snap: SavageSnapshot): boolean {
+  return snap.matches({ alive: { restraintTrack: "entangled" } })
+}
+
+export function isRestrained(snap: SavageSnapshot): boolean {
+  return isBound(snap) || isEntangled(snap)
 }
 
 export function isActive(snap: SavageSnapshot): boolean {

@@ -137,7 +137,7 @@
 - [ ] Bound cascades distracted + vulnerable
 - [ ] Escape logic correct for each level
 
-### Slice 3.2: XState port for restraint
+### Slice 3.2: XState port for restraint [DONE]
 
 - New parallel region `restraintTrack` inside `alive`: `free | entangled | bound`
 - Events: `APPLY_ENTANGLED`, `APPLY_BOUND`, `ESCAPE_ATTEMPT { rollResult }`
@@ -148,17 +148,17 @@
 - Mirror Quint tests
 
 **Acceptance criteria:**
-- [ ] All existing tests pass
-- [ ] Restraint + escape tests pass
-- [ ] Bound correctly triggers distracted + vulnerable timers
+- [x] All existing tests pass
+- [x] Restraint + escape tests pass
+- [x] Bound correctly triggers distracted + vulnerable timers
 
-### Slice 3.3: UI for restraint
+### Slice 3.3: UI for restraint [DONE]
 
 - Restraint status indicator (entangled/bound)
 - Escape attempt action
 
 **Acceptance criteria:**
-- [ ] Restraint status visible, escape action functional
+- [x] Restraint status visible, escape action functional
 
 ---
 

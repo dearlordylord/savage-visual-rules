@@ -9,8 +9,11 @@ import {
   isActive,
   isDead,
   isDistracted,
+  isBound,
+  isEntangled,
   isOnHold,
   isProne,
+  isRestrained,
   isShaken,
   isStunned,
   isVulnerable,
@@ -396,6 +399,14 @@ function StateTree({ snapshot }: { snapshot: SavageSnapshot }) {
               <StateLeaf label="prone" active={isProne(snapshot)} />
             </div>
           </StateRegion>
+
+          <StateRegion title="Restraint">
+            <div className="flex gap-3">
+              <StateLeaf label="free" active={snapshot.matches({ alive: { restraintTrack: "free" } })} />
+              <StateLeaf label="entangled" active={isEntangled(snapshot)} />
+              <StateLeaf label="bound" active={isBound(snapshot)} />
+            </div>
+          </StateRegion>
         </div>
       )}
     </section>
@@ -453,6 +464,7 @@ function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
     { label: "Vulnerable", value: isVulnerable(snapshot) },
     { label: "Prone", value: isProne(snapshot) },
     { label: "On Hold", value: isOnHold(snapshot) },
+    { label: "Restrained", value: isRestrained(snapshot) },
     { label: "Can Act", value: canAct(snapshot) },
     { label: "Can Move", value: canMove(snapshot) },
     { label: "Active", value: isActive(snapshot) },
@@ -498,10 +510,12 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
   const [spiritRoll, setSpiritRoll] = useState(1)
   const [healAmount, setHealAmount] = useState(1)
   const [athleticsRoll, setAthleticsRoll] = useState(1)
+  const [escapeRoll, setEscapeRoll] = useState(1)
 
   const dead = isDead(snapshot)
   const incapacitated = !dead && snapshot.matches({ alive: { damageTrack: "incapacitated" } })
   const onHold = !dead && isOnHold(snapshot)
+  const restrained = !dead && isRestrained(snapshot)
 
   return (
     <section className="island-shell rounded-2xl p-5">
@@ -606,6 +620,12 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
           <EventBtn disabled={dead} onClick={() => send({ type: "GO_ON_HOLD" })}>
             Go On Hold
           </EventBtn>
+          <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_ENTANGLED" })}>
+            Apply Entangled
+          </EventBtn>
+          <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_BOUND" })}>
+            Apply Bound
+          </EventBtn>
           {incapacitated && <EventBtn onClick={() => send({ type: "FINISHING_MOVE" })}>Finishing Move</EventBtn>}
         </div>
 
@@ -624,6 +644,24 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
               />
             </div>
             <EventBtn onClick={() => send({ type: "INTERRUPT", athleticsRoll })}>Fire</EventBtn>
+          </div>
+        )}
+
+        {/* ESCAPE ATTEMPT (visible when restrained) */}
+        {restrained && (
+          <div className="rounded-lg border border-[var(--line)] p-3">
+            <p className="mb-2 font-semibold">Escape Attempt</p>
+            <div className="mb-2 flex gap-3">
+              <NumInput
+                label="rollResult"
+                value={escapeRoll}
+                onChange={setEscapeRoll}
+                min={0}
+                max={3}
+                title="Escape roll. From entangled: 1+ = free. From bound: 1 = entangled, 2+ = free."
+              />
+            </div>
+            <EventBtn onClick={() => send({ type: "ESCAPE_ATTEMPT", rollResult: escapeRoll })}>Fire</EventBtn>
           </div>
         )}
 
@@ -821,6 +859,8 @@ function formatEvent(e: SavageEvent): string {
       return `HEAL(${e.amount})`
     case "INTERRUPT":
       return `INTERRUPT(ath:${e.athleticsRoll})`
+    case "ESCAPE_ATTEMPT":
+      return `ESCAPE_ATTEMPT(r:${e.rollResult})`
     default:
       return e.type
   }
