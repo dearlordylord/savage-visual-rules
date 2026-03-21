@@ -185,6 +185,7 @@ function App() {
             onJumpTo={jumpTo}
             onUndo={() => jumpTo(cursor - 1)}
             onRedo={() => jumpTo(cursor + 1)}
+            onClear={() => initActor(isWildCard)}
           />
         </div>
       </div>
@@ -366,6 +367,7 @@ function EventPanel({
   const [healAmount, setHealAmount] = useState(1)
 
   const dead = isDead(snapshot)
+  const incapacitated = !dead && snapshot.matches({ alive: { damageTrack: 'incapacitated' } })
 
   return (
     <section className="island-shell rounded-2xl p-5">
@@ -422,6 +424,11 @@ function EventPanel({
           <EventBtn disabled={dead} onClick={() => send({ type: 'RECOVER_FATIGUE' })}>
             Recover Fatigue
           </EventBtn>
+          {incapacitated && (
+            <EventBtn onClick={() => send({ type: 'FINISHING_MOVE' })}>
+              Finishing Move
+            </EventBtn>
+          )}
         </div>
 
         {/* HEAL */}
@@ -507,6 +514,7 @@ function TransitionLog({
   onJumpTo,
   onUndo,
   onRedo,
+  onClear,
 }: {
   log: LogEntry[]
   cursor: number
@@ -515,6 +523,7 @@ function TransitionLog({
   onJumpTo: (index: number) => void
   onUndo: () => void
   onRedo: () => void
+  onClear: () => void
 }) {
   // Display in reverse chronological order (most recent first)
   const reversed = [...log].reverse()
@@ -540,6 +549,13 @@ function TransitionLog({
               className="rounded border border-[var(--line)] px-2 py-0.5 text-xs font-semibold text-[var(--sea-ink-soft)] transition hover:bg-[var(--surface)] disabled:cursor-not-allowed disabled:opacity-30"
             >
               Redo
+            </button>
+            <button
+              onClick={onClear}
+              title="Clear log and reset to fresh state"
+              className="rounded border border-[var(--line)] px-2 py-0.5 text-xs font-semibold text-[var(--sea-ink-soft)] transition hover:bg-[var(--surface)]"
+            >
+              Clear
             </button>
           </div>
         )}

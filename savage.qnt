@@ -302,6 +302,15 @@ module savage {
     }
   }
 
+  /// Finishing move: automatically dispatch a helpless (incapacitated) victim.
+  pure def pFinishingMove(s: State): {success: bool, newState: State} = {
+    if (s.incapacitated) {
+      {success: true, newState: die(s)}
+    } else {
+      {success: false, newState: s}
+    }
+  }
+
   // ============================================================
   // 4. STATE VARIABLE
   // ============================================================
@@ -401,6 +410,11 @@ module savage {
     all { r.success, state' = r.newState }
   }
 
+  action doFinishingMove: bool = {
+    val r = pFinishingMove(state)
+    all { r.success, state' = r.newState }
+  }
+
   // ============================================================
   // 7. INITIALIZATION
   // ============================================================
@@ -448,6 +462,9 @@ module savage {
         // Healing
         nondet amount = HEAL_RANGE.oneOf()
         doHeal(amount),
+
+        // Finishing move (dispatch helpless victim)
+        doFinishingMove,
       }
     }
   }

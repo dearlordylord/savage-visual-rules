@@ -74,6 +74,7 @@ const savageDriver = defineDriver(
     doApplyFatigue: {},
     doRecoverFatigue: {},
     doHeal: { amount: ITFBigInt },
+    doFinishingMove: {},
     step: {}, // dead character no-op (state' = state)
   },
   () => {
@@ -115,6 +116,7 @@ const savageDriver = defineDriver(
       doHeal: ({ amount }) => {
         ensureActor().send({ type: 'HEAL', amount: Number(amount) })
       },
+      doFinishingMove: () => { ensureActor().send({ type: 'FINISHING_MOVE' }) },
       step: () => {}, // dead character no-op
       getState: () => snapshotToQuintState(ensureActor().getSnapshot()),
       config: () => ({ statePath: ['state'] }),

@@ -23,7 +23,8 @@ export type SavageEvent =
   | { type: 'APPLY_VULNERABLE' }
   | { type: 'APPLY_FATIGUE' }
   | { type: 'RECOVER_FATIGUE' }
-  | { type: 'HEAL'; amount: number };
+  | { type: 'HEAL'; amount: number }
+  | { type: 'FINISHING_MOVE' };
 
 // ============================================================
 // Helpers (mirror Quint spec pure functions)
@@ -277,6 +278,7 @@ export const savageMachine = setup({
                   { guard: 'healToZero', target: '#savage.alive.damageTrack.active.unshaken', actions: ['healWounds'] },
                   { guard: 'hasWounds', target: '#savage.alive.damageTrack.active.wounded', actions: ['healWounds'] },
                 ],
+                FINISHING_MOVE: '#savage.dead',
               },
             },
           },
