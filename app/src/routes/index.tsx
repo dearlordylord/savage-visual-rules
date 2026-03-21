@@ -166,11 +166,11 @@ function StateTree({ snapshot }: { snapshot: SavageSnapshot }) {
             <div className="flex gap-4">
               <StateLeaf label="stunned" active={isStunned(snapshot)} />
               <StateLeaf
-                label={`distracted (${snapshot.context.distractedTimer})`}
+                label={`distracted (${snapshot.context.distractedTimer === -1 ? 'off' : snapshot.context.distractedTimer + 1})`}
                 active={snapshot.matches({ alive: { conditionTrack: { distraction: 'distracted' } } })}
               />
               <StateLeaf
-                label={`vulnerable (${snapshot.context.vulnerableTimer})`}
+                label={`vulnerable (${snapshot.context.vulnerableTimer === -1 ? 'off' : snapshot.context.vulnerableTimer + 1})`}
                 active={snapshot.matches({ alive: { conditionTrack: { vulnerability: 'vulnerable' } } })}
               />
             </div>
@@ -297,7 +297,8 @@ function EventPanel({
   const [margin, setMargin] = useState(4)
   const [soak, setSoak] = useState(0)
   const [incapRoll, setIncapRoll] = useState(0)
-  const [recoveryRoll, setRecoveryRoll] = useState(1)
+  const [vigorRoll, setVigorRoll] = useState(1)
+  const [spiritRoll, setSpiritRoll] = useState(1)
   const [healAmount, setHealAmount] = useState(1)
 
   const dead = isDead(snapshot)
@@ -325,10 +326,11 @@ function EventPanel({
         {/* START_OF_TURN */}
         <div className="rounded-lg border border-[var(--line)] p-3">
           <p className="mb-2 font-semibold">Start of Turn</p>
-          <div className="mb-2">
-            <NumInput label="recoveryRoll" value={recoveryRoll} onChange={setRecoveryRoll} min={0} max={3} title="Recovery roll result. For Shaken: Spirit check. For Stunned: Vigor check. For Bleeding Out: Vigor check. 0 = fail. 1 = success. 2+ = raise." />
+          <div className="mb-2 flex gap-3">
+            <NumInput label="vigorRoll" value={vigorRoll} onChange={setVigorRoll} min={0} max={3} title="Vigor check result. Used for Stunned recovery and Bleeding Out. 0 = fail. 1 = success. 2+ = raise." />
+            <NumInput label="spiritRoll" value={spiritRoll} onChange={setSpiritRoll} min={0} max={3} title="Spirit check result. Used for Shaken recovery. 0 = fail. 1 = success. 2+ = raise." />
           </div>
-          <EventBtn disabled={dead} onClick={() => send({ type: 'START_OF_TURN', recoveryRoll })}>
+          <EventBtn disabled={dead} onClick={() => send({ type: 'START_OF_TURN', vigorRoll, spiritRoll })}>
             Fire
           </EventBtn>
         </div>
@@ -473,7 +475,7 @@ function formatEvent(e: SavageEvent): string {
     case 'TAKE_DAMAGE':
       return `TAKE_DAMAGE(m:${e.margin} s:${e.soakSuccesses} i:${e.incapRoll})`
     case 'START_OF_TURN':
-      return `START_OF_TURN(${e.recoveryRoll})`
+      return `START_OF_TURN(vig:${e.vigorRoll} spi:${e.spiritRoll})`
     case 'HEAL':
       return `HEAL(${e.amount})`
     default:

@@ -142,20 +142,22 @@ module savage {
     }
   }
 
-  /// Start of turn: transition to own turn + one recovery attempt.
-  /// roll: 0 = fail, 1 = success, 2+ = raise.
-  /// Used for: bleeding out (Vigor), Stunned (Vigor), or Shaken (Spirit) — whichever applies.
+  /// Start of turn: transition to own turn + recovery attempts.
+  /// Stunned (Vigor) and Shaken (Spirit) recoveries are independent free actions.
+  /// vigorRoll: used for bleeding out or stunned recovery. 0 = fail, 1 = success, 2+ = raise.
+  /// spiritRoll: used for shaken recovery. 0 = fail, 1 = success, 2+ = raise.
   pure def pStartOfTurn(
     s: State,
-    roll: int
+    vigorRoll: int,
+    spiritRoll: int
   ): {success: bool, newState: State} = {
     if (s.dead or s.ownTurn) {
       {success: false, newState: s}
     } else if (s.incapacitated and s.bleedingOut) {
       // Bleeding out: Vigor check each turn
-      if (roll == 0) {
+      if (vigorRoll == 0) {
         {success: true, newState: {...s, ownTurn: true, dead: true}}
-      } else if (roll >= 2) {
+      } else if (vigorRoll >= 2) {
         // Raise: stabilized
         {success: true, newState: {...s, ownTurn: true, bleedingOut: false}}
       } else {
@@ -165,27 +167,37 @@ module savage {
     } else if (s.incapacitated or s.incapByFatigue) {
       // Incapacitated but stable — no per-turn recovery (daily recovery out of scope)
       {success: true, newState: {...s, ownTurn: true}}
-    } else if (s.stunned) {
-      // Stunned recovery: Vigor check
-      if (roll >= 2) {
-        // Raise: clear Stunned, Vulnerable until end of current turn
-        {success: true, newState: {...s, ownTurn: true, stunned: false, vulnerable: max(s.vulnerable, 0)}}
-      } else if (roll >= 1) {
-        // Success: clear Stunned, Vulnerable until end of next turn
-        {success: true, newState: {...s, ownTurn: true, stunned: false, vulnerable: max(s.vulnerable, 1)}}
-      } else {
-        {success: true, newState: {...s, ownTurn: true}}
-      }
-    } else if (s.shaken) {
-      // Shaken recovery: Spirit check
-      if (roll >= 1) {
-        {success: true, newState: {...s, ownTurn: true, shaken: false}}
-      } else {
-        {success: true, newState: {...s, ownTurn: true}}
-      }
     } else {
-      // Nothing to recover from
-      {success: true, newState: {...s, ownTurn: true}}
+      // Active: attempt Stunned and Shaken recovery independently
+      val s1 = {...s, ownTurn: true}
+
+      // Stunned recovery (Vigor check)
+      val s2 = if (s1.stunned) {
+        if (vigorRoll >= 2) {
+          // Raise: clear Stunned, Vulnerable until end of current turn
+          {...s1, stunned: false, vulnerable: max(s1.vulnerable, 0)}
+        } else if (vigorRoll >= 1) {
+          // Success: clear Stunned, Vulnerable until end of next turn
+          {...s1, stunned: false, vulnerable: max(s1.vulnerable, 1)}
+        } else {
+          s1
+        }
+      } else {
+        s1
+      }
+
+      // Shaken recovery (Spirit check) — independent of Stunned
+      val s3 = if (s2.shaken) {
+        if (spiritRoll >= 1) {
+          {...s2, shaken: false}
+        } else {
+          s2
+        }
+      } else {
+        s2
+      }
+
+      {success: true, newState: s3}
     }
   }
 
@@ -336,8 +348,8 @@ module savage {
     all { r.success, state' = r.newState }
   }
 
-  action doStartOfTurn(roll: int): bool = {
-    val r = pStartOfTurn(state, roll)
+  action doStartOfTurn(vigorRoll: int, spiritRoll: int): bool = {
+    val r = pStartOfTurn(state, vigorRoll, spiritRoll)
     all { r.success, state' = r.newState }
   }
 
@@ -405,9 +417,10 @@ module savage {
         nondet incapRoll = ROLL_RANGE.oneOf()
         doTakeDamage(margin, soak, incapRoll),
 
-        // Start of turn (recovery attempt)
-        nondet roll = 0.to(3).oneOf()
-        doStartOfTurn(roll),
+        // Start of turn (recovery attempts)
+        nondet vigorRoll = 0.to(3).oneOf()
+        nondet spiritRoll = 0.to(3).oneOf()
+        doStartOfTurn(vigorRoll, spiritRoll),
 
         // End of turn (expire conditions)
         doEndOfTurn,

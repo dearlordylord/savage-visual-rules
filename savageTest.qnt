@@ -119,14 +119,14 @@ module savageTest {
   /// Bleeding out: fail → dead
   run bleedingOutDeathTest = {
     all { state' = {...FRESH_WILD_CARD, wounds: 3, incapacitated: true, bleedingOut: true} }
-    .then(doStartOfTurn(0))
+    .then(doStartOfTurn(0, 0))
     .expect(state.dead)
   }
 
   /// Bleeding out: raise → stabilized
   run bleedingOutStabilizedTest = {
     all { state' = {...FRESH_WILD_CARD, wounds: 3, incapacitated: true, bleedingOut: true} }
-    .then(doStartOfTurn(2))
+    .then(doStartOfTurn(2, 0))
     .expect(not(state.bleedingOut) and state.incapacitated)
   }
 
@@ -139,11 +139,11 @@ module savageTest {
     initWildCard
     .then(doApplyStunned)
     .expect(state.stunned and state.distracted == 0)
-    .then(doStartOfTurn(1))
+    .then(doStartOfTurn(1, 0))
     .expect(not(state.stunned) and state.vulnerable == 1 and state.ownTurn)
     .then(doEndOfTurn)
     .expect(state.vulnerable == 0 and state.distracted == -1)
-    .then(doStartOfTurn(0))
+    .then(doStartOfTurn(0, 0))
     .then(doEndOfTurn)
     .expect(state.vulnerable == -1)
   }
@@ -152,7 +152,7 @@ module savageTest {
   run stunnedRecoveryRaiseTest = {
     initWildCard
     .then(doApplyStunned)
-    .then(doStartOfTurn(2))
+    .then(doStartOfTurn(2, 0))
     .expect(not(state.stunned) and state.vulnerable == 0)
     .then(doEndOfTurn)
     .expect(state.vulnerable == -1)
@@ -162,8 +162,31 @@ module savageTest {
   run stunnedRecoveryFailTest = {
     initWildCard
     .then(doApplyStunned)
-    .then(doStartOfTurn(0))
+    .then(doStartOfTurn(0, 0))
     .expect(state.stunned)
+  }
+
+  action initStunnedAndShaken = state' = {...FRESH_WILD_CARD, stunned: true, shaken: true, distracted: 0}
+
+  /// Stunned + Shaken: both recover independently on same turn
+  run stunnedAndShakenRecoveryTest = {
+    initStunnedAndShaken
+    .then(doStartOfTurn(1, 1))
+    .expect(not(state.stunned) and not(state.shaken) and state.vulnerable == 1)
+  }
+
+  /// Stunned + Shaken: stunned fails but shaken succeeds
+  run stunnedFailShakenSuccessTest = {
+    initStunnedAndShaken
+    .then(doStartOfTurn(0, 1))
+    .expect(state.stunned and not(state.shaken))
+  }
+
+  /// Stunned + Shaken: stunned succeeds but shaken fails
+  run stunnedSuccessShakenFailTest = {
+    initStunnedAndShaken
+    .then(doStartOfTurn(1, 0))
+    .expect(not(state.stunned) and state.shaken and state.vulnerable == 1)
   }
 
   // ============================================================
@@ -175,7 +198,7 @@ module savageTest {
     initWildCard
     .then(doTakeDamage(0, 0, 0))
     .expect(state.shaken)
-    .then(doStartOfTurn(1))
+    .then(doStartOfTurn(0, 1))
     .expect(not(state.shaken) and state.ownTurn)
   }
 
@@ -183,7 +206,7 @@ module savageTest {
   run shakenRecoveryFailTest = {
     initWildCard
     .then(doTakeDamage(0, 0, 0))
-    .then(doStartOfTurn(0))
+    .then(doStartOfTurn(0, 0))
     .expect(state.shaken and state.ownTurn)
   }
 
@@ -206,7 +229,7 @@ module savageTest {
     .expect(not(state.ownTurn))
     .then(doApplyDistracted)
     .expect(state.distracted == 0)
-    .then(doStartOfTurn(0))
+    .then(doStartOfTurn(0, 0))
     .then(doEndOfTurn)
     .expect(state.distracted == -1)
   }
@@ -214,13 +237,13 @@ module savageTest {
   /// Applied during own turn: lasts through current + next turn (2 endOfTurns)
   run distractedDuringOwnTurnTest = {
     initWildCard
-    .then(doStartOfTurn(0))
+    .then(doStartOfTurn(0, 0))
     .expect(state.ownTurn)
     .then(doApplyDistracted)
     .expect(state.distracted == 1)
     .then(doEndOfTurn)
     .expect(state.distracted == 0)
-    .then(doStartOfTurn(0))
+    .then(doStartOfTurn(0, 0))
     .then(doEndOfTurn)
     .expect(state.distracted == -1)
   }

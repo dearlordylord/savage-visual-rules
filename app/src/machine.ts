@@ -15,7 +15,7 @@ export interface SavageContext {
 
 export type SavageEvent =
   | { type: 'TAKE_DAMAGE'; margin: number; soakSuccesses: number; incapRoll: number }
-  | { type: 'START_OF_TURN'; recoveryRoll: number }
+  | { type: 'START_OF_TURN'; vigorRoll: number; spiritRoll: number }
   | { type: 'END_OF_TURN' }
   | { type: 'SPEND_BENNY' }
   | { type: 'APPLY_STUNNED' }
@@ -120,11 +120,12 @@ export const savageMachine = setup({
     // --- Margin guard ---
     marginNonNeg: ({ event }) => asDamage(event).margin >= 0,
 
-    // --- Recovery guards ---
-    recoverySuccess: ({ event }) => asRecovery(event).recoveryRoll >= 1,
-    recoveryRaise: ({ event }) => asRecovery(event).recoveryRoll >= 2,
-    recoverySuccessNoRaise: ({ event }) => asRecovery(event).recoveryRoll === 1,
-    bleedingOutFail: ({ event }) => asRecovery(event).recoveryRoll === 0,
+    // --- Recovery guards (Vigor: stunned + bleeding out, Spirit: shaken) ---
+    vigorSuccess: ({ event }) => asRecovery(event).vigorRoll >= 1,
+    vigorRaise: ({ event }) => asRecovery(event).vigorRoll >= 2,
+    vigorSuccessNoRaise: ({ event }) => asRecovery(event).vigorRoll === 1,
+    vigorFail: ({ event }) => asRecovery(event).vigorRoll === 0,
+    spiritSuccess: ({ event }) => asRecovery(event).spiritRoll >= 1,
 
     // --- Context guards ---
     hasWounds: ({ context }) => context.wounds > 0,
@@ -221,8 +222,8 @@ export const savageMachine = setup({
                       { guard: 'woundsNotExceedMaxShaken', actions: ['addWoundsShaken'] }, // Stay shaken, add wounds
                     ],
                     START_OF_TURN: [
-                      { guard: and([stateIn(OTHERS_TURN), not(stateIn(STUNNED_STATE)), 'recoverySuccess', 'hasWounds']), target: 'wounded' },
-                      { guard: and([stateIn(OTHERS_TURN), not(stateIn(STUNNED_STATE)), 'recoverySuccess']), target: 'unshaken' },
+                      { guard: and([stateIn(OTHERS_TURN), 'spiritSuccess', 'hasWounds']), target: 'wounded' },
+                      { guard: and([stateIn(OTHERS_TURN), 'spiritSuccess']), target: 'unshaken' },
                     ],
                     SPEND_BENNY: [
                       { guard: 'hasWounds', target: 'wounded' },
@@ -262,8 +263,8 @@ export const savageMachine = setup({
                 bleedingOut: {
                   on: {
                     START_OF_TURN: [
-                      { guard: and([stateIn(OTHERS_TURN), 'bleedingOutFail']), target: '#savage.dead' },
-                      { guard: and([stateIn(OTHERS_TURN), 'recoveryRaise']), target: 'stable' },
+                      { guard: and([stateIn(OTHERS_TURN), 'vigorFail']), target: '#savage.dead' },
+                      { guard: and([stateIn(OTHERS_TURN), 'vigorRaise']), target: 'stable' },
                       // roll == 1: survive, stay bleedingOut
                     ],
                   },
@@ -296,8 +297,8 @@ export const savageMachine = setup({
                 stunned: {
                   on: {
                     START_OF_TURN: [
-                      { guard: and([stateIn(OTHERS_TURN), 'recoveryRaise']), target: 'normal', actions: ['setVulnerableTimerRecoveryRaise'] },
-                      { guard: and([stateIn(OTHERS_TURN), 'recoverySuccessNoRaise']), target: 'normal', actions: ['setVulnerableTimerRecoverySuccess'] },
+                      { guard: and([stateIn(OTHERS_TURN), 'vigorRaise']), target: 'normal', actions: ['setVulnerableTimerRecoveryRaise'] },
+                      { guard: and([stateIn(OTHERS_TURN), 'vigorSuccessNoRaise']), target: 'normal', actions: ['setVulnerableTimerRecoverySuccess'] },
                     ],
                   },
                 },
@@ -334,7 +335,7 @@ export const savageMachine = setup({
                     APPLY_VULNERABLE: { target: 'vulnerable', actions: ['setVulnerableTimer'] },
                     // Stunned recovery also triggers vulnerability
                     START_OF_TURN: [
-                      { guard: and([stateIn(OTHERS_TURN), stateIn(STUNNED_STATE), 'recoverySuccess']), target: 'vulnerable' },
+                      { guard: and([stateIn(OTHERS_TURN), stateIn(STUNNED_STATE), 'vigorSuccess']), target: 'vulnerable' },
                     ],
                   },
                 },

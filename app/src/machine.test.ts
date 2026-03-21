@@ -156,7 +156,7 @@ describe('incapacitation', () => {
   it('bleeding out fail → dead', () => {
     const a = shakenWith3Wounds();
     a.send({ type: 'TAKE_DAMAGE', margin: 0, soakSuccesses: 0, incapRoll: 0 }); // → bleedingOut
-    a.send({ type: 'START_OF_TURN', recoveryRoll: 0 });
+    a.send({ type: 'START_OF_TURN', vigorRoll: 0, spiritRoll: 0 });
     expect(isDead(snap(a))).toBe(true);
   });
 
@@ -164,7 +164,7 @@ describe('incapacitation', () => {
   it('bleeding out raise → stabilized', () => {
     const a = shakenWith3Wounds();
     a.send({ type: 'TAKE_DAMAGE', margin: 0, soakSuccesses: 0, incapRoll: 0 }); // → bleedingOut
-    a.send({ type: 'START_OF_TURN', recoveryRoll: 2 });
+    a.send({ type: 'START_OF_TURN', vigorRoll: 2, spiritRoll: 0 });
     expect(snap(a).matches({ alive: { damageTrack: { incapacitated: 'stable' } } })).toBe(true);
     expect(isDead(snap(a))).toBe(false);
   });
@@ -183,7 +183,7 @@ describe('stunned recovery', () => {
     expect(snap(a).matches({ alive: { conditionTrack: { distraction: 'distracted' } } })).toBe(true);
     expect(snap(a).context.distractedTimer).toBe(0);
 
-    a.send({ type: 'START_OF_TURN', recoveryRoll: 1 });
+    a.send({ type: 'START_OF_TURN', vigorRoll: 1, spiritRoll: 0 });
     expect(snap(a).matches({ alive: { conditionTrack: { stun: 'normal' } } })).toBe(true);
     expect(snap(a).matches({ alive: { conditionTrack: { vulnerability: 'vulnerable' } } })).toBe(true);
     expect(snap(a).context.vulnerableTimer).toBe(1);
@@ -193,7 +193,7 @@ describe('stunned recovery', () => {
     expect(snap(a).context.vulnerableTimer).toBe(0);
     expect(snap(a).context.distractedTimer).toBe(-1);
 
-    a.send({ type: 'START_OF_TURN', recoveryRoll: 0 });
+    a.send({ type: 'START_OF_TURN', vigorRoll: 0, spiritRoll: 0 });
     a.send({ type: 'END_OF_TURN' });
     expect(snap(a).context.vulnerableTimer).toBe(-1);
     expect(snap(a).matches({ alive: { conditionTrack: { vulnerability: 'clear' } } })).toBe(true);
@@ -203,7 +203,7 @@ describe('stunned recovery', () => {
   it('stunned recovery raise → vulnerable clears at end of current turn', () => {
     const a = createWC();
     a.send({ type: 'APPLY_STUNNED' });
-    a.send({ type: 'START_OF_TURN', recoveryRoll: 2 });
+    a.send({ type: 'START_OF_TURN', vigorRoll: 2, spiritRoll: 0 });
     expect(snap(a).matches({ alive: { conditionTrack: { stun: 'normal' } } })).toBe(true);
     expect(snap(a).context.vulnerableTimer).toBe(0);
 
@@ -216,8 +216,36 @@ describe('stunned recovery', () => {
   it('stunned recovery fail → still stunned', () => {
     const a = createWC();
     a.send({ type: 'APPLY_STUNNED' });
-    a.send({ type: 'START_OF_TURN', recoveryRoll: 0 });
+    a.send({ type: 'START_OF_TURN', vigorRoll: 0, spiritRoll: 0 });
     expect(snap(a).matches({ alive: { conditionTrack: { stun: 'stunned' } } })).toBe(true);
+  });
+
+  function shakenAndStunned() {
+    const a = createWC();
+    a.send({ type: 'TAKE_DAMAGE', margin: 0, soakSuccesses: 0, incapRoll: 0 });
+    a.send({ type: 'APPLY_STUNNED' });
+    return a;
+  }
+
+  it('stunned + shaken: both recover on same turn', () => {
+    const a = shakenAndStunned();
+    a.send({ type: 'START_OF_TURN', vigorRoll: 1, spiritRoll: 1 });
+    expect(snap(a).matches({ alive: { conditionTrack: { stun: 'normal' } } })).toBe(true);
+    expect(isShaken(snap(a))).toBe(false);
+  });
+
+  it('stunned + shaken: vigor fails, spirit succeeds', () => {
+    const a = shakenAndStunned();
+    a.send({ type: 'START_OF_TURN', vigorRoll: 0, spiritRoll: 1 });
+    expect(snap(a).matches({ alive: { conditionTrack: { stun: 'stunned' } } })).toBe(true);
+    expect(isShaken(snap(a))).toBe(false);
+  });
+
+  it('stunned + shaken: vigor succeeds, spirit fails', () => {
+    const a = shakenAndStunned();
+    a.send({ type: 'START_OF_TURN', vigorRoll: 1, spiritRoll: 0 });
+    expect(snap(a).matches({ alive: { conditionTrack: { stun: 'normal' } } })).toBe(true);
+    expect(isShaken(snap(a))).toBe(true);
   });
 });
 
@@ -231,7 +259,7 @@ describe('shaken recovery', () => {
     const a = createWC();
     a.send({ type: 'TAKE_DAMAGE', margin: 0, soakSuccesses: 0, incapRoll: 0 });
     expect(isShaken(snap(a))).toBe(true);
-    a.send({ type: 'START_OF_TURN', recoveryRoll: 1 });
+    a.send({ type: 'START_OF_TURN', vigorRoll: 0, spiritRoll: 1 });
     expect(isShaken(snap(a))).toBe(false);
     expect(snap(a).matches({ alive: { turnPhase: 'ownTurn' } })).toBe(true);
   });
@@ -240,7 +268,7 @@ describe('shaken recovery', () => {
   it('shaken recovery fail', () => {
     const a = createWC();
     a.send({ type: 'TAKE_DAMAGE', margin: 0, soakSuccesses: 0, incapRoll: 0 });
-    a.send({ type: 'START_OF_TURN', recoveryRoll: 0 });
+    a.send({ type: 'START_OF_TURN', vigorRoll: 0, spiritRoll: 0 });
     expect(isShaken(snap(a))).toBe(true);
     expect(snap(a).matches({ alive: { turnPhase: 'ownTurn' } })).toBe(true);
   });
@@ -267,7 +295,7 @@ describe('condition timers', () => {
     a.send({ type: 'APPLY_DISTRACTED' });
     expect(snap(a).context.distractedTimer).toBe(0);
 
-    a.send({ type: 'START_OF_TURN', recoveryRoll: 0 });
+    a.send({ type: 'START_OF_TURN', vigorRoll: 0, spiritRoll: 0 });
     a.send({ type: 'END_OF_TURN' });
     expect(snap(a).context.distractedTimer).toBe(-1);
     expect(snap(a).matches({ alive: { conditionTrack: { distraction: 'clear' } } })).toBe(true);
@@ -276,7 +304,7 @@ describe('condition timers', () => {
   // distractedDuringOwnTurnTest
   it('distracted during own turn → lasts through current + next turn', () => {
     const a = createWC();
-    a.send({ type: 'START_OF_TURN', recoveryRoll: 0 });
+    a.send({ type: 'START_OF_TURN', vigorRoll: 0, spiritRoll: 0 });
     expect(snap(a).matches({ alive: { turnPhase: 'ownTurn' } })).toBe(true);
     a.send({ type: 'APPLY_DISTRACTED' });
     expect(snap(a).context.distractedTimer).toBe(1);
@@ -284,7 +312,7 @@ describe('condition timers', () => {
     a.send({ type: 'END_OF_TURN' });
     expect(snap(a).context.distractedTimer).toBe(0);
 
-    a.send({ type: 'START_OF_TURN', recoveryRoll: 0 });
+    a.send({ type: 'START_OF_TURN', vigorRoll: 0, spiritRoll: 0 });
     a.send({ type: 'END_OF_TURN' });
     expect(snap(a).context.distractedTimer).toBe(-1);
     expect(snap(a).matches({ alive: { conditionTrack: { distraction: 'clear' } } })).toBe(true);
@@ -334,7 +362,7 @@ describe('healing', () => {
     const a = createWC();
     // Get to wounded state: take damage, recover from shaken
     a.send({ type: 'TAKE_DAMAGE', margin: 8, soakSuccesses: 0, incapRoll: 0 }); // 2 wounds, shaken
-    a.send({ type: 'START_OF_TURN', recoveryRoll: 1 }); // recover shaken → wounded
+    a.send({ type: 'START_OF_TURN', vigorRoll: 0, spiritRoll: 1 }); // recover shaken → wounded
     expect(snap(a).context.wounds).toBe(2);
     expect(isShaken(snap(a))).toBe(false);
 
