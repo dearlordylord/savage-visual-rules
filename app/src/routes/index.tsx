@@ -107,12 +107,9 @@ function App() {
         fromState: before,
         toState: after,
       }
-      setLog((prev) => {
-        // Truncate any future entries beyond cursor, then append
-        const base = prev.slice(0, cursorRef.current + 1)
-        return [...base, newEntry]
-      })
-      updateCursor(cursorRef.current + 1)
+      const truncateAt = cursorRef.current + 1
+      setLog((prev) => [...prev.slice(0, truncateAt), newEntry])
+      updateCursor(truncateAt)
     },
     [updateCursor],
   )
@@ -222,8 +219,8 @@ function StateTree({ snapshot }: { snapshot: SavageSnapshot }) {
               label="incapacitated"
               active={snapshot.matches({ alive: { damageTrack: 'incapacitated' } })}
             >
-              <StateLeaf label="stable" active={snapshot.matches({ alive: { damageTrack: { incapacitated: 'stable' } } })} />
-              <StateLeaf label="bleedingOut" active={snapshot.matches({ alive: { damageTrack: { incapacitated: 'bleedingOut' } } })} />
+              <StateLeaf label="stable" active={snapshot.matches({ alive: { damageTrack: { incapacitated: 'stable' } } })} title="Incapacitated with injury. Injury Table roll not modeled — lookup is external." />
+              <StateLeaf label="bleedingOut" active={snapshot.matches({ alive: { damageTrack: { incapacitated: 'bleedingOut' } } })} title="Dying. Vigor roll each turn: fail = dead, raise = stabilized. Injury Table roll not modeled." />
             </StateNode>
           </StateRegion>
 
@@ -295,10 +292,11 @@ function StateNode({
   )
 }
 
-function StateLeaf({ label, active }: { label: string; active: boolean }) {
+function StateLeaf({ label, active, title }: { label: string; active: boolean; title?: string }) {
   return (
     <span
-      className={`inline-block rounded-md px-2 py-0.5 text-xs font-medium ${active ? 'bg-[var(--lagoon)] text-white' : 'bg-[var(--surface)] text-[var(--sea-ink-soft)] opacity-50'}`}
+      title={title}
+      className={`inline-block rounded-md px-2 py-0.5 text-xs font-medium ${active ? 'bg-[var(--lagoon)] text-white' : 'bg-[var(--surface)] text-[var(--sea-ink-soft)] opacity-50'} ${title ? 'cursor-help' : ''}`}
     >
       {label}
     </span>
@@ -312,9 +310,9 @@ function StateLeaf({ label, active }: { label: string; active: boolean }) {
 function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
   const ctx = snapshot.context
 
-  const items = [
+  const items: { label: string; value: string | boolean; title?: string }[] = [
     { label: 'Wounds', value: `${ctx.wounds} / ${ctx.maxWounds}` },
-    { label: 'Penalty', value: totalPenalty(snapshot).toString() },
+    { label: 'Penalty', value: totalPenalty(snapshot).toString(), title: 'Cumulative penalty to all trait rolls from Wounds (max -3) and Fatigue levels.' },
     { label: 'Shaken', value: isShaken(snapshot) },
     { label: 'Stunned', value: isStunned(snapshot) },
     { label: 'Distracted', value: isDistracted(snapshot) },
@@ -329,9 +327,9 @@ function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
     <section className="island-shell rounded-2xl p-5">
       <p className="island-kicker mb-3">Derived Values</p>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-        {items.map(({ label, value }) => (
-          <div key={label} className="flex justify-between">
-            <span className="text-[var(--sea-ink-soft)]">{label}</span>
+        {items.map(({ label, value, title }) => (
+          <div key={label} className="flex justify-between" title={title}>
+            <span className={`text-[var(--sea-ink-soft)] ${title ? 'cursor-help underline decoration-dotted underline-offset-2' : ''}`}>{label}</span>
             <span className="font-semibold">
               {typeof value === 'boolean' ? (
                 <span className={value ? 'text-green-600' : 'text-[var(--sea-ink-soft)] opacity-50'}>
