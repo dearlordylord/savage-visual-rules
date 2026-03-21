@@ -64,6 +64,8 @@ function asHeal(event: SavageEvent) {
 // ============================================================
 const STUNNED_STATE = { alive: { conditionTrack: { stun: 'stunned' as const } } };
 const OTHERS_TURN = { alive: { turnPhase: 'othersTurn' as const } };
+const DAMAGE_ACTIVE = { alive: { damageTrack: 'active' as const } };
+const FATIGUE_INCAP = { alive: { fatigueTrack: 'incapByFatigue' as const } };
 
 // ============================================================
 // Machine
@@ -222,8 +224,8 @@ export const savageMachine = setup({
                       { guard: 'woundsNotExceedMaxShaken', actions: ['addWoundsShaken'] }, // Stay shaken, add wounds
                     ],
                     START_OF_TURN: [
-                      { guard: and([stateIn(OTHERS_TURN), 'spiritSuccess', 'hasWounds']), target: 'wounded' },
-                      { guard: and([stateIn(OTHERS_TURN), 'spiritSuccess']), target: 'unshaken' },
+                      { guard: and([stateIn(OTHERS_TURN), not(stateIn(FATIGUE_INCAP)), 'spiritSuccess', 'hasWounds']), target: 'wounded' },
+                      { guard: and([stateIn(OTHERS_TURN), not(stateIn(FATIGUE_INCAP)), 'spiritSuccess']), target: 'unshaken' },
                     ],
                     SPEND_BENNY: [
                       { guard: 'hasWounds', target: 'wounded' },
@@ -291,15 +293,22 @@ export const savageMachine = setup({
               states: {
                 normal: {
                   on: {
-                    APPLY_STUNNED: 'stunned',
+                    APPLY_STUNNED: {
+                      guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
+                      target: 'stunned',
+                    },
                   },
                 },
                 stunned: {
                   on: {
                     START_OF_TURN: [
-                      { guard: and([stateIn(OTHERS_TURN), 'vigorRaise']), target: 'normal', actions: ['setVulnerableTimerRecoveryRaise'] },
-                      { guard: and([stateIn(OTHERS_TURN), 'vigorSuccessNoRaise']), target: 'normal', actions: ['setVulnerableTimerRecoverySuccess'] },
+                      { guard: and([stateIn(OTHERS_TURN), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), 'vigorRaise']), target: 'normal', actions: ['setVulnerableTimerRecoveryRaise'] },
+                      { guard: and([stateIn(OTHERS_TURN), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), 'vigorSuccessNoRaise']), target: 'normal', actions: ['setVulnerableTimerRecoverySuccess'] },
                     ],
+                  },
+                  always: {
+                    guard: not(stateIn(DAMAGE_ACTIVE)),
+                    target: 'normal',
                   },
                 },
               },
@@ -310,14 +319,14 @@ export const savageMachine = setup({
               states: {
                 clear: {
                   on: {
-                    APPLY_DISTRACTED: { target: 'distracted', actions: ['setDistractedTimer'] },
-                    APPLY_STUNNED: { target: 'distracted', actions: ['setDistractedTimer'] },
+                    APPLY_DISTRACTED: { guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]), target: 'distracted', actions: ['setDistractedTimer'] },
+                    APPLY_STUNNED: { guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]), target: 'distracted', actions: ['setDistractedTimer'] },
                   },
                 },
                 distracted: {
                   on: {
-                    APPLY_DISTRACTED: { actions: ['setDistractedTimer'] },
-                    APPLY_STUNNED: { actions: ['setDistractedTimer'] },
+                    APPLY_DISTRACTED: { guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]), actions: ['setDistractedTimer'] },
+                    APPLY_STUNNED: { guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]), actions: ['setDistractedTimer'] },
                   },
                   always: {
                     guard: 'distractedTimerExpired',
@@ -332,16 +341,16 @@ export const savageMachine = setup({
               states: {
                 clear: {
                   on: {
-                    APPLY_VULNERABLE: { target: 'vulnerable', actions: ['setVulnerableTimer'] },
+                    APPLY_VULNERABLE: { guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]), target: 'vulnerable', actions: ['setVulnerableTimer'] },
                     // Stunned recovery also triggers vulnerability
                     START_OF_TURN: [
-                      { guard: and([stateIn(OTHERS_TURN), stateIn(STUNNED_STATE), 'vigorSuccess']), target: 'vulnerable' },
+                      { guard: and([stateIn(OTHERS_TURN), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), stateIn(STUNNED_STATE), 'vigorSuccess']), target: 'vulnerable' },
                     ],
                   },
                 },
                 vulnerable: {
                   on: {
-                    APPLY_VULNERABLE: { actions: ['setVulnerableTimer'] },
+                    APPLY_VULNERABLE: { guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]), actions: ['setVulnerableTimer'] },
                   },
                   always: {
                     guard: 'vulnerableTimerExpired',
@@ -403,6 +412,10 @@ export const savageMachine = setup({
 
     dead: {
       type: 'final',
+      entry: assign({
+        distractedTimer: -1,
+        vulnerableTimer: -1,
+      }),
     },
   },
 });

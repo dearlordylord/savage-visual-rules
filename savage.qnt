@@ -67,6 +67,14 @@ module savage {
   // --- Helpers ---
   pure def max(a: int, b: int): int = if (a > b) a else b
 
+  /// Clear all conditions when dying — dead is absorbing, no residual state
+  pure def die(s: State): State = {
+    ...s, dead: true, shaken: false, stunned: false,
+    distracted: -1, vulnerable: -1,
+    incapacitated: false, bleedingOut: false,
+    fatigue: 0, incapByFatigue: false
+  }
+
   // --- Derived state ---
 
   /// Distracted: from timer OR from Stunned (Stunned sets its own Distracted timer)
@@ -124,12 +132,12 @@ module savage {
 
       if (not(s.isWildCard) and actualWounds > 0) {
         // Extra: any wound = eliminated
-        {success: true, newState: {...s, wounds: s.maxWounds, dead: true}}
+        {success: true, newState: die({...s, wounds: s.maxWounds})}
       } else if (s.isWildCard and newWounds > s.maxWounds) {
         // Wild Card: exceeds max wounds = incapacitated + immediate vigor roll
-        val base = {...s, wounds: s.maxWounds, shaken: newShaken, incapacitated: true}
+        val base = {...s, wounds: s.maxWounds, shaken: false, stunned: false, incapacitated: true}
         if (incapRoll < 0) {
-          {success: true, newState: {...base, dead: true}}
+          {success: true, newState: die(base)}
         } else if (incapRoll == 0) {
           {success: true, newState: {...base, bleedingOut: true}}
         } else {
@@ -156,7 +164,7 @@ module savage {
     } else if (s.incapacitated and s.bleedingOut) {
       // Bleeding out: Vigor check each turn
       if (vigorRoll == 0) {
-        {success: true, newState: {...s, ownTurn: true, dead: true}}
+        {success: true, newState: die({...s, ownTurn: true})}
       } else if (vigorRoll >= 2) {
         // Raise: stabilized
         {success: true, newState: {...s, ownTurn: true, bleedingOut: false}}
