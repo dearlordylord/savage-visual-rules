@@ -6,7 +6,10 @@ import {
   isDead,
   isDistracted,
   isEntangled,
+  isGrabbed,
+  isGrappled,
   isOnHold,
+  isPinned,
   isProne,
   isRestrained,
   isShaken,
@@ -681,5 +684,83 @@ describe("restraint", () => {
     b.send({ type: "TAKE_DAMAGE", margin: 4, soakSuccesses: 0, incapRoll: 0 })
     expect(isDead(snap(b))).toBe(true)
     expect(isRestrained(snap(b))).toBe(false)
+  })
+})
+
+// ============================================================
+// Grapple tests
+// ============================================================
+
+describe("grapple", () => {
+  it("grapple attempt success → grabbed + distracted + vulnerable", () => {
+    const a = createWC()
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: 1 })
+    expect(isGrabbed(snap(a))).toBe(true)
+    expect(isGrappled(snap(a))).toBe(true)
+    expect(isDistracted(snap(a))).toBe(true)
+    expect(isVulnerable(snap(a))).toBe(true)
+  })
+
+  it("grapple attempt raise → pinned", () => {
+    const a = createWC()
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: 2 })
+    expect(isPinned(snap(a))).toBe(true)
+    expect(isGrappled(snap(a))).toBe(true)
+  })
+
+  it("grapple attempt fail → still free", () => {
+    const a = createWC()
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: 0 })
+    expect(isGrappled(snap(a))).toBe(false)
+  })
+
+  it("grapple escape from grabbed → free", () => {
+    const a = createWC()
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: 1 })
+    expect(isGrabbed(snap(a))).toBe(true)
+    a.send({ type: "GRAPPLE_ESCAPE", rollResult: 1 })
+    expect(isGrappled(snap(a))).toBe(false)
+  })
+
+  it("grapple escape fail → still grabbed", () => {
+    const a = createWC()
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: 1 })
+    a.send({ type: "GRAPPLE_ESCAPE", rollResult: 0 })
+    expect(isGrabbed(snap(a))).toBe(true)
+  })
+
+  it("pin attempt success → pinned", () => {
+    const a = createWC()
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: 1 })
+    expect(isGrabbed(snap(a))).toBe(true)
+    a.send({ type: "PIN_ATTEMPT", rollResult: 1 })
+    expect(isPinned(snap(a))).toBe(true)
+  })
+
+  it("grapple escape from pinned → free", () => {
+    const a = createWC()
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: 2 })
+    expect(isPinned(snap(a))).toBe(true)
+    a.send({ type: "GRAPPLE_ESCAPE", rollResult: 1 })
+    expect(isGrappled(snap(a))).toBe(false)
+  })
+
+  it("grapple and restraint are mutually exclusive", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_ENTANGLED" })
+    expect(isEntangled(snap(a))).toBe(true)
+    // Grapple from entangled state — replaces restraint
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: 1 })
+    expect(isGrabbed(snap(a))).toBe(true)
+    expect(isEntangled(snap(a))).toBe(false)
+  })
+
+  it("grapple clears on incapacitation", () => {
+    const a = createWC()
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: 1 })
+    expect(isGrabbed(snap(a))).toBe(true)
+    a.send({ type: "TAKE_DAMAGE", margin: 12, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 1 })
+    expect(isGrappled(snap(a))).toBe(false)
   })
 })

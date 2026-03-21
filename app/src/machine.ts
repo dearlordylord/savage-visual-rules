@@ -27,6 +27,7 @@ export interface SavageContext {
   onHold: boolean // mirrors turnPhase onHold state for use in guards/actions
   interruptedSuccessfully: boolean // true when last interrupt roll succeeded (acts before interruptee)
   injuries: InjuryType[] // permanent injuries from Injury Table
+  grappledBy: string | null // opponent identifier when grabbed/pinned
 }
 
 export type SavageEvent =
@@ -48,6 +49,9 @@ export type SavageEvent =
   | { type: "APPLY_ENTANGLED" }
   | { type: "APPLY_BOUND" }
   | { type: "ESCAPE_ATTEMPT"; rollResult: number }
+  | { type: "GRAPPLE_ATTEMPT"; rollResult: number }
+  | { type: "GRAPPLE_ESCAPE"; rollResult: number }
+  | { type: "PIN_ATTEMPT"; rollResult: number }
 
 // ============================================================
 // Helpers (mirror Quint spec pure functions)
@@ -103,6 +107,15 @@ export function resolveInjury(injuryRoll: number): InjuryType {
 }
 function asEscape(event: SavageEvent) {
   return event as Extract<SavageEvent, { type: "ESCAPE_ATTEMPT" }>
+}
+function asGrapple(event: SavageEvent) {
+  return event as Extract<SavageEvent, { type: "GRAPPLE_ATTEMPT" }>
+}
+function asGrappleEscape(event: SavageEvent) {
+  return event as Extract<SavageEvent, { type: "GRAPPLE_ESCAPE" }>
+}
+function asPin(event: SavageEvent) {
+  return event as Extract<SavageEvent, { type: "PIN_ATTEMPT" }>
 }
 
 // ============================================================
@@ -192,7 +205,13 @@ export const savageMachine = setup({
 
     // --- Escape guards ---
     escapeSuccess: ({ event }) => asEscape(event).rollResult >= 1,
-    escapeRaise: ({ event }) => asEscape(event).rollResult >= 2
+    escapeRaise: ({ event }) => asEscape(event).rollResult >= 2,
+
+    // --- Grapple guards ---
+    grappleSuccess: ({ event }) => asGrapple(event).rollResult >= 1,
+    grappleRaise: ({ event }) => asGrapple(event).rollResult >= 2,
+    grappleEscapeSuccess: ({ event }) => asGrappleEscape(event).rollResult >= 1,
+    pinSuccess: ({ event }) => asPin(event).rollResult >= 1
   },
   actions: {
     addWounds: assign(({ context, event }) => {
@@ -235,7 +254,8 @@ export const savageMachine = setup({
       const roll = asDamage(event).injuryRoll ?? 0
       if (roll === 0) return {}
       return { injuries: [...context.injuries, resolveInjury(roll)] }
-    })
+    }),
+    clearGrappledBy: assign({ grappledBy: null })
   }
 }).createMachine({
   id: "savage",
@@ -249,7 +269,8 @@ export const savageMachine = setup({
     ownTurn: false,
     onHold: false,
     interruptedSuccessfully: false,
-    injuries: []
+    injuries: [],
+    grappledBy: null
   }),
   states: {
     alive: {
@@ -459,6 +480,11 @@ export const savageMachine = setup({
                       guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
                       target: "distracted",
                       actions: ["setDistractedTimer"]
+                    },
+                    GRAPPLE_ATTEMPT: {
+                      guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "grappleSuccess"]),
+                      target: "distracted",
+                      actions: ["setDistractedTimer"]
                     }
                   }
                 },
@@ -474,6 +500,10 @@ export const savageMachine = setup({
                     },
                     APPLY_BOUND: {
                       guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
+                      actions: ["setDistractedTimer"]
+                    },
+                    GRAPPLE_ATTEMPT: {
+                      guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "grappleSuccess"]),
                       actions: ["setDistractedTimer"]
                     }
                   },
@@ -500,6 +530,11 @@ export const savageMachine = setup({
                       target: "vulnerable",
                       actions: ["setVulnerableTimer"]
                     },
+                    GRAPPLE_ATTEMPT: {
+                      guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "grappleSuccess"]),
+                      target: "vulnerable",
+                      actions: ["setVulnerableTimer"]
+                    },
                     // Stunned recovery also triggers vulnerability
                     START_OF_TURN: [
                       {
@@ -523,6 +558,10 @@ export const savageMachine = setup({
                     },
                     APPLY_BOUND: {
                       guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
+                      actions: ["setVulnerableTimer"]
+                    },
+                    GRAPPLE_ATTEMPT: {
+                      guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "grappleSuccess"]),
                       actions: ["setVulnerableTimer"]
                     }
                   },
@@ -664,7 +703,17 @@ export const savageMachine = setup({
                 APPLY_BOUND: {
                   guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
                   target: "bound"
-                }
+                },
+                GRAPPLE_ATTEMPT: [
+                  {
+                    guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "grappleRaise"]),
+                    target: "pinned"
+                  },
+                  {
+                    guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "grappleSuccess"]),
+                    target: "grabbed"
+                  }
+                ]
               }
             },
             entangled: {
@@ -676,7 +725,17 @@ export const savageMachine = setup({
                 ESCAPE_ATTEMPT: {
                   guard: "escapeSuccess",
                   target: "free"
-                }
+                },
+                GRAPPLE_ATTEMPT: [
+                  {
+                    guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "grappleRaise"]),
+                    target: "pinned"
+                  },
+                  {
+                    guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "grappleSuccess"]),
+                    target: "grabbed"
+                  }
+                ]
               },
               always: {
                 guard: not(stateIn(DAMAGE_ACTIVE)),
@@ -688,7 +747,47 @@ export const savageMachine = setup({
                 ESCAPE_ATTEMPT: [
                   { guard: "escapeRaise", target: "free" },
                   { guard: "escapeSuccess", target: "entangled" }
+                ],
+                GRAPPLE_ATTEMPT: [
+                  {
+                    guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "grappleRaise"]),
+                    target: "pinned"
+                  },
+                  {
+                    guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "grappleSuccess"]),
+                    target: "grabbed"
+                  }
                 ]
+              },
+              always: {
+                guard: not(stateIn(DAMAGE_ACTIVE)),
+                target: "free"
+              }
+            },
+            grabbed: {
+              on: {
+                PIN_ATTEMPT: {
+                  guard: "pinSuccess",
+                  target: "pinned"
+                },
+                GRAPPLE_ESCAPE: {
+                  guard: "grappleEscapeSuccess",
+                  target: "free",
+                  actions: ["clearGrappledBy"]
+                }
+              },
+              always: {
+                guard: not(stateIn(DAMAGE_ACTIVE)),
+                target: "free"
+              }
+            },
+            pinned: {
+              on: {
+                GRAPPLE_ESCAPE: {
+                  guard: "grappleEscapeSuccess",
+                  target: "free",
+                  actions: ["clearGrappledBy"]
+                }
               },
               always: {
                 guard: not(stateIn(DAMAGE_ACTIVE)),
@@ -706,7 +805,8 @@ export const savageMachine = setup({
         distractedTimer: -1,
         vulnerableTimer: -1,
         onHold: false,
-        interruptedSuccessfully: false
+        interruptedSuccessfully: false,
+        grappledBy: null
       })
     }
   }
@@ -756,6 +856,18 @@ export function isEntangled(snap: SavageSnapshot): boolean {
 
 export function isRestrained(snap: SavageSnapshot): boolean {
   return isBound(snap) || isEntangled(snap)
+}
+
+export function isGrabbed(snap: SavageSnapshot): boolean {
+  return snap.matches({ alive: { restraintTrack: "grabbed" } })
+}
+
+export function isPinned(snap: SavageSnapshot): boolean {
+  return snap.matches({ alive: { restraintTrack: "pinned" } })
+}
+
+export function isGrappled(snap: SavageSnapshot): boolean {
+  return isGrabbed(snap) || isPinned(snap)
 }
 
 export function isActive(snap: SavageSnapshot): boolean {

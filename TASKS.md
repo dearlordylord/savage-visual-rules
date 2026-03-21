@@ -231,7 +231,7 @@
 - [ ] Grabbed/pinned applies distracted + vulnerable
 - [ ] External signals for attacker vulnerability documented
 
-### Slice 5.2: XState port for grapple
+### Slice 5.2: XState port for grapple [DONE]
 
 - Extend `restraintTrack`: `free | entangled | bound | grabbed | pinned`
 - Events: `GRAPPLE_ATTEMPT { rollResult }`, `GRAPPLE_ESCAPE { rollResult }`, `PIN_ATTEMPT { rollResult }`
@@ -245,7 +245,7 @@
 - [ ] Grapple tests pass
 - [ ] Mutual exclusion with entangled/bound enforced
 
-### Slice 5.3: UI for grapple
+### Slice 5.3: UI for grapple [DONE]
 
 - Grapple indicator showing grabbed/pinned + opponent
 - Escape action
