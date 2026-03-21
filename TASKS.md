@@ -279,7 +279,7 @@
 - [ ] Severity step-down works correctly
 - [ ] Raise clears entirely
 
-### Slice 6.2: XState port for blinded
+### Slice 6.2: XState port for blinded [DONE]
 
 - New sub-region in `conditionTrack`: `vision` with states `clear | impaired | blinded`
 - Events: `APPLY_BLINDED { severity: 2 | 4 }`
@@ -289,17 +289,17 @@
 - Mirror Quint tests
 
 **Acceptance criteria:**
-- [ ] All existing tests pass
-- [ ] Blinded tests pass
-- [ ] Recovery uses same vigorRoll as stunned (no new event params needed)
+- [x] All existing tests pass
+- [x] Blinded tests pass
+- [x] Recovery uses same vigorRoll as stunned (no new event params needed)
 
-### Slice 6.3: UI for blinded
+### Slice 6.3: UI for blinded [DONE]
 
 - Blinded indicator with severity level
 - Penalty display
 
 **Acceptance criteria:**
-- [ ] Severity visible, penalty applied to display
+- [x] Severity visible, penalty applied to display
 
 ---
 

@@ -52,6 +52,7 @@ export type SavageEvent =
   | { type: "GRAPPLE_ATTEMPT"; rollResult: number }
   | { type: "GRAPPLE_ESCAPE"; rollResult: number }
   | { type: "PIN_ATTEMPT"; rollResult: number }
+  | { type: "APPLY_BLINDED"; severity: 2 | 4 }
 
 // ============================================================
 // Helpers (mirror Quint spec pure functions)
@@ -211,7 +212,11 @@ export const savageMachine = setup({
     grappleSuccess: ({ event }) => asGrapple(event).rollResult >= 1,
     grappleRaise: ({ event }) => asGrapple(event).rollResult >= 2,
     grappleEscapeSuccess: ({ event }) => asGrappleEscape(event).rollResult >= 1,
-    pinSuccess: ({ event }) => asPin(event).rollResult >= 1
+    pinSuccess: ({ event }) => asPin(event).rollResult >= 1,
+
+    // --- Blinded guards ---
+    blindedSeverityFull: ({ event }) =>
+      (event as Extract<SavageEvent, { type: "APPLY_BLINDED" }>).severity === 4
   },
   actions: {
     addWounds: assign(({ context, event }) => {
@@ -571,6 +576,62 @@ export const savageMachine = setup({
                   }
                 }
               }
+            },
+
+            vision: {
+              initial: "clear",
+              states: {
+                clear: {
+                  on: {
+                    APPLY_BLINDED: [
+                      {
+                        guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "blindedSeverityFull"]),
+                        target: "blinded"
+                      },
+                      {
+                        guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
+                        target: "impaired"
+                      }
+                    ]
+                  }
+                },
+                impaired: {
+                  on: {
+                    APPLY_BLINDED: {
+                      guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "blindedSeverityFull"]),
+                      target: "blinded"
+                    },
+                    START_OF_TURN: [
+                      {
+                        guard: and([stateIn(OTHERS_TURN), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "vigorSuccess"]),
+                        target: "clear"
+                      }
+                    ]
+                  },
+                  always: {
+                    guard: not(stateIn(DAMAGE_ACTIVE)),
+                    target: "clear"
+                  }
+                },
+                blinded: {
+                  on: {
+                    START_OF_TURN: [
+                      {
+                        guard: and([stateIn(OTHERS_TURN), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "vigorRaise"]),
+                        target: "clear"
+                      },
+                      {
+                        guard: and([stateIn(OTHERS_TURN), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "vigorSuccessNoRaise"]),
+                        target: "impaired"
+                      }
+                    ]
+                  },
+                  always: {
+                    guard: not(stateIn(DAMAGE_ACTIVE)),
+                    target: "clear"
+                  }
+                }
+              }
             }
           }
         },
@@ -868,6 +929,23 @@ export function isPinned(snap: SavageSnapshot): boolean {
 
 export function isGrappled(snap: SavageSnapshot): boolean {
   return isGrabbed(snap) || isPinned(snap)
+}
+
+export function isBlinded(snap: SavageSnapshot): boolean {
+  return (
+    snap.matches({ alive: { conditionTrack: { vision: "blinded" } } }) ||
+    snap.matches({ alive: { conditionTrack: { vision: "impaired" } } })
+  )
+}
+
+export function isFullyBlinded(snap: SavageSnapshot): boolean {
+  return snap.matches({ alive: { conditionTrack: { vision: "blinded" } } })
+}
+
+export function blindedPenalty(snap: SavageSnapshot): number {
+  if (snap.matches({ alive: { conditionTrack: { vision: "blinded" } } })) return -4
+  if (snap.matches({ alive: { conditionTrack: { vision: "impaired" } } })) return -2
+  return 0
 }
 
 export function isActive(snap: SavageSnapshot): boolean {

@@ -9,6 +9,8 @@ import {
   isActive,
   isDead,
   isDistracted,
+  isBlinded,
+  blindedPenalty,
   isBound,
   isEntangled,
   isGrabbed,
@@ -369,7 +371,7 @@ function StateTree({ snapshot }: { snapshot: SavageSnapshot }) {
           </StateRegion>
 
           <StateRegion title="Conditions">
-            <div className="flex gap-4">
+            <div className="flex flex-wrap gap-4">
               <StateLeaf label="stunned" active={isStunned(snapshot)} />
               <StateLeaf
                 label={`distracted (${snapshot.context.distractedTimer === -1 ? "off" : snapshot.context.distractedTimer + 1})`}
@@ -378,6 +380,14 @@ function StateTree({ snapshot }: { snapshot: SavageSnapshot }) {
               <StateLeaf
                 label={`vulnerable (${snapshot.context.vulnerableTimer === -1 ? "off" : snapshot.context.vulnerableTimer + 1})`}
                 active={snapshot.matches({ alive: { conditionTrack: { vulnerability: "vulnerable" } } })}
+              />
+              <StateLeaf
+                label={`impaired (-2)`}
+                active={snapshot.matches({ alive: { conditionTrack: { vision: "impaired" } } })}
+              />
+              <StateLeaf
+                label={`blinded (-4)`}
+                active={isBlinded(snapshot)}
               />
             </div>
           </StateRegion>
@@ -473,6 +483,7 @@ function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
     { label: "On Hold", value: isOnHold(snapshot) },
     { label: "Restrained", value: isRestrained(snapshot) },
     { label: "Grappled", value: isGrappled(snapshot) },
+    { label: "Blinded Penalty", value: (-blindedPenalty(snapshot)).toString(), title: "Vision penalty: -2 impaired, -4 blinded" },
     { label: "Can Act", value: canAct(snapshot) },
     { label: "Can Move", value: canMove(snapshot) },
     { label: "Active", value: isActive(snapshot) },
@@ -681,6 +692,12 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
           </EventBtn>
           <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_BOUND" })}>
             Apply Bound
+          </EventBtn>
+          <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_BLINDED", severity: 2 })}>
+            Impair Vision
+          </EventBtn>
+          <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_BLINDED", severity: 4 })}>
+            Blind
           </EventBtn>
           {incapacitated && <EventBtn onClick={() => send({ type: "FINISHING_MOVE" })}>Finishing Move</EventBtn>}
         </div>

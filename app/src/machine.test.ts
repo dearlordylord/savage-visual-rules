@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest"
 import { createActor } from "xstate"
 
 import {
+  blindedPenalty,
+  isBlinded,
   isBound,
   isDead,
   isDistracted,
   isEntangled,
+  isFullyBlinded,
   isGrabbed,
   isGrappled,
   isOnHold,
@@ -762,5 +765,75 @@ describe("grapple", () => {
     a.send({ type: "TAKE_DAMAGE", margin: 12, soakSuccesses: 0, incapRoll: 0 })
     a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 1 })
     expect(isGrappled(snap(a))).toBe(false)
+  })
+})
+
+// ============================================================
+// Blinded tests
+// ============================================================
+
+describe("blinded", () => {
+  it("apply blinded severity 2 → impaired", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_BLINDED", severity: 2 })
+    expect(isBlinded(snap(a))).toBe(true)
+    expect(isFullyBlinded(snap(a))).toBe(false)
+    expect(blindedPenalty(snap(a))).toBe(-2)
+  })
+
+  it("apply blinded severity 4 → fully blinded", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_BLINDED", severity: 4 })
+    expect(isFullyBlinded(snap(a))).toBe(true)
+    expect(blindedPenalty(snap(a))).toBe(-4)
+  })
+
+  it("impaired upgraded to blinded", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_BLINDED", severity: 2 })
+    expect(isFullyBlinded(snap(a))).toBe(false)
+    a.send({ type: "APPLY_BLINDED", severity: 4 })
+    expect(isFullyBlinded(snap(a))).toBe(true)
+  })
+
+  it("blinded recovery: vigor raise → clear", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_BLINDED", severity: 4 })
+    expect(isFullyBlinded(snap(a))).toBe(true)
+    a.send({ type: "START_OF_TURN", vigorRoll: 2, spiritRoll: 0 })
+    expect(isBlinded(snap(a))).toBe(false)
+    expect(blindedPenalty(snap(a))).toBe(0)
+  })
+
+  it("blinded recovery: vigor success → step down to impaired", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_BLINDED", severity: 4 })
+    a.send({ type: "START_OF_TURN", vigorRoll: 1, spiritRoll: 0 })
+    expect(isFullyBlinded(snap(a))).toBe(false)
+    expect(isBlinded(snap(a))).toBe(true)
+    expect(blindedPenalty(snap(a))).toBe(-2)
+  })
+
+  it("impaired recovery: vigor success → clear", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_BLINDED", severity: 2 })
+    a.send({ type: "START_OF_TURN", vigorRoll: 1, spiritRoll: 0 })
+    expect(isBlinded(snap(a))).toBe(false)
+  })
+
+  it("blinded recovery: vigor fail → no change", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_BLINDED", severity: 4 })
+    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    expect(isFullyBlinded(snap(a))).toBe(true)
+  })
+
+  it("blinded clears on incapacitation", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_BLINDED", severity: 4 })
+    expect(isFullyBlinded(snap(a))).toBe(true)
+    a.send({ type: "TAKE_DAMAGE", margin: 12, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 1 })
+    expect(isBlinded(snap(a))).toBe(false)
   })
 })
