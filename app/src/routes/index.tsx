@@ -340,7 +340,7 @@ function EventPanel({
           <EventBtn disabled={dead} onClick={() => send({ type: 'END_OF_TURN' })}>
             End of Turn
           </EventBtn>
-          <EventBtn disabled={dead} onClick={() => send({ type: 'SPEND_BENNY' })}>
+          <EventBtn disabled={dead} onClick={() => send({ type: 'SPEND_BENNY' })} title="Spend a Benny to immediately remove Shaken (any time, even on others' turns).">
             Spend Benny
           </EventBtn>
           <EventBtn disabled={dead} onClick={() => send({ type: 'APPLY_STUNNED' })}>
@@ -412,15 +412,18 @@ function EventBtn({
   children,
   onClick,
   disabled,
+  title,
 }: {
   children: React.ReactNode
   onClick: () => void
   disabled?: boolean
+  title?: string
 }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
+      title={title}
       className="rounded-lg border border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.14)] px-3 py-1.5 text-xs font-semibold text-[var(--lagoon-deep)] transition hover:bg-[rgba(79,184,178,0.24)] disabled:cursor-not-allowed disabled:opacity-30"
     >
       {children}
