@@ -165,7 +165,9 @@ function App() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+      <StatusReference snapshot={snapshot} />
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1fr]">
         {/* Left column: state tree + derived */}
         <div className="flex flex-col gap-4">
           <StateTree snapshot={snapshot} />
@@ -187,6 +189,127 @@ function App() {
         </div>
       </div>
     </main>
+  )
+}
+
+// ============================================================
+// Status reference table
+// ============================================================
+
+const STATUS_DATA: {
+  name: string
+  nameEn: string
+  cause: string
+  effects: string
+  removal: string
+  isActive: (snap: SavageSnapshot) => boolean
+  /** Returns true when this status is active only because of stunned (implied), not directly */
+  isImplied?: (snap: SavageSnapshot) => boolean
+}[] = [
+  {
+    name: 'Шок',
+    nameEn: 'Shaken',
+    cause: 'Урон >= Стойкости; провал проверки Страха.',
+    effects: 'Можно только Свободные действия и движение. Защита не падает.',
+    removal: 'Проверка Характера в начале хода. Фишка — мгновенно.',
+    isActive: isShaken,
+  },
+  {
+    name: 'Оглушение',
+    nameEn: 'Stunned',
+    cause: 'Электрошокеры, сила оглушение, способности существ.',
+    effects: 'Отвлечён и Уязвим. Падает навзничь. Не может действовать.',
+    removal: 'Выносливость в начале хода. Успех → Уязвим до конца след. хода.',
+    isActive: isStunned,
+  },
+  {
+    name: 'Отвлечён',
+    nameEn: 'Distracted',
+    cause: 'Уловки, магия, способности существ; побочный эффект Оглушения.',
+    effects: '–2 ко всем проверкам параметров.',
+    removal: 'В конце твоего следующего хода.',
+    isActive: isDistracted,
+    isImplied: (snap) =>
+      isStunned(snap) &&
+      !snap.matches({ alive: { conditionTrack: { distraction: 'distracted' } } }),
+  },
+  {
+    name: 'Уязвим',
+    nameEn: 'Vulnerable',
+    cause: 'Уловки, магия, способности существ; побочный эффект Оглушения.',
+    effects: 'Враги получают +2 ко всем проверкам против персонажа.',
+    removal: 'В конце твоего следующего хода.',
+    isActive: isVulnerable,
+    isImplied: (snap) =>
+      isStunned(snap) &&
+      !snap.matches({ alive: { conditionTrack: { vulnerability: 'vulnerable' } } }),
+  },
+  {
+    name: 'Ранение',
+    nameEn: 'Wounded',
+    cause: 'Каждый подъём на броске урона (на 4+ больше Стойкости).',
+    effects: '–1 за каждое ранение (макс. –3) к проверкам и Шагу.',
+    removal: 'Лечение (в течение часа) или естественное исцеление (5 дней).',
+    isActive: (snap) => snap.context.wounds > 0,
+  },
+]
+
+function StatusReference({ snapshot }: { snapshot: SavageSnapshot }) {
+  const dead = isDead(snapshot)
+
+  return (
+    <section className="island-shell rounded-2xl p-5">
+      <p className="island-kicker mb-3">Справочник состояний</p>
+      <div className="overflow-x-auto text-xs">
+        <table className="w-full">
+          <thead>
+            <tr className="text-left text-[var(--sea-ink-soft)]">
+              <th className="pb-2 pr-3">Состояние</th>
+              <th className="pb-2 pr-3">Как возникает</th>
+              <th className="pb-2 pr-3">Эффекты и штрафы</th>
+              <th className="pb-2">Как снять</th>
+            </tr>
+          </thead>
+          <tbody>
+            {STATUS_DATA.map((s) => {
+              const active = !dead && s.isActive(snapshot)
+              const implied = active && s.isImplied?.(!dead ? snapshot : snapshot)
+              return (
+                <tr
+                  key={s.nameEn}
+                  className={`border-t border-[var(--line)] transition-colors ${
+                    active
+                      ? implied
+                        ? 'bg-[rgba(79,184,178,0.07)]'
+                        : 'bg-[rgba(79,184,178,0.15)]'
+                      : ''
+                  }`}
+                >
+                  <td className="py-2 pr-3 font-semibold whitespace-nowrap">
+                    <span className={active ? (implied ? 'text-[var(--lagoon)]' : 'text-[var(--lagoon-deep)]') : ''}>
+                      {s.name}
+                      <span className="ml-1 font-normal text-[var(--sea-ink-soft)]">
+                        ({s.nameEn})
+                      </span>
+                    </span>
+                    {active && (
+                      implied ? (
+                        <span className="ml-2 text-[10px] text-[var(--sea-ink-soft)]">via Stunned</span>
+                      ) : (
+                        <span className="ml-2 inline-block h-2 w-2 rounded-full bg-[var(--lagoon)]" />
+                      )
+                    )}
+                  </td>
+                  <td className="py-2 pr-3">{s.cause}</td>
+                  <td className="py-2 pr-3">{s.effects}</td>
+                  <td className="py-2">{s.removal}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
   )
 }
 
