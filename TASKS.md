@@ -128,7 +128,7 @@
 
 > Character can be restrained (entangled/bound) with cascading condition effects.
 
-### Slice 3.1: Quint spec for restraint
+### Slice 3.1: Quint spec for restraint [DONE]
 
 - Add `restrained: int` to State (-1 = free, 0 = entangled, 1 = bound)
 - Add `pApplyEntangled(s)`, `pApplyBound(s)`:
@@ -144,9 +144,9 @@
 - Add 8-10 tests
 
 **Acceptance criteria:**
-- [ ] `quint test` and `quint verify` pass
-- [ ] Bound cascades distracted + vulnerable
-- [ ] Escape logic correct for each level
+- [x] `quint test` and `quint verify` pass
+- [x] Bound cascades distracted + vulnerable
+- [x] Escape logic correct for each level
 
 ### Slice 3.2: XState port for restraint [DONE]
 

@@ -449,4 +449,79 @@ module savageTest {
     .then(doApplyFatigue)
     .expect(state.incapByFatigue and not(state.onHold))
   }
+
+  // ============================================================
+  // Restraint tests
+  // ============================================================
+
+  /// Apply entangled, then escape
+  run entangledAndEscapeTest = {
+    initWildCard
+    .then(doApplyEntangled)
+    .expect(state.restrained == 0)
+    .then(doEscapeAttempt(1))
+    .expect(state.restrained == -1)
+  }
+
+  /// Apply bound: cascades distracted + vulnerable
+  run boundCascadesConditionsTest = {
+    initWildCard
+    .then(doApplyBound)
+    .expect(state.restrained == 1 and state.isDistracted() and state.isVulnerable())
+  }
+
+  /// Bound escape: success → entangled, raise → free
+  run boundEscapeSuccessTest = {
+    all { state' = {...FRESH_WILD_CARD, restrained: 1, distracted: 0, vulnerable: 0} }
+    .then(doEscapeAttempt(1))
+    .expect(state.restrained == 0)
+  }
+
+  run boundEscapeRaiseTest = {
+    all { state' = {...FRESH_WILD_CARD, restrained: 1, distracted: 0, vulnerable: 0} }
+    .then(doEscapeAttempt(2))
+    .expect(state.restrained == -1)
+  }
+
+  /// Bound escape fail: stays bound
+  run boundEscapeFailTest = {
+    all { state' = {...FRESH_WILD_CARD, restrained: 1, distracted: 0, vulnerable: 0} }
+    .then(doEscapeAttempt(0))
+    .fail()
+  }
+
+  /// Entangled escape fail: stays entangled
+  run entangledEscapeFailTest = {
+    all { state' = {...FRESH_WILD_CARD, restrained: 0} }
+    .then(doEscapeAttempt(0))
+    .fail()
+  }
+
+  /// Entangled does not downgrade bound
+  run entangledDoesNotDowngradeBoundTest = {
+    all { state' = {...FRESH_WILD_CARD, restrained: 1, distracted: 0, vulnerable: 0} }
+    .then(doApplyEntangled)
+    .expect(state.restrained == 1)
+  }
+
+  /// Restraint blocked when incapacitated
+  run restraintBlockedWhenIncapTest = {
+    all { state' = {...FRESH_WILD_CARD, wounds: 3, incapacitated: true} }
+    .then(doApplyEntangled)
+    .fail()
+  }
+
+  /// Restraint clears on death
+  run restraintClearsOnDeathTest = {
+    all { state' = {...FRESH_WILD_CARD, restrained: 1, distracted: 0, vulnerable: 0} }
+    .then(doTakeDamage(16, 0, -1))
+    .expect(state.dead and state.restrained == -1)
+  }
+
+  /// Restraint clears on incapacitation
+  run restraintClearsOnIncapTest = {
+    all { state' = {...FRESH_WILD_CARD, wounds: 3, shaken: true, restrained: 1, distracted: 0, vulnerable: 0} }
+    .then(doTakeDamage(0, 0, 1))
+    .expect(state.incapacitated and state.restrained == -1)
+  }
 }

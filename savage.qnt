@@ -232,10 +232,13 @@ module savage {
     } else if (not(s.ownTurn)) {
       {success: false, newState: s}
     } else {
-      val nd = if (s.distracted > 0) s.distracted - 1
+      // Bound characters keep distracted + vulnerable (conditions don't expire while bound)
+      val nd = if (s.restrained == 1 and s.distracted >= 0) s.distracted
+               else if (s.distracted > 0) s.distracted - 1
                else if (s.distracted == 0) -1
                else -1
-      val nv = if (s.vulnerable > 0) s.vulnerable - 1
+      val nv = if (s.restrained == 1 and s.vulnerable >= 0) s.vulnerable
+               else if (s.vulnerable > 0) s.vulnerable - 1
                else if (s.vulnerable == 0) -1
                else -1
       {success: true, newState: {...s, ownTurn: false, distracted: nd, vulnerable: nv}}
