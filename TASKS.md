@@ -22,7 +22,7 @@
 
 > Character can go prone and stand up, affecting attack modifiers.
 
-### Slice 1.1: Quint spec for prone
+### Slice 1.1: Quint spec for prone [DONE]
 
 - Add `prone: bool` to `State` type
 - Add `pDropProne(s: State)` and `pStandUp(s: State)` pure functions
@@ -35,8 +35,8 @@
 - Add 4-6 tests: drop/stand cycle, blocked when incapacitated, clears on death, prone persists across turns
 
 **Acceptance criteria:**
-- [ ] `quint test --main savageTest` passes with all existing + new tests
-- [ ] `quint verify --invariant safetyInv` passes (safetyInv extended with proneImpliesActive)
+- [x] `quint test --main savageTest` passes with all existing + new tests
+- [x] `quint verify --invariant safetyInv` passes (safetyInv extended with proneImpliesActive)
 
 ### Slice 1.2: XState port for prone [DONE]
 
