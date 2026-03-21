@@ -12,6 +12,8 @@ export interface SavageContext {
   isWildCard: boolean
   maxWounds: number // 3 for WC, 1 for Extra
   ownTurn: boolean // mirrors turnPhase state for use in guards/actions
+  onHold: boolean // mirrors turnPhase onHold state for use in guards/actions
+  interruptedSuccessfully: boolean // true when last interrupt roll succeeded (acts before interruptee)
 }
 
 export type SavageEvent =
@@ -28,6 +30,8 @@ export type SavageEvent =
   | { type: "FINISHING_MOVE" }
   | { type: "DROP_PRONE" }
   | { type: "STAND_UP" }
+  | { type: "GO_ON_HOLD" }
+  | { type: "INTERRUPT"; athleticsRoll: number }
 
 // ============================================================
 // Helpers (mirror Quint spec pure functions)
@@ -58,11 +62,15 @@ function asRecovery(event: SavageEvent) {
 function asHeal(event: SavageEvent) {
   return event as Extract<SavageEvent, { type: "HEAL" }>
 }
+function asInterrupt(event: SavageEvent) {
+  return event as Extract<SavageEvent, { type: "INTERRUPT" }>
+}
 
 // ============================================================
 // State path constants
 // ============================================================
 const STUNNED_STATE = { alive: { conditionTrack: { stun: "stunned" as const } } }
+const SHAKEN_STATE = { alive: { damageTrack: { active: "shaken" as const } } }
 const OTHERS_TURN = { alive: { turnPhase: "othersTurn" as const } }
 const DAMAGE_ACTIVE = { alive: { damageTrack: "active" as const } }
 const FATIGUE_INCAP = { alive: { fatigueTrack: "incapByFatigue" as const } }
@@ -138,7 +146,10 @@ export const savageMachine = setup({
 
     // --- Timer guards (for always transitions) ---
     distractedTimerExpired: ({ context }) => context.distractedTimer === -1,
-    vulnerableTimerExpired: ({ context }) => context.vulnerableTimer === -1
+    vulnerableTimerExpired: ({ context }) => context.vulnerableTimer === -1,
+
+    // --- Interrupt guards ---
+    interruptSuccess: ({ event }) => asInterrupt(event).athleticsRoll >= 1
   },
   actions: {
     addWounds: assign(({ context, event }) => {
@@ -172,7 +183,11 @@ export const savageMachine = setup({
       vulnerableTimer: tickTimer(context.vulnerableTimer)
     })),
     setOwnTurnTrue: assign({ ownTurn: true }),
-    setOwnTurnFalse: assign({ ownTurn: false })
+    setOwnTurnFalse: assign({ ownTurn: false }),
+    setOnHold: assign({ onHold: true, ownTurn: false }),
+    clearOnHold: assign({ onHold: false }),
+    setInterruptSuccess: assign({ interruptedSuccessfully: true }),
+    setInterruptFail: assign({ interruptedSuccessfully: false })
   }
 }).createMachine({
   id: "savage",
@@ -183,7 +198,9 @@ export const savageMachine = setup({
     vulnerableTimer: -1,
     isWildCard: input.isWildCard ?? true,
     maxWounds: (input.isWildCard ?? true) ? 3 : 1,
-    ownTurn: false
+    ownTurn: false,
+    onHold: false,
+    interruptedSuccessfully: false
   }),
   states: {
     alive: {
@@ -492,8 +509,46 @@ export const savageMachine = setup({
             },
             ownTurn: {
               on: {
-                END_OF_TURN: { target: "othersTurn", actions: ["tickTimers", "setOwnTurnFalse"] }
+                END_OF_TURN: { target: "othersTurn", actions: ["tickTimers", "setOwnTurnFalse"] },
+                GO_ON_HOLD: {
+                  guard: and([
+                    stateIn(DAMAGE_ACTIVE),
+                    not(stateIn(FATIGUE_INCAP)),
+                    not(stateIn(SHAKEN_STATE)),
+                    not(stateIn(STUNNED_STATE))
+                  ]),
+                  target: "onHold",
+                  actions: ["setOnHold"]
+                }
               }
+            },
+            onHold: {
+              on: {
+                INTERRUPT: [
+                  {
+                    guard: "interruptSuccess",
+                    target: "ownTurn",
+                    actions: ["clearOnHold", "setOwnTurnTrue", "setInterruptSuccess"]
+                  },
+                  {
+                    target: "ownTurn",
+                    actions: ["clearOnHold", "setOwnTurnTrue", "setInterruptFail"]
+                  }
+                ],
+                END_OF_TURN: { target: "othersTurn", actions: ["clearOnHold", "tickTimers", "setOwnTurnFalse"] }
+              },
+              always: [
+                {
+                  guard: stateIn(STUNNED_STATE),
+                  target: "othersTurn",
+                  actions: ["clearOnHold", "setOwnTurnFalse"]
+                },
+                {
+                  guard: stateIn(SHAKEN_STATE),
+                  target: "othersTurn",
+                  actions: ["clearOnHold", "setOwnTurnFalse"]
+                }
+              ]
             }
           }
         },
@@ -533,7 +588,9 @@ export const savageMachine = setup({
       type: "final",
       entry: assign({
         distractedTimer: -1,
-        vulnerableTimer: -1
+        vulnerableTimer: -1,
+        onHold: false,
+        interruptedSuccessfully: false
       })
     }
   }
@@ -563,6 +620,10 @@ export function isDistracted(snap: SavageSnapshot): boolean {
 
 export function isVulnerable(snap: SavageSnapshot): boolean {
   return snap.matches({ alive: { conditionTrack: { vulnerability: "vulnerable" } } }) || isStunned(snap)
+}
+
+export function isOnHold(snap: SavageSnapshot): boolean {
+  return snap.matches({ alive: { turnPhase: "onHold" } })
 }
 
 export function isProne(snap: SavageSnapshot): boolean {

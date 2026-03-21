@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { createActor } from "xstate"
 
-import { isDead, isProne, isShaken, savageMachine } from "./machine"
+import { isDead, isOnHold, isProne, isShaken, savageMachine } from "./machine"
 
 // ============================================================
 // Helpers
@@ -482,5 +482,103 @@ describe("prone", () => {
     a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 1 })
     expect(snap(a).matches({ alive: { damageTrack: "incapacitated" } })).toBe(true)
     expect(isProne(snap(a))).toBe(false)
+  })
+})
+
+// ============================================================
+// Hold/Interrupt tests
+// ============================================================
+
+describe("hold/interrupt", () => {
+  it("go on hold from own turn", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+
+    a.send({ type: "GO_ON_HOLD" })
+    expect(isOnHold(snap(a))).toBe(true)
+    expect(snap(a).context.ownTurn).toBe(false)
+  })
+
+  it("cannot go on hold when shaken", () => {
+    const a = createWC()
+    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 0 })
+    expect(isShaken(snap(a))).toBe(true)
+    // Recover shaken on start of turn
+    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    // Still shaken (spirit fail)
+    expect(isShaken(snap(a))).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+
+    a.send({ type: "GO_ON_HOLD" })
+    expect(isOnHold(snap(a))).toBe(false) // Blocked
+    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+  })
+
+  it("cannot go on hold when stunned", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_STUNNED" })
+    a.send({ type: "START_OF_TURN", vigorRoll: 1, spiritRoll: 0 }) // recover stunned
+    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    // Now vulnerable but not stunned — should be able to hold
+    a.send({ type: "GO_ON_HOLD" })
+    expect(isOnHold(snap(a))).toBe(true)
+  })
+
+  it("interrupt success → acts before interruptee", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "GO_ON_HOLD" })
+    expect(isOnHold(snap(a))).toBe(true)
+
+    a.send({ type: "INTERRUPT", athleticsRoll: 1 })
+    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).context.ownTurn).toBe(true)
+    expect(snap(a).context.interruptedSuccessfully).toBe(true)
+  })
+
+  it("interrupt fail → still gets turn (acts after interruptee)", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "GO_ON_HOLD" })
+
+    a.send({ type: "INTERRUPT", athleticsRoll: 0 })
+    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).context.ownTurn).toBe(true)
+    expect(snap(a).context.interruptedSuccessfully).toBe(false)
+  })
+
+  it("hold lost when shaken applied", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "GO_ON_HOLD" })
+    expect(isOnHold(snap(a))).toBe(true)
+
+    // Take damage → shaken
+    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 0 })
+    expect(isShaken(snap(a))).toBe(true)
+    expect(isOnHold(snap(a))).toBe(false)
+    expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
+  })
+
+  it("hold lost when stunned applied", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "GO_ON_HOLD" })
+    expect(isOnHold(snap(a))).toBe(true)
+
+    a.send({ type: "APPLY_STUNNED" })
+    expect(isOnHold(snap(a))).toBe(false)
+    expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
+  })
+
+  it("end of turn from hold → othersTurn", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "GO_ON_HOLD" })
+
+    a.send({ type: "END_OF_TURN" })
+    expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
+    expect(isOnHold(snap(a))).toBe(false)
   })
 })

@@ -9,6 +9,7 @@ import {
   isActive,
   isDead,
   isDistracted,
+  isOnHold,
   isProne,
   isShaken,
   isStunned,
@@ -385,6 +386,7 @@ function StateTree({ snapshot }: { snapshot: SavageSnapshot }) {
             <div className="flex gap-3">
               <StateLeaf label="othersTurn" active={snapshot.matches({ alive: { turnPhase: "othersTurn" } })} />
               <StateLeaf label="ownTurn" active={snapshot.matches({ alive: { turnPhase: "ownTurn" } })} />
+              <StateLeaf label="onHold" active={isOnHold(snapshot)} />
             </div>
           </StateRegion>
 
@@ -450,6 +452,7 @@ function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
     { label: "Distracted", value: isDistracted(snapshot) },
     { label: "Vulnerable", value: isVulnerable(snapshot) },
     { label: "Prone", value: isProne(snapshot) },
+    { label: "On Hold", value: isOnHold(snapshot) },
     { label: "Can Act", value: canAct(snapshot) },
     { label: "Can Move", value: canMove(snapshot) },
     { label: "Active", value: isActive(snapshot) },
@@ -494,9 +497,11 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
   const [vigorRoll, setVigorRoll] = useState(1)
   const [spiritRoll, setSpiritRoll] = useState(1)
   const [healAmount, setHealAmount] = useState(1)
+  const [athleticsRoll, setAthleticsRoll] = useState(1)
 
   const dead = isDead(snapshot)
   const incapacitated = !dead && snapshot.matches({ alive: { damageTrack: "incapacitated" } })
+  const onHold = !dead && isOnHold(snapshot)
 
   return (
     <section className="island-shell rounded-2xl p-5">
@@ -598,8 +603,29 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
           <EventBtn disabled={dead} onClick={() => send({ type: "STAND_UP" })}>
             Stand Up
           </EventBtn>
+          <EventBtn disabled={dead} onClick={() => send({ type: "GO_ON_HOLD" })}>
+            Go On Hold
+          </EventBtn>
           {incapacitated && <EventBtn onClick={() => send({ type: "FINISHING_MOVE" })}>Finishing Move</EventBtn>}
         </div>
+
+        {/* INTERRUPT (visible when on hold) */}
+        {onHold && (
+          <div className="rounded-lg border border-[var(--line)] p-3">
+            <p className="mb-2 font-semibold">Interrupt</p>
+            <div className="mb-2 flex gap-3">
+              <NumInput
+                label="athleticsRoll"
+                value={athleticsRoll}
+                onChange={setAthleticsRoll}
+                min={0}
+                max={3}
+                title="Athletics roll to interrupt. 0 = fail (act after interruptee). 1+ = success (act before interruptee)."
+              />
+            </div>
+            <EventBtn onClick={() => send({ type: "INTERRUPT", athleticsRoll })}>Fire</EventBtn>
+          </div>
+        )}
 
         {/* HEAL */}
         <div className="rounded-lg border border-[var(--line)] p-3">
@@ -793,6 +819,8 @@ function formatEvent(e: SavageEvent): string {
       return `START_OF_TURN(vig:${e.vigorRoll} spi:${e.spiritRoll})`
     case "HEAL":
       return `HEAL(${e.amount})`
+    case "INTERRUPT":
+      return `INTERRUPT(ath:${e.athleticsRoll})`
     default:
       return e.type
   }

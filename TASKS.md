@@ -87,7 +87,7 @@
 - [ ] Hold is lost when shaken/stunned applied
 - [ ] Interrupt success/fail both yield a turn (differ in ordering — context flag)
 
-### Slice 2.2: XState port for hold/interrupt
+### Slice 2.2: XState port for hold/interrupt [DONE]
 
 - Extend `turnPhase`: `othersTurn | ownTurn | onHold`
 - `ownTurn` → `onHold` via `GO_ON_HOLD`
@@ -103,7 +103,7 @@
 - [ ] Hold/interrupt tests pass
 - [ ] Cross-region guard (lose hold on shaken/stunned) works
 
-### Slice 2.3: UI indicator for hold
+### Slice 2.3: UI indicator for hold [DONE]
 
 - Hold badge on character status
 - Interrupt action button (visible when on hold)
