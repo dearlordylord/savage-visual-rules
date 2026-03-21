@@ -305,4 +305,60 @@ module savageTest {
     .then(doTakeDamage(margin, soak, incapRoll))
     .expect(state.wounds >= 0 and state.wounds <= state.maxWounds)
   }
+
+  // ============================================================
+  // Prone tests
+  // ============================================================
+
+  /// Drop prone and stand up cycle
+  run proneDropAndStandTest = {
+    initWildCard
+    .then(doDropProne)
+    .expect(state.prone)
+    .then(doStandUp)
+    .expect(not(state.prone))
+  }
+
+  /// Prone blocked when incapacitated by wounds
+  run proneBlockedWhenIncapTest = {
+    all { state' = {...FRESH_WILD_CARD, wounds: 3, incapacitated: true} }
+    .then(doDropProne)
+    .fail()
+  }
+
+  /// Prone blocked when incapacitated by fatigue
+  run proneBlockedWhenFatigueIncapTest = {
+    all { state' = {...FRESH_WILD_CARD, fatigue: 2, incapByFatigue: true} }
+    .then(doDropProne)
+    .fail()
+  }
+
+  /// Prone clears on death
+  run proneClearsOnDeathTest = {
+    initWildCard
+    .then(doDropProne)
+    .expect(state.prone)
+    .then(doTakeDamage(16, 0, -1))
+    .expect(state.dead and not(state.prone))
+  }
+
+  /// Prone persists across turns
+  run pronePersistsAcrossTurnsTest = {
+    initWildCard
+    .then(doDropProne)
+    .expect(state.prone)
+    .then(doStartOfTurn(0, 0))
+    .expect(state.prone)
+    .then(doEndOfTurn)
+    .expect(state.prone)
+    .then(doStartOfTurn(0, 0))
+    .expect(state.prone)
+  }
+
+  /// Stand up blocked when incapacitated
+  run standUpBlockedWhenIncapTest = {
+    all { state' = {...FRESH_WILD_CARD, wounds: 3, incapacitated: true, prone: true} }
+    .then(doStandUp)
+    .fail()
+  }
 }

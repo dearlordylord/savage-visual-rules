@@ -33,7 +33,10 @@ module savage {
     maxWounds: int,         // 3 for Wild Cards, 1 for Extras
 
     // Turn phase
-    ownTurn: bool
+    ownTurn: bool,
+
+    // Position
+    prone: bool
   }
 
   // ============================================================
@@ -44,14 +47,16 @@ module savage {
     shaken: false, stunned: false, distracted: -1, vulnerable: -1,
     wounds: 0, incapacitated: false, bleedingOut: false, dead: false,
     fatigue: 0, incapByFatigue: false,
-    isWildCard: true, maxWounds: 3, ownTurn: false
+    isWildCard: true, maxWounds: 3, ownTurn: false,
+    prone: false
   }
 
   pure val FRESH_EXTRA: State = {
     shaken: false, stunned: false, distracted: -1, vulnerable: -1,
     wounds: 0, incapacitated: false, bleedingOut: false, dead: false,
     fatigue: 0, incapByFatigue: false,
-    isWildCard: false, maxWounds: 1, ownTurn: false
+    isWildCard: false, maxWounds: 1, ownTurn: false,
+    prone: false
   }
 
   // Bounded ranges for nondeterministic exploration
@@ -72,7 +77,8 @@ module savage {
     ...s, dead: true, shaken: false, stunned: false,
     distracted: -1, vulnerable: -1,
     incapacitated: false, bleedingOut: false,
-    fatigue: 0, incapByFatigue: false
+    fatigue: 0, incapByFatigue: false,
+    prone: false
   }
 
   // --- Derived state ---
@@ -135,7 +141,7 @@ module savage {
         {success: true, newState: die({...s, wounds: s.maxWounds})}
       } else if (s.isWildCard and newWounds > s.maxWounds) {
         // Wild Card: exceeds max wounds = incapacitated + immediate vigor roll
-        val base = {...s, wounds: s.maxWounds, shaken: false, stunned: false, incapacitated: true}
+        val base = {...s, wounds: s.maxWounds, shaken: false, stunned: false, incapacitated: true, prone: false}
         if (incapRoll < 0) {
           {success: true, newState: die(base)}
         } else if (incapRoll == 0) {
@@ -271,7 +277,7 @@ module savage {
       {success: false, newState: s}
     } else if (s.fatigue >= 2) {
       // Already Exhausted, one more = incapacitated by fatigue
-      {success: true, newState: {...s, incapByFatigue: true}}
+      {success: true, newState: {...s, incapByFatigue: true, prone: false}}
     } else {
       {success: true, newState: {...s, fatigue: s.fatigue + 1}}
     }
@@ -311,6 +317,24 @@ module savage {
     }
   }
 
+  /// Drop prone voluntarily. Guard: must be active.
+  pure def pDropProne(s: State): {success: bool, newState: State} = {
+    if (not(s.isActive())) {
+      {success: false, newState: s}
+    } else {
+      {success: true, newState: {...s, prone: true}}
+    }
+  }
+
+  /// Stand up from prone. Guard: must be active.
+  pure def pStandUp(s: State): {success: bool, newState: State} = {
+    if (not(s.isActive())) {
+      {success: false, newState: s}
+    } else {
+      {success: true, newState: {...s, prone: false}}
+    }
+  }
+
   // ============================================================
   // 4. STATE VARIABLE
   // ============================================================
@@ -339,6 +363,9 @@ module savage {
   /// Condition timers never go below -1
   val timersValid = state.distracted >= -1 and state.vulnerable >= -1
 
+  /// Prone only when active (not dead, not incapacitated)
+  val proneImpliesActive = state.prone implies state.isActive()
+
   /// Combined safety invariant
   val safetyInv = and {
     woundsBounded,
@@ -346,7 +373,8 @@ module savage {
     bleedingImpliesIncap,
     fatigueIncapConsistent,
     extraWoundsDead,
-    timersValid
+    timersValid,
+    proneImpliesActive
   }
 
   // Action witnesses (should be VIOLATED = reachable)
@@ -415,6 +443,16 @@ module savage {
     all { r.success, state' = r.newState }
   }
 
+  action doDropProne: bool = {
+    val r = pDropProne(state)
+    all { r.success, state' = r.newState }
+  }
+
+  action doStandUp: bool = {
+    val r = pStandUp(state)
+    all { r.success, state' = r.newState }
+  }
+
   // ============================================================
   // 7. INITIALIZATION
   // ============================================================
@@ -465,6 +503,10 @@ module savage {
 
         // Finishing move (dispatch helpless victim)
         doFinishingMove,
+
+        // Prone
+        doDropProne,
+        doStandUp,
       }
     }
   }
