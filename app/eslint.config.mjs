@@ -101,20 +101,10 @@ export default [
       ],
       "no-restricted-syntax": ["error", doubleAssertionSelector],
 
-      // Functional programming (subset)
-      ...functional.configs.recommended.rules,
+      // Functional programming (cherry-picked from recommended)
+      "functional/no-mixed-types": "error",
       "functional/prefer-tacit": "error",
-      "functional/no-throw-statements": "off",
-      "functional/immutable-data": "warn",
-      "functional/no-expression-statements": "off",
-      "functional/functional-parameters": "off",
-      "functional/no-classes": "off",
-      "functional/no-class-inheritance": "off",
-      "functional/no-conditional-statements": "off",
-      "functional/no-return-void": "off",
-      "functional/prefer-immutable-types": "off",
-      "functional/no-let": "off",
-      "functional/no-loop-statements": "off"
+      "functional/immutable-data": "warn"
     }
   },
 
