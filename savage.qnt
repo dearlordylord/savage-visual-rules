@@ -36,7 +36,10 @@ module savage {
     ownTurn: bool,
 
     // Position
-    prone: bool
+    prone: bool,
+
+    // Hold
+    onHold: bool
   }
 
   // ============================================================
@@ -48,7 +51,7 @@ module savage {
     wounds: 0, incapacitated: false, bleedingOut: false, dead: false,
     fatigue: 0, incapByFatigue: false,
     isWildCard: true, maxWounds: 3, ownTurn: false,
-    prone: false
+    prone: false, onHold: false
   }
 
   pure val FRESH_EXTRA: State = {
@@ -56,7 +59,7 @@ module savage {
     wounds: 0, incapacitated: false, bleedingOut: false, dead: false,
     fatigue: 0, incapByFatigue: false,
     isWildCard: false, maxWounds: 1, ownTurn: false,
-    prone: false
+    prone: false, onHold: false
   }
 
   // Bounded ranges for nondeterministic exploration
@@ -78,7 +81,7 @@ module savage {
     distracted: -1, vulnerable: -1,
     incapacitated: false, bleedingOut: false,
     fatigue: 0, incapByFatigue: false,
-    prone: false
+    prone: false, onHold: false
   }
 
   // --- Derived state ---
@@ -141,7 +144,7 @@ module savage {
         {success: true, newState: die({...s, wounds: s.maxWounds})}
       } else if (s.isWildCard and newWounds > s.maxWounds) {
         // Wild Card: exceeds max wounds = incapacitated + immediate vigor roll
-        val base = {...s, wounds: s.maxWounds, shaken: false, stunned: false, incapacitated: true, prone: false}
+        val base = {...s, wounds: s.maxWounds, shaken: false, stunned: false, incapacitated: true, prone: false, onHold: false}
         if (incapRoll < 0) {
           {success: true, newState: die(base)}
         } else if (incapRoll == 0) {
@@ -151,7 +154,9 @@ module savage {
           {success: true, newState: base}
         }
       } else {
-        {success: true, newState: {...s, wounds: newWounds, shaken: newShaken}}
+        // Becoming shaken clears hold
+        val loseHold = newShaken and s.onHold
+        {success: true, newState: {...s, wounds: newWounds, shaken: newShaken, onHold: if (loseHold) false else s.onHold}}
       }
     }
   }
@@ -165,7 +170,7 @@ module savage {
     vigorRoll: int,
     spiritRoll: int
   ): {success: bool, newState: State} = {
-    if (s.dead or s.ownTurn) {
+    if (s.dead or s.ownTurn or s.onHold) {
       {success: false, newState: s}
     } else if (s.incapacitated and s.bleedingOut) {
       // Bleeding out: Vigor check each turn
@@ -216,8 +221,12 @@ module savage {
   }
 
   /// End of turn: expire timed conditions, transition to others' turns.
+  /// Also handles round-end for held characters (hold expires).
   pure def pEndOfTurn(s: State): {success: bool, newState: State} = {
-    if (not(s.ownTurn)) {
+    if (s.onHold) {
+      // Round ends, hold expires
+      {success: true, newState: {...s, onHold: false}}
+    } else if (not(s.ownTurn)) {
       {success: false, newState: s}
     } else {
       val nd = if (s.distracted > 0) s.distracted - 1
@@ -247,7 +256,7 @@ module savage {
     } else {
       // Timer: 1 if during own turn (survives current + next endOfTurn), 0 if others' turn
       val timer = if (s.ownTurn) 1 else 0
-      {success: true, newState: {...s, stunned: true, distracted: max(s.distracted, timer)}}
+      {success: true, newState: {...s, stunned: true, distracted: max(s.distracted, timer), onHold: false}}
     }
   }
 
@@ -277,7 +286,7 @@ module savage {
       {success: false, newState: s}
     } else if (s.fatigue >= 2) {
       // Already Exhausted, one more = incapacitated by fatigue
-      {success: true, newState: {...s, incapByFatigue: true, prone: false}}
+      {success: true, newState: {...s, incapByFatigue: true, prone: false, onHold: false}}
     } else {
       {success: true, newState: {...s, fatigue: s.fatigue + 1}}
     }
@@ -335,6 +344,28 @@ module savage {
     }
   }
 
+  /// Go on hold: yield current turn, wait for opportunity.
+  /// Guard: must be on own turn, not shaken, not stunned, active.
+  pure def pGoOnHold(s: State): {success: bool, newState: State} = {
+    if (not(s.ownTurn) or s.shaken or s.stunned or not(s.isActive())) {
+      {success: false, newState: s}
+    } else {
+      {success: true, newState: {...s, ownTurn: false, onHold: true}}
+    }
+  }
+
+  /// Interrupt another character's action while on hold.
+  /// athleticsRoll >= 1: success (act before interruptee)
+  /// athleticsRoll < 1: fail (act after interruptee — still gets turn)
+  /// Either way, hold is consumed and character gets own turn.
+  pure def pInterrupt(s: State, athleticsRoll: int): {success: bool, newState: State} = {
+    if (not(s.onHold)) {
+      {success: false, newState: s}
+    } else {
+      {success: true, newState: {...s, onHold: false, ownTurn: true}}
+    }
+  }
+
   // ============================================================
   // 4. STATE VARIABLE
   // ============================================================
@@ -366,6 +397,9 @@ module savage {
   /// Prone only when active (not dead, not incapacitated)
   val proneImpliesActive = state.prone implies state.isActive()
 
+  /// Hold only when active, not shaken, not stunned
+  val holdImpliesActive = state.onHold implies (state.isActive() and not(state.shaken) and not(state.stunned))
+
   /// Combined safety invariant
   val safetyInv = and {
     woundsBounded,
@@ -374,7 +408,8 @@ module savage {
     fatigueIncapConsistent,
     extraWoundsDead,
     timersValid,
-    proneImpliesActive
+    proneImpliesActive,
+    holdImpliesActive
   }
 
   // Action witnesses (should be VIOLATED = reachable)
@@ -453,6 +488,16 @@ module savage {
     all { r.success, state' = r.newState }
   }
 
+  action doGoOnHold: bool = {
+    val r = pGoOnHold(state)
+    all { r.success, state' = r.newState }
+  }
+
+  action doInterrupt(athleticsRoll: int): bool = {
+    val r = pInterrupt(state, athleticsRoll)
+    all { r.success, state' = r.newState }
+  }
+
   // ============================================================
   // 7. INITIALIZATION
   // ============================================================
@@ -507,6 +552,11 @@ module savage {
         // Prone
         doDropProne,
         doStandUp,
+
+        // Hold / Interrupt
+        doGoOnHold,
+        nondet athleticsRoll = ROLL_RANGE.oneOf()
+        doInterrupt(athleticsRoll),
       }
     }
   }

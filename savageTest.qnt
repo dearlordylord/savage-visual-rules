@@ -361,4 +361,92 @@ module savageTest {
     .then(doStandUp)
     .fail()
   }
+
+  // ============================================================
+  // Hold / Interrupt tests
+  // ============================================================
+
+  /// Go on hold during own turn, then interrupt
+  run holdAndInterruptCycleTest = {
+    initWildCard
+    .then(doStartOfTurn(0, 0))
+    .expect(state.ownTurn)
+    .then(doGoOnHold)
+    .expect(state.onHold and not(state.ownTurn))
+    .then(doInterrupt(1))
+    .expect(not(state.onHold) and state.ownTurn)
+  }
+
+  /// Cannot go on hold when shaken
+  run holdBlockedWhenShakenTest = {
+    all { state' = {...FRESH_WILD_CARD, shaken: true, ownTurn: true} }
+    .then(doGoOnHold)
+    .fail()
+  }
+
+  /// Cannot go on hold when stunned
+  run holdBlockedWhenStunnedTest = {
+    all { state' = {...FRESH_WILD_CARD, stunned: true, ownTurn: true, distracted: 0} }
+    .then(doGoOnHold)
+    .fail()
+  }
+
+  /// Hold lost when shaken by damage
+  run holdLostOnShakenTest = {
+    initWildCard
+    .then(doStartOfTurn(0, 0))
+    .then(doGoOnHold)
+    .expect(state.onHold)
+    .then(doTakeDamage(0, 0, 0))
+    .expect(state.shaken and not(state.onHold))
+  }
+
+  /// Hold lost when stunned
+  run holdLostOnStunnedTest = {
+    initWildCard
+    .then(doStartOfTurn(0, 0))
+    .then(doGoOnHold)
+    .expect(state.onHold)
+    .then(doApplyStunned)
+    .expect(state.stunned and not(state.onHold))
+  }
+
+  /// Start of turn skipped when on hold
+  run startOfTurnSkippedOnHoldTest = {
+    all { state' = {...FRESH_WILD_CARD, onHold: true} }
+    .then(doStartOfTurn(0, 0))
+    .fail()
+  }
+
+  /// Cannot go on hold from others' turn
+  run holdBlockedFromOthersTurnTest = {
+    initWildCard
+    .expect(not(state.ownTurn))
+    .then(doGoOnHold)
+    .fail()
+  }
+
+  /// End of turn (round end) clears hold
+  run holdClearedOnEndOfTurnTest = {
+    initWildCard
+    .then(doStartOfTurn(0, 0))
+    .then(doGoOnHold)
+    .expect(state.onHold)
+    .then(doEndOfTurn)
+    .expect(not(state.onHold) and not(state.ownTurn))
+  }
+
+  /// Interrupt fail still gives turn
+  run interruptFailStillGetsTurnTest = {
+    all { state' = {...FRESH_WILD_CARD, onHold: true} }
+    .then(doInterrupt(-1))
+    .expect(state.ownTurn and not(state.onHold))
+  }
+
+  /// Hold lost when fatigue-incapacitated
+  run holdLostOnFatigueIncapTest = {
+    all { state' = {...FRESH_WILD_CARD, fatigue: 2, onHold: true} }
+    .then(doApplyFatigue)
+    .expect(state.incapByFatigue and not(state.onHold))
+  }
 }
