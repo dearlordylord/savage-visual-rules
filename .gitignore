@@ -1,2 +1,5 @@
 *.pdf
 node_modules/
+.reference/
+.output/
+.vinxi/
