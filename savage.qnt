@@ -39,7 +39,10 @@ module savage {
     prone: bool,
 
     // Hold
-    onHold: bool
+    onHold: bool,
+
+    // Restraint
+    restrained: int         // -1 = free, 0 = entangled, 1 = bound
   }
 
   // ============================================================
@@ -51,7 +54,7 @@ module savage {
     wounds: 0, incapacitated: false, bleedingOut: false, dead: false,
     fatigue: 0, incapByFatigue: false,
     isWildCard: true, maxWounds: 3, ownTurn: false,
-    prone: false, onHold: false
+    prone: false, onHold: false, restrained: -1
   }
 
   pure val FRESH_EXTRA: State = {
@@ -59,7 +62,7 @@ module savage {
     wounds: 0, incapacitated: false, bleedingOut: false, dead: false,
     fatigue: 0, incapByFatigue: false,
     isWildCard: false, maxWounds: 1, ownTurn: false,
-    prone: false, onHold: false
+    prone: false, onHold: false, restrained: -1
   }
 
   // Bounded ranges for nondeterministic exploration
@@ -81,7 +84,7 @@ module savage {
     distracted: -1, vulnerable: -1,
     incapacitated: false, bleedingOut: false,
     fatigue: 0, incapByFatigue: false,
-    prone: false, onHold: false
+    prone: false, onHold: false, restrained: -1
   }
 
   // --- Derived state ---
@@ -144,7 +147,7 @@ module savage {
         {success: true, newState: die({...s, wounds: s.maxWounds})}
       } else if (s.isWildCard and newWounds > s.maxWounds) {
         // Wild Card: exceeds max wounds = incapacitated + immediate vigor roll
-        val base = {...s, wounds: s.maxWounds, shaken: false, stunned: false, incapacitated: true, prone: false, onHold: false}
+        val base = {...s, wounds: s.maxWounds, shaken: false, stunned: false, incapacitated: true, prone: false, onHold: false, restrained: -1}
         if (incapRoll < 0) {
           {success: true, newState: die(base)}
         } else if (incapRoll == 0) {
@@ -286,7 +289,7 @@ module savage {
       {success: false, newState: s}
     } else if (s.fatigue >= 2) {
       // Already Exhausted, one more = incapacitated by fatigue
-      {success: true, newState: {...s, incapByFatigue: true, prone: false, onHold: false}}
+      {success: true, newState: {...s, incapByFatigue: true, prone: false, onHold: false, restrained: -1}}
     } else {
       {success: true, newState: {...s, fatigue: s.fatigue + 1}}
     }
@@ -366,6 +369,55 @@ module savage {
     }
   }
 
+  /// Apply entangled. Guard: isActive. Sets restrained = max(restrained, 0).
+  pure def pApplyEntangled(s: State): {success: bool, newState: State} = {
+    if (not(s.isActive())) {
+      {success: false, newState: s}
+    } else {
+      {success: true, newState: {...s, restrained: max(s.restrained, 0)}}
+    }
+  }
+
+  /// Apply bound. Guard: isActive. Sets restrained = 1.
+  /// Also cascades: sets distracted + vulnerable timers.
+  pure def pApplyBound(s: State): {success: bool, newState: State} = {
+    if (not(s.isActive())) {
+      {success: false, newState: s}
+    } else {
+      val timer = if (s.ownTurn) 1 else 0
+      {success: true, newState: {...s,
+        restrained: 1,
+        distracted: max(s.distracted, timer),
+        vulnerable: max(s.vulnerable, timer)
+      }}
+    }
+  }
+
+  /// Escape attempt from restraint.
+  /// From bound: success (>= 1) → entangled, raise (>= 2) → free
+  /// From entangled: success (>= 1) → free
+  pure def pEscapeAttempt(s: State, rollResult: int): {success: bool, newState: State} = {
+    if (s.restrained < 0) {
+      {success: false, newState: s}
+    } else if (s.restrained == 1) {
+      // Bound
+      if (rollResult >= 2) {
+        {success: true, newState: {...s, restrained: -1}}
+      } else if (rollResult >= 1) {
+        {success: true, newState: {...s, restrained: 0}}
+      } else {
+        {success: false, newState: s}
+      }
+    } else {
+      // Entangled
+      if (rollResult >= 1) {
+        {success: true, newState: {...s, restrained: -1}}
+      } else {
+        {success: false, newState: s}
+      }
+    }
+  }
+
   // ============================================================
   // 4. STATE VARIABLE
   // ============================================================
@@ -400,6 +452,15 @@ module savage {
   /// Hold only when active, not shaken, not stunned
   val holdImpliesActive = state.onHold implies (state.isActive() and not(state.shaken) and not(state.stunned))
 
+  /// Bound implies distracted and vulnerable
+  val boundImpliesConditions = (state.restrained == 1) implies (state.isDistracted() and state.isVulnerable())
+
+  /// Restrained implies active
+  val restrainedImpliesActive = (state.restrained >= 0) implies state.isActive()
+
+  /// Restrained range valid
+  val restrainedValid = state.restrained >= -1 and state.restrained <= 1
+
   /// Combined safety invariant
   val safetyInv = and {
     woundsBounded,
@@ -409,7 +470,10 @@ module savage {
     extraWoundsDead,
     timersValid,
     proneImpliesActive,
-    holdImpliesActive
+    holdImpliesActive,
+    boundImpliesConditions,
+    restrainedImpliesActive,
+    restrainedValid
   }
 
   // Action witnesses (should be VIOLATED = reachable)
@@ -498,6 +562,21 @@ module savage {
     all { r.success, state' = r.newState }
   }
 
+  action doApplyEntangled: bool = {
+    val r = pApplyEntangled(state)
+    all { r.success, state' = r.newState }
+  }
+
+  action doApplyBound: bool = {
+    val r = pApplyBound(state)
+    all { r.success, state' = r.newState }
+  }
+
+  action doEscapeAttempt(rollResult: int): bool = {
+    val r = pEscapeAttempt(state, rollResult)
+    all { r.success, state' = r.newState }
+  }
+
   // ============================================================
   // 7. INITIALIZATION
   // ============================================================
@@ -557,6 +636,12 @@ module savage {
         doGoOnHold,
         nondet athleticsRoll = ROLL_RANGE.oneOf()
         doInterrupt(athleticsRoll),
+
+        // Restraint
+        doApplyEntangled,
+        doApplyBound,
+        nondet escapeRoll = ROLL_RANGE.oneOf()
+        doEscapeAttempt(escapeRoll),
       }
     }
   }

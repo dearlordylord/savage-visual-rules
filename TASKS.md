@@ -72,7 +72,7 @@
 
 > Character can hold action and interrupt another character's turn.
 
-### Slice 2.1: Quint spec for hold/interrupt
+### Slice 2.1: Quint spec for hold/interrupt [DONE]
 
 - Extend turn model: `ownTurn` bool becomes richer — add `onHold: bool` to State
 - Add `pGoOnHold(s: State)`:
@@ -88,9 +88,9 @@
 - Add 6-8 tests
 
 **Acceptance criteria:**
-- [ ] `quint test` and `quint verify` pass
-- [ ] Hold is lost when shaken/stunned applied
-- [ ] Interrupt success/fail both yield a turn (differ in ordering — context flag)
+- [x] `quint test` and `quint verify` pass
+- [x] Hold is lost when shaken/stunned applied
+- [x] Interrupt success/fail both yield a turn (differ in ordering — context flag)
 
 ### Slice 2.2: XState port for hold/interrupt [DONE]
 
