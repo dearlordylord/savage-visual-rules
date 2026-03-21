@@ -241,9 +241,9 @@
 - Mirror Quint tests
 
 **Acceptance criteria:**
-- [ ] All existing tests pass
-- [ ] Grapple tests pass
-- [ ] Mutual exclusion with entangled/bound enforced
+- [x] All existing tests pass
+- [x] Grapple tests pass
+- [x] Mutual exclusion with entangled/bound enforced
 
 ### Slice 5.3: UI for grapple [DONE]
 
@@ -251,8 +251,8 @@
 - Escape action
 
 **Acceptance criteria:**
-- [ ] Grapple status and opponent visible
-- [ ] Escape action functional
+- [x] Grapple status and opponent visible
+- [x] Escape action functional
 
 ---
 

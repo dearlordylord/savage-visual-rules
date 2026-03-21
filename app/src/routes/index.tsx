@@ -11,7 +11,10 @@ import {
   isDistracted,
   isBound,
   isEntangled,
+  isGrabbed,
+  isGrappled,
   isOnHold,
+  isPinned,
   isProne,
   isRestrained,
   isShaken,
@@ -402,11 +405,13 @@ function StateTree({ snapshot }: { snapshot: SavageSnapshot }) {
             </div>
           </StateRegion>
 
-          <StateRegion title="Restraint">
-            <div className="flex gap-3">
+          <StateRegion title="Restraint / Grapple">
+            <div className="flex flex-wrap gap-3">
               <StateLeaf label="free" active={snapshot.matches({ alive: { restraintTrack: "free" } })} />
               <StateLeaf label="entangled" active={isEntangled(snapshot)} />
               <StateLeaf label="bound" active={isBound(snapshot)} />
+              <StateLeaf label="grabbed" active={isGrabbed(snapshot)} />
+              <StateLeaf label="pinned" active={isPinned(snapshot)} />
             </div>
           </StateRegion>
         </div>
@@ -467,6 +472,7 @@ function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
     { label: "Prone", value: isProne(snapshot) },
     { label: "On Hold", value: isOnHold(snapshot) },
     { label: "Restrained", value: isRestrained(snapshot) },
+    { label: "Grappled", value: isGrappled(snapshot) },
     { label: "Can Act", value: canAct(snapshot) },
     { label: "Can Move", value: canMove(snapshot) },
     { label: "Active", value: isActive(snapshot) },
@@ -551,9 +557,11 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
   const [healAmount, setHealAmount] = useState(1)
   const [athleticsRoll, setAthleticsRoll] = useState(1)
   const [escapeRoll, setEscapeRoll] = useState(1)
+  const [grappleRoll, setGrappleRoll] = useState(1)
 
   const dead = isDead(snapshot)
   const incapacitated = !dead && snapshot.matches({ alive: { damageTrack: "incapacitated" } })
+  const grappled = !dead && isGrappled(snapshot)
   const onHold = !dead && isOnHold(snapshot)
   const restrained = !dead && isRestrained(snapshot)
 
@@ -712,6 +720,36 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
             <EventBtn onClick={() => send({ type: "ESCAPE_ATTEMPT", rollResult: escapeRoll })}>Fire</EventBtn>
           </div>
         )}
+
+        {/* GRAPPLE */}
+        <div className="rounded-lg border border-[var(--line)] p-3">
+          <p className="mb-2 font-semibold">Grapple</p>
+          <div className="mb-2 flex gap-3">
+            <NumInput
+              label="rollResult"
+              value={grappleRoll}
+              onChange={setGrappleRoll}
+              min={0}
+              max={3}
+              title="Grapple/escape/pin roll. 0 = fail. 1 = success. 2+ = raise."
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <EventBtn disabled={dead} onClick={() => send({ type: "GRAPPLE_ATTEMPT", rollResult: grappleRoll })}>
+              Grapple
+            </EventBtn>
+            {grappled && (
+              <>
+                <EventBtn onClick={() => send({ type: "GRAPPLE_ESCAPE", rollResult: grappleRoll })}>
+                  Escape Grapple
+                </EventBtn>
+                <EventBtn onClick={() => send({ type: "PIN_ATTEMPT", rollResult: grappleRoll })}>
+                  Pin
+                </EventBtn>
+              </>
+            )}
+          </div>
+        </div>
 
         {/* HEAL */}
         <div className="rounded-lg border border-[var(--line)] p-3">
@@ -909,6 +947,12 @@ function formatEvent(e: SavageEvent): string {
       return `INTERRUPT(ath:${e.athleticsRoll})`
     case "ESCAPE_ATTEMPT":
       return `ESCAPE_ATTEMPT(r:${e.rollResult})`
+    case "GRAPPLE_ATTEMPT":
+      return `GRAPPLE_ATTEMPT(r:${e.rollResult})`
+    case "GRAPPLE_ESCAPE":
+      return `GRAPPLE_ESCAPE(r:${e.rollResult})`
+    case "PIN_ATTEMPT":
+      return `PIN_ATTEMPT(r:${e.rollResult})`
     default:
       return e.type
   }
