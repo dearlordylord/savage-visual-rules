@@ -90,7 +90,6 @@ const CATEGORY_LABELS_INTERNAL = {
   powers: m.cat_powers,
   defense: m.cat_defense,
   fear: m.cat_fear,
-  // Phase 2: cross-feature interactions
   crossCombat: m.cat_crossCombat,
   crossRecovery: m.cat_crossRecovery,
   crossHold: m.cat_crossHold,
@@ -1410,10 +1409,6 @@ export const scenarios: Array<Scenario> = [
       }
     ]
   },
-
-  // ========================================================
-  // Phase 2: Cross-feature mechanics
-  // ========================================================
 
   // ========================================
   // 2.1 — Full combat round

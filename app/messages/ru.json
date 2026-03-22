@@ -658,7 +658,7 @@
   "sc_cross_full_round_s0": "Персонаж получает удар — в шоке",
   "sc_cross_full_round_s1": "Начало хода — характер успех, шок снят",
   "sc_cross_full_round_s2": "Конец хода",
-  "sc_chk_idle": "Idle",
+  "sc_chk_idle": "Ожидание",
   "sc_cross_stun_shaken_both_ok_title": "Оглушён + шок: оба оправления успешны",
   "sc_cross_stun_shaken_both_ok_desc": "Персонаж оглушён и в шоке. В начале хода выносливость (оглушение) и характер (шок) проверяются независимо. Оба успешны.",
   "sc_cross_stun_shaken_both_ok_s0": "Удар — шок",
