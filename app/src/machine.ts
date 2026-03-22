@@ -49,6 +49,7 @@ export interface SavageContext {
   maxWounds: MaxWounds
   ownTurn: boolean
   onHold: boolean
+  holdUsed: boolean
   interruptedSuccessfully: boolean
   injuries: InjuryType[]
   afflictionTimer: number
@@ -70,6 +71,7 @@ export type SavageEvent =
   | { type: "DROP_PRONE" }
   | { type: "STAND_UP" }
   | { type: "GO_ON_HOLD" }
+  | { type: "ACT_FROM_HOLD" }
   | { type: "INTERRUPT"; athleticsRoll: AthleticsRollResult }
   | { type: "APPLY_ENTANGLED" }
   | { type: "APPLY_BOUND" }
@@ -256,6 +258,10 @@ export const savageMachine = setup({
     distractedTimerExpired: ({ context }) => context.distractedTimer === -1,
     vulnerableTimerExpired: ({ context }) => context.vulnerableTimer === -1,
 
+    // --- Hold guards ---
+    isOnHold: ({ context }) => context.onHold,
+    holdNotUsed: ({ context }) => !context.holdUsed,
+
     // --- Interrupt guards ---
     interruptSuccess: ({ event }) => asInterrupt(event).athleticsRoll >= 1,
 
@@ -331,8 +337,9 @@ export const savageMachine = setup({
       vulnerableTimer: context.vulnerableTimer >= 99 ? context.vulnerableTimer : tickTimer(context.vulnerableTimer)
     })),
     setOwnTurnTrue: assign({ ownTurn: true }),
+    clearHoldUsed: assign({ holdUsed: false }),
     setOwnTurnFalse: assign({ ownTurn: false }),
-    setOnHold: assign({ onHold: true, ownTurn: false }),
+    setOnHold: assign({ onHold: true, holdUsed: true, ownTurn: false }),
     clearOnHold: assign({ onHold: false }),
     setInterruptSuccess: assign({ interruptedSuccessfully: true }),
     setInterruptFail: assign({ interruptedSuccessfully: false }),
@@ -387,6 +394,7 @@ export const savageMachine = setup({
     maxWounds: maxWounds((input.isWildCard ?? true) ? 3 : 1),
     ownTurn: false,
     onHold: false,
+    holdUsed: false,
     interruptedSuccessfully: false,
     injuries: [],
     afflictionTimer: -1,
@@ -866,7 +874,17 @@ export const savageMachine = setup({
           states: {
             othersTurn: {
               on: {
-                START_OF_TURN: { target: "ownTurn", actions: ["setOwnTurnTrue"] }
+                START_OF_TURN: [
+                  {
+                    guard: "isOnHold",
+                    target: "onHold",
+                    actions: ["setOwnTurnFalse"]
+                  },
+                  {
+                    target: "ownTurn",
+                    actions: ["setOwnTurnTrue", "clearHoldUsed"]
+                  }
+                ]
               }
             },
             ownTurn: {
@@ -878,7 +896,8 @@ export const savageMachine = setup({
                     not(stateIn(FATIGUE_INCAP)),
                     not(stateIn(SHAKEN_STATE)),
                     not(stateIn(STUNNED_STATE)),
-                    not(stateIn(DEFENDING_STATE))
+                    not(stateIn(DEFENDING_STATE)),
+                    "holdNotUsed"
                   ]),
                   target: "onHold",
                   actions: ["setOnHold"]
@@ -887,6 +906,10 @@ export const savageMachine = setup({
             },
             onHold: {
               on: {
+                ACT_FROM_HOLD: {
+                  target: "ownTurn",
+                  actions: ["clearOnHold", "setOwnTurnTrue"]
+                },
                 INTERRUPT: [
                   {
                     guard: "interruptSuccess",
@@ -898,7 +921,7 @@ export const savageMachine = setup({
                     actions: ["clearOnHold", "setOwnTurnTrue", "setInterruptFail"]
                   }
                 ],
-                END_OF_TURN: { target: "onHold" }
+                END_OF_TURN: { target: "othersTurn", actions: ["setOwnTurnFalse"] }
               },
               always: [
                 {
@@ -1127,6 +1150,7 @@ export const savageMachine = setup({
         distractedTimer: conditionTimer(-1),
         vulnerableTimer: conditionTimer(-1),
         onHold: false,
+        holdUsed: false,
         interruptedSuccessfully: false,
         afflictionTimer: -1,
         activeEffects: [],

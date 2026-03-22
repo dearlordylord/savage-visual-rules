@@ -870,10 +870,14 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
           {incapacitated && <EventBtn disabled={!snapshot.can({ type: "FINISHING_MOVE" })} onClick={() => send({ type: "FINISHING_MOVE" })}>Finishing Move</EventBtn>}
         </div>
 
-        {/* INTERRUPT (visible when on hold) */}
+        {/* ON HOLD ACTIONS (visible when on hold) */}
         {onHold && (
           <div className="rounded-lg border border-[var(--line)] p-3">
-            <p className="mb-2 font-semibold cursor-help" title="Реакция (наготове). Встречная проверка Атлетики для прерывания чужого действия.">Interrupt</p>
+            <p className="mb-2 font-semibold cursor-help" title="Наготове. Действовать добровольно или прервать чужое действие.">On Hold</p>
+            <EventBtn disabled={!snapshot.can({ type: "ACT_FROM_HOLD" })} onClick={() => send({ type: "ACT_FROM_HOLD" })} title="Voluntarily leave hold and take your turn (no Athletics check needed).">
+              Act
+            </EventBtn>
+            <p className="mt-3 mb-2 font-semibold cursor-help" title="Реакция (наготове). Встречная проверка Атлетики для прерывания чужого действия.">Interrupt</p>
             <div className="mb-2 flex gap-3">
               <NumInput
                 label="athleticsRoll"

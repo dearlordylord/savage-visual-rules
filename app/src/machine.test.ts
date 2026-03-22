@@ -599,6 +599,72 @@ describe("hold/interrupt", () => {
     expect(snap(a).context.interruptedSuccessfully).toBe(false)
   })
 
+  it("act from hold → voluntarily take turn without Athletics check", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "GO_ON_HOLD" })
+    expect(isOnHold(snap(a))).toBe(true)
+
+    a.send({ type: "ACT_FROM_HOLD" })
+    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).context.ownTurn).toBe(true)
+    expect(snap(a).context.onHold).toBe(false)
+  })
+
+  it("act from hold blocked when not on hold", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+
+    a.send({ type: "ACT_FROM_HOLD" })
+    // Should still be in ownTurn, event ignored
+    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+  })
+
+  it("cannot go on hold again after acting from hold (same round)", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "GO_ON_HOLD" })
+    expect(isOnHold(snap(a))).toBe(true)
+
+    a.send({ type: "ACT_FROM_HOLD" })
+    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+
+    // Try to go on hold again — blocked by holdUsed
+    a.send({ type: "GO_ON_HOLD" })
+    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(isOnHold(snap(a))).toBe(false)
+  })
+
+  it("cannot go on hold again after interrupt (same round)", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "GO_ON_HOLD" })
+    expect(isOnHold(snap(a))).toBe(true)
+
+    a.send({ type: "INTERRUPT", athleticsRoll: ar(1) })
+    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+
+    a.send({ type: "GO_ON_HOLD" })
+    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(isOnHold(snap(a))).toBe(false)
+  })
+
+  it("can go on hold again in a new round after holdUsed resets", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "GO_ON_HOLD" })
+    a.send({ type: "ACT_FROM_HOLD" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
+
+    // New round
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    expect(snap(a).context.holdUsed).toBe(false)
+
+    a.send({ type: "GO_ON_HOLD" })
+    expect(isOnHold(snap(a))).toBe(true)
+  })
+
   it("hold lost when shaken applied", () => {
     const a = createWC()
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
@@ -623,27 +689,30 @@ describe("hold/interrupt", () => {
     expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
   })
 
-  it("end of turn from hold → still on hold (hold persists across rounds)", () => {
+  it("end of turn from hold → othersTurn, hold persists in context", () => {
     const a = createWC()
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     a.send({ type: "GO_ON_HOLD" })
 
     a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
-    expect(snap(a).matches({ alive: { turnPhase: "onHold" } })).toBe(true)
-    expect(isOnHold(snap(a))).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
+    expect(snap(a).context.onHold).toBe(true)
   })
 
-  it("hold persists across multiple rounds", () => {
+  it("hold persists across multiple rounds via START_OF_TURN", () => {
     const a = createWC()
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     a.send({ type: "GO_ON_HOLD" })
     expect(isOnHold(snap(a))).toBe(true)
 
     a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
-    expect(isOnHold(snap(a))).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
+    expect(snap(a).context.onHold).toBe(true)
 
-    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
+    // New round → back to onHold state
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(isOnHold(snap(a))).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "onHold" } })).toBe(true)
   })
 
   it("end of turn from hold does NOT tick distracted timer", () => {
@@ -657,17 +726,19 @@ describe("hold/interrupt", () => {
     expect(snap(a).context.distractedTimer).toBe(0)
 
     a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
-    expect(isOnHold(snap(a))).toBe(true)
+    expect(snap(a).context.onHold).toBe(true)
     expect(snap(a).context.distractedTimer).toBe(0) // NOT ticked
   })
 
-  it("startOfTurn from hold is rejected (already own turn)", () => {
+  it("startOfTurn while on hold → back to onHold state", () => {
     const a = createWC()
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     a.send({ type: "GO_ON_HOLD" })
     expect(isOnHold(snap(a))).toBe(true)
 
-    // Send START_OF_TURN while on hold — no handler, should be ignored
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
+    expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
+
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(isOnHold(snap(a))).toBe(true)
     expect(snap(a).matches({ alive: { turnPhase: "onHold" } })).toBe(true)
@@ -687,7 +758,7 @@ describe("hold/interrupt", () => {
     expect(isOnHold(snap(a))).toBe(false)
   })
 
-  it("distracted timer preserved across multiple end-of-turns while on hold", () => {
+  it("distracted timer preserved across multiple rounds while on hold", () => {
     const a = createWC()
     // Apply distracted outside own turn → timer=0
     a.send({ type: "APPLY_DISTRACTED" })
@@ -698,16 +769,14 @@ describe("hold/interrupt", () => {
     expect(isOnHold(snap(a))).toBe(true)
     expect(snap(a).context.distractedTimer).toBe(0)
 
-    // Multiple END_OF_TURNs while on hold → timer stays at 0
+    // Multiple rounds while on hold → timer stays at 0
     a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(snap(a).context.distractedTimer).toBe(0)
     expect(isOnHold(snap(a))).toBe(true)
 
     a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
-    expect(snap(a).context.distractedTimer).toBe(0)
-    expect(isOnHold(snap(a))).toBe(true)
-
-    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(snap(a).context.distractedTimer).toBe(0)
     expect(isOnHold(snap(a))).toBe(true)
   })
@@ -1165,8 +1234,13 @@ describe("blinded", () => {
     a.send({ type: "GO_ON_HOLD" })
     expect(isOnHold(snap(a))).toBe(true)
 
-    // END_OF_TURN while on hold → self-transition, no recovery
+    // END_OF_TURN while on hold → othersTurn, no recovery
     a.send({ type: "END_OF_TURN", vigorRoll: vr(2) })
+    expect(isFullyBlinded(snap(a))).toBe(true)
+    expect(snap(a).context.onHold).toBe(true)
+
+    // New round → back to onHold, still blinded
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(isFullyBlinded(snap(a))).toBe(true)
     expect(isOnHold(snap(a))).toBe(true)
   })
