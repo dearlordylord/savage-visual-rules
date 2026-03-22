@@ -31,7 +31,7 @@ export function maxWounds(n: number): MaxWounds {
 const DamageMargin = Schema.Number.pipe(Schema.brand("DamageMargin"))
 type DamageMargin = typeof DamageMargin.Type
 export function damageMargin(n: number): DamageMargin {
-  return DamageMargin.make(Math.max(0, Math.min(15, Math.floor(n))))
+  return DamageMargin.make(Math.max(0, Math.floor(n)))
 }
 
 const SoakSuccesses = Schema.Number.pipe(Schema.brand("SoakSuccesses"))
@@ -49,7 +49,9 @@ export function incapRollResult(n: number): IncapRollResult {
 const InjuryRoll = Schema.Number.pipe(Schema.brand("InjuryRoll"))
 type InjuryRoll = typeof InjuryRoll.Type
 export function injuryRoll(n: number): InjuryRoll {
-  return InjuryRoll.make(n)
+  const tableRoll = Math.max(2, Math.min(12, Math.floor(n / 10)))
+  const subRoll = Math.max(1, Math.min(6, n % 10))
+  return InjuryRoll.make(tableRoll * 10 + subRoll)
 }
 
 const VigorRollResult = Schema.Literal(0, 1, 2).pipe(Schema.brand("VigorRollResult"))

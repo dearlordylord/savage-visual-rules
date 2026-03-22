@@ -26,7 +26,7 @@ import {
   resolveFear,
   savageMachine
 } from "./machine"
-import { margin as dm, soak as sk, incap as ir, injury as ij, vigor as vr, spirit as sr, heal as ha, athletics as ar, escape as er, grapple as gr, grappleEsc as ger, pin as pr, severity as bs, affDur as ad } from "./test/helpers/brands"
+import { damageMargin as dm, soakSuccesses as sk, incapRollResult as ir, injuryRoll as ij, vigorRollResult as vr, spiritRollResult as sr, healAmount as ha, athleticsRollResult as ar, escapeRollResult as er, grappleRollResult as gr, grappleEscapeRollResult as ger, pinRollResult as pr, blindedSeverity as bs, afflictionDuration as ad } from "./types"
 
 // ============================================================
 // Helpers
