@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { createActor } from "xstate"
 
 import {
-  activeEffectsList,
   afflictionType,
   canAct,
   canMove,
@@ -547,7 +546,7 @@ function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
           <p className="mb-1 text-xs font-semibold text-[var(--sea-ink-soft)]">Affliction</p>
           <div className="flex items-center gap-2">
             <span className="rounded-md bg-purple-500/15 px-2 py-0.5 text-xs font-medium text-purple-700">
-              {AFFLICTION_LABELS[afflictionType(snapshot)!]}
+              {(() => { const aType = afflictionType(snapshot); return aType ? AFFLICTION_LABELS[aType] : "Unknown" })()}
             </span>
             <span className="text-xs text-[var(--sea-ink-soft)]">
               {ctx.afflictionTimer >= 0 ? `${ctx.afflictionTimer} turn(s) remaining` : ""}
@@ -944,7 +943,10 @@ function AfflictionPanel({ send, dead, afflicted }: { send: (e: SavageEvent) => 
           <select
             className="mt-0.5 rounded border border-[var(--line)] bg-white px-2 py-1 text-sm"
             value={affType}
-            onChange={(e) => setAffType(e.target.value as AfflictionType)}
+            onChange={(e) => {
+              const v = e.target.value
+              if (v === "paralytic" || v === "weak" || v === "lethal" || v === "sleep") setAffType(v)
+            }}
           >
             <option value="paralytic">Paralytic</option>
             <option value="weak">Weak</option>

@@ -281,7 +281,7 @@
 - [ ] Backlash clears all + adds fatigue
 - [ ] Dismiss removes individual effect
 
-### Slice 9.2: XState port for power effects
+### Slice 9.2: XState port for power effects [DONE]
 
 - Add `activeEffects: { type: string, roundsRemaining: number }[]` to context
 - Events: `APPLY_POWER_EFFECT { type, duration }`, `DISMISS_EFFECT { type }`, `BACKLASH`
@@ -296,7 +296,7 @@
 - [ ] Power effect tests pass
 - [ ] Backlash cascade (clear + fatigue) works atomically
 
-### Slice 9.3: UI for power effects
+### Slice 9.3: UI for power effects [DONE]
 
 - Active effects list with remaining duration per effect
 - Dismiss button per effect

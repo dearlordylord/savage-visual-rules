@@ -1138,11 +1138,11 @@ export function isActive(snap: SavageSnapshot): boolean {
 }
 
 export function canAct(snap: SavageSnapshot): boolean {
-  return isActive(snap) && !isShaken(snap) && !isStunned(snap)
+  return isActive(snap) && !isShaken(snap) && !isStunned(snap) && !snap.matches(SLEEP_STATE)
 }
 
 export function canMove(snap: SavageSnapshot): boolean {
-  return isActive(snap) && !isStunned(snap)
+  return isActive(snap) && !isStunned(snap) && !snap.matches(SLEEP_STATE)
 }
 
 export function hasInjury(snap: SavageSnapshot, type: InjuryType): boolean {
