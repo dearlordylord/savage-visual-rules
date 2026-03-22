@@ -56,7 +56,10 @@ module savage {
     afflictionTimer: int,   // -1 = none, >= 0 = turns remaining
 
     // Active power effects (buffs/debuffs with duration)
-    activeEffects: List[{etype: str, timer: int}]
+    activeEffects: List[{etype: str, timer: int}],
+
+    // Defending (Full Defense): +4 Parry, lasts until start of next turn
+    defending: bool
   }
 
   // ============================================================
@@ -71,7 +74,8 @@ module savage {
     prone: false, onHold: false, restrained: -1, grappledBy: "",
     blinded: 0, injuries: List(),
     afflictionType: "none", afflictionTimer: -1,
-    activeEffects: List()
+    activeEffects: List(),
+    defending: false
   }
 
   pure val FRESH_EXTRA: State = {
@@ -82,7 +86,8 @@ module savage {
     prone: false, onHold: false, restrained: -1, grappledBy: "",
     blinded: 0, injuries: List(),
     afflictionType: "none", afflictionTimer: -1,
-    activeEffects: List()
+    activeEffects: List(),
+    defending: false
   }
 
   // Bounded ranges for nondeterministic exploration
@@ -135,7 +140,8 @@ module savage {
     prone: false, onHold: false, restrained: -1, grappledBy: "",
     blinded: 0, injuries: List(),
     afflictionType: "none", afflictionTimer: -1,
-    activeEffects: List()
+    activeEffects: List(),
+    defending: false
   }
 
   // --- Derived state ---
@@ -161,6 +167,9 @@ module savage {
   /// Can move (Shaken allows movement, Stunned does not)
   pure def canMove(s: State): bool =
     s.isConscious() and not(s.stunned)
+
+  /// Defending: +4 Parry, uses whole turn, lasts until start of next turn
+  pure def isDefending(s: State): bool = s.defending
 
   /// Total penalty to all trait rolls from wounds + fatigue
   pure def totalPenalty(s: State): int = {
@@ -204,7 +213,7 @@ module savage {
         {success: true, newState: die({...s, wounds: s.maxWounds})}
       } else if (s.isWildCard and newWounds > s.maxWounds) {
         // Wild Card: exceeds max wounds = incapacitated + immediate vigor roll
-        val base = {...s, wounds: s.maxWounds, shaken: false, stunned: false, incapacitated: true, prone: false, onHold: false, restrained: -1, grappledBy: "", blinded: 0}
+        val base = {...s, wounds: s.maxWounds, shaken: false, stunned: false, incapacitated: true, prone: false, onHold: false, restrained: -1, grappledBy: "", blinded: 0, defending: false}
         if (incapRoll < 0) {
           {success: true, newState: die(base)}
         } else if (incapRoll == 0) {
@@ -240,17 +249,17 @@ module savage {
         {success: true, newState: die({...s, ownTurn: true})}
       } else if (vigorRoll >= 2) {
         // Raise: stabilized
-        {success: true, newState: {...s, ownTurn: true, bleedingOut: false}}
+        {success: true, newState: {...s, ownTurn: true, bleedingOut: false, defending: false}}
       } else {
         // Success: still bleeding, survived this turn
-        {success: true, newState: {...s, ownTurn: true}}
+        {success: true, newState: {...s, ownTurn: true, defending: false}}
       }
     } else if (s.incapacitated or s.incapByFatigue or s.afflictionType == "sleep") {
       // Incapacitated/sleeping — no per-turn recovery
-      {success: true, newState: {...s, ownTurn: true}}
+      {success: true, newState: {...s, ownTurn: true, defending: false}}
     } else {
       // Active: attempt Stunned and Shaken recovery independently
-      val s1 = {...s, ownTurn: true}
+      val s1 = {...s, ownTurn: true, defending: false}
 
       // Stunned recovery (Vigor check) — blocked by paralytic affliction
       val s2 = if (s1.stunned and s1.afflictionType != "paralytic") {
@@ -352,7 +361,7 @@ module savage {
     } else {
       // Timer: 1 if during own turn (survives current + next endOfTurn), 0 if others' turn
       val timer = if (s.ownTurn) 1 else 0
-      {success: true, newState: {...s, stunned: true, distracted: max(s.distracted, timer), onHold: false, prone: true}}
+      {success: true, newState: {...s, stunned: true, distracted: max(s.distracted, timer), onHold: false, prone: true, defending: false}}
     }
   }
 
@@ -382,7 +391,7 @@ module savage {
       {success: false, newState: s}
     } else if (s.fatigue >= 2) {
       // Already Exhausted, one more = incapacitated by fatigue
-      {success: true, newState: {...s, incapByFatigue: true, prone: false, onHold: false, restrained: -1, grappledBy: "", blinded: 0}}
+      {success: true, newState: {...s, incapByFatigue: true, prone: false, onHold: false, restrained: -1, grappledBy: "", blinded: 0, defending: false}}
     } else {
       {success: true, newState: {...s, fatigue: s.fatigue + 1}}
     }
@@ -443,10 +452,20 @@ module savage {
   /// Go on hold: yield current turn, wait for opportunity.
   /// Guard: must be on own turn, not shaken, not stunned, active.
   pure def pGoOnHold(s: State): {success: bool, newState: State} = {
-    if (not(s.ownTurn) or s.shaken or s.stunned or not(s.isConscious())) {
+    if (not(s.ownTurn) or s.shaken or s.stunned or not(s.isConscious()) or s.defending) {
       {success: false, newState: s}
     } else {
       {success: true, newState: {...s, ownTurn: false, onHold: true}}
+    }
+  }
+
+  /// Defend (Full Defense): +4 Parry, uses whole turn, lasts until start of next turn.
+  /// Guard: must be on own turn, able to act (not shaken/stunned), active, not sleeping, not already defending.
+  pure def pDefend(s: State): {success: bool, newState: State} = {
+    if (not(s.ownTurn) or s.shaken or s.stunned or not(s.isActive()) or s.defending or s.afflictionType == "sleep") {
+      {success: false, newState: s}
+    } else {
+      {success: true, newState: {...s, defending: true}}
     }
   }
 
@@ -763,6 +782,12 @@ module savage {
   /// Dead characters have no active effects
   val deadClearsEffects = state.dead implies state.activeEffects.length() == 0
 
+  /// Defending implies conscious and not stunned
+  val defendingImpliesCanAct = state.defending implies (state.isConscious() and not(state.stunned))
+
+  /// Dead characters are not defending
+  val deadClearsDefending = state.dead implies not(state.defending)
+
   /// Combined safety invariant
   val safetyInv = and {
     woundsBounded,
@@ -788,7 +813,9 @@ module savage {
     deadClearsAffliction,
     activeEffectsValid,
     activeEffectTypesValid,
-    deadClearsEffects
+    deadClearsEffects,
+    defendingImpliesCanAct,
+    deadClearsDefending
   }
 
   // Action witnesses (should be VIOLATED = reachable)
@@ -874,6 +901,11 @@ module savage {
 
   action doInterrupt(athleticsRoll: int): bool = {
     val r = pInterrupt(state, athleticsRoll)
+    all { r.success, state' = r.newState }
+  }
+
+  action doDefend: bool = {
+    val r = pDefend(state)
     all { r.success, state' = r.newState }
   }
 
@@ -994,8 +1026,9 @@ module savage {
         doDropProne,
         doStandUp,
 
-        // Hold / Interrupt
+        // Hold / Interrupt / Defend
         doGoOnHold,
+        doDefend,
         nondet athleticsRoll = ROLL_RANGE.oneOf()
         doInterrupt(athleticsRoll),
 

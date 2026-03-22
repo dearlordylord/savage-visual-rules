@@ -81,6 +81,7 @@ export type SavageEvent =
   | { type: "APPLY_AFFLICTION"; afflictionType: AfflictionType; duration: AfflictionDuration }
   | { type: "CURE_AFFLICTION" }
   | { type: "_LETHAL_TICK" }
+  | { type: "DEFEND" }
   | { type: "APPLY_POWER_EFFECT"; etype: string; duration: number }
   | { type: "DISMISS_EFFECT"; etype: string }
   | { type: "BACKLASH" }
@@ -170,6 +171,8 @@ const PINNED_STATE = { alive: { restraintTrack: "pinned" as const } }
 const ON_HOLD_STATE = { alive: { turnPhase: "onHold" as const } }
 const PARALYTIC_STATE = { alive: { afflictionTrack: { afflicted: "paralytic" as const } } }
 const SLEEP_STATE = { alive: { afflictionTrack: { afflicted: "sleep" as const } } }
+const OWN_TURN = { alive: { turnPhase: "ownTurn" as const } }
+const DEFENDING_STATE = { alive: { conditionTrack: { defense: "defending" as const } } }
 
 // ============================================================
 // Machine
@@ -784,6 +787,40 @@ export const savageMachine = setup({
                   }
                 }
               }
+            },
+
+            defense: {
+              initial: "notDefending",
+              states: {
+                notDefending: {
+                  on: {
+                    DEFEND: {
+                      guard: and([
+                        stateIn(DAMAGE_ACTIVE),
+                        not(stateIn(FATIGUE_INCAP)),
+                        not(stateIn(STUNNED_STATE)),
+                        not(stateIn(SHAKEN_STATE)),
+                        not(stateIn(SLEEP_STATE)),
+                        stateIn(OWN_TURN)
+                      ]),
+                      target: "defending"
+                    }
+                  }
+                },
+                defending: {
+                  on: {
+                    START_OF_TURN: {
+                      guard: stateIn(OTHERS_TURN),
+                      target: "notDefending"
+                    }
+                  },
+                  always: [
+                    { guard: not(stateIn(DAMAGE_ACTIVE)), target: "notDefending" },
+                    { guard: stateIn(STUNNED_STATE), target: "notDefending" },
+                    { guard: stateIn(FATIGUE_INCAP), target: "notDefending" }
+                  ]
+                }
+              }
             }
           }
         },
@@ -834,7 +871,8 @@ export const savageMachine = setup({
                     stateIn(DAMAGE_ACTIVE),
                     not(stateIn(FATIGUE_INCAP)),
                     not(stateIn(SHAKEN_STATE)),
-                    not(stateIn(STUNNED_STATE))
+                    not(stateIn(STUNNED_STATE)),
+                    not(stateIn(DEFENDING_STATE))
                   ]),
                   target: "onHold",
                   actions: ["setOnHold"]
@@ -1111,6 +1149,10 @@ export function isDistracted(snap: SavageSnapshot): boolean {
 
 export function isVulnerable(snap: SavageSnapshot): boolean {
   return snap.matches({ alive: { conditionTrack: { vulnerability: "vulnerable" } } }) || isStunned(snap)
+}
+
+export function isDefending(snap: SavageSnapshot): boolean {
+  return snap.matches({ alive: { conditionTrack: { defense: "defending" } } })
 }
 
 export function isOnHold(snap: SavageSnapshot): boolean {
