@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react"
+import { useMemo } from "react"
 import { createActor } from "xstate"
 
 import { savageMachine, type SavageSnapshot } from "../machine"
@@ -6,8 +6,11 @@ import * as m from "../paraglide/messages"
 import type { Scenario } from "../scenarios"
 import { StateSummary } from "./StateSummary"
 
+// eslint-disable-next-line functional/no-mixed-types -- React component props
 interface ScenarioPlayerProps {
   scenario: Scenario
+  step: number | undefined
+  onStepChange: (step: number | undefined) => void
 }
 
 interface StepResult {
@@ -16,60 +19,32 @@ interface StepResult {
   assertions: Array<{ desc: () => string; passed: boolean }>
 }
 
-function createScenarioActor(scenario: Scenario) {
+function computeResults(scenario: Scenario, completedCount: number): ReadonlyArray<StepResult> {
+  if (completedCount <= 0) return []
   const actor = createActor(savageMachine, {
     input: { isWildCard: scenario.characterType === "wildCard" }
   })
   actor.start()
-  return actor
+  const count = Math.min(completedCount, scenario.steps.length)
+  const results = scenario.steps.slice(0, count).map((step, i) => {
+    if (step.event) actor.send(step.event)
+    const snap = actor.getSnapshot()
+    return {
+      stepIndex: i,
+      snapshot: snap,
+      assertions: step.expect.map((e) => ({ desc: e.desc, passed: e.check(snap) }))
+    }
+  })
+  actor.stop()
+  return results
 }
 
-function runStep(
-  actor: ReturnType<typeof createActor<typeof savageMachine>>,
-  step: Scenario["steps"][number]
-): StepResult["assertions"] {
-  if (step.event) actor.send(step.event)
-  const snap = actor.getSnapshot()
-  return step.expect.map((e) => ({ desc: e.desc, passed: e.check(snap) }))
-}
-
-export function ScenarioPlayer({ scenario }: ScenarioPlayerProps) {
-  const [results, setResults] = useState<Array<StepResult>>([])
-  const actorRef = useRef<ReturnType<typeof createActor<typeof savageMachine>> | null>(null)
+export function ScenarioPlayer({ onStepChange, scenario, step }: ScenarioPlayerProps) {
+  const completedCount = step ?? 0
+  const results = useMemo(() => computeResults(scenario, completedCount), [scenario, completedCount])
 
   const done = results.length >= scenario.steps.length
   const lastSnap = results.length > 0 ? results[results.length - 1].snapshot : null
-
-  const reset = useCallback(() => {
-    actorRef.current?.stop()
-    actorRef.current = null
-    setResults([])
-  }, [])
-
-  const advance = useCallback(() => {
-    const stepIdx = results.length
-    if (stepIdx >= scenario.steps.length) return
-
-    if (!actorRef.current) {
-      actorRef.current = createScenarioActor(scenario)
-    }
-
-    const assertions = runStep(actorRef.current, scenario.steps[stepIdx])
-    const snapshot = actorRef.current.getSnapshot()
-    setResults((prev) => [...prev, { stepIndex: stepIdx, snapshot, assertions }])
-  }, [results.length, scenario])
-
-  const playAll = useCallback(() => {
-    actorRef.current?.stop()
-    const actor = createScenarioActor(scenario)
-    actorRef.current = actor
-
-    const allResults: Array<StepResult> = scenario.steps.map((step, i) => {
-      const assertions = runStep(actor, step)
-      return { stepIndex: i, snapshot: actor.getSnapshot(), assertions }
-    })
-    setResults(allResults)
-  }, [scenario])
 
   return (
     <div className="flex flex-col gap-4">
@@ -82,7 +57,7 @@ export function ScenarioPlayer({ scenario }: ScenarioPlayerProps) {
       </div>
 
       <div className="flex flex-col gap-2">
-        {scenario.steps.map((step, i) => {
+        {scenario.steps.map((scenarioStep, i) => {
           const isPast = i < results.length
           const isCurrent = i === results.length
           const result = isPast ? results[i] : undefined
@@ -90,12 +65,13 @@ export function ScenarioPlayer({ scenario }: ScenarioPlayerProps) {
           return (
             <div
               key={i}
+              onClick={isCurrent ? undefined : () => onStepChange(i || undefined)}
               className={`rounded-lg border px-3 py-2 text-xs transition ${
                 isCurrent
                   ? "border-[var(--lagoon)] bg-[rgba(79,184,178,0.06)]"
                   : isPast
-                    ? "border-[var(--line)] bg-[var(--surface)]"
-                    : "border-transparent bg-[var(--surface)] opacity-50"
+                    ? "cursor-pointer border-[var(--line)] bg-[var(--surface)] hover:border-[var(--lagoon)] hover:bg-[rgba(79,184,178,0.04)]"
+                    : "cursor-pointer border-transparent bg-[var(--surface)] opacity-50 hover:opacity-75"
               }`}
             >
               <div className="flex items-center gap-2">
@@ -103,10 +79,10 @@ export function ScenarioPlayer({ scenario }: ScenarioPlayerProps) {
                 <span
                   className={`font-medium ${isPast || isCurrent ? "text-[var(--sea-ink)]" : "text-[var(--sea-ink-soft)]"}`}
                 >
-                  {step.label()}
+                  {scenarioStep.label()}
                 </span>
-                {step.event && (
-                  <code className="ml-auto text-[10px] text-[var(--sea-ink-soft)]">{step.event.type}</code>
+                {scenarioStep.event && (
+                  <code className="ml-auto text-[10px] text-[var(--sea-ink-soft)]">{scenarioStep.event.type}</code>
                 )}
               </div>
               {result !== undefined && result.assertions.length > 0 && (
@@ -140,7 +116,7 @@ export function ScenarioPlayer({ scenario }: ScenarioPlayerProps) {
       <div className="flex gap-2">
         <button
           type="button"
-          onClick={advance}
+          onClick={() => onStepChange(completedCount + 1)}
           disabled={done}
           className="rounded-lg border border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.14)] px-3 py-1.5 text-xs font-semibold text-[var(--lagoon-deep)] transition hover:bg-[rgba(79,184,178,0.24)] disabled:opacity-30"
         >
@@ -148,19 +124,21 @@ export function ScenarioPlayer({ scenario }: ScenarioPlayerProps) {
         </button>
         <button
           type="button"
-          onClick={playAll}
+          onClick={() => onStepChange(scenario.steps.length)}
           disabled={done}
           className="rounded-lg border border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.14)] px-3 py-1.5 text-xs font-semibold text-[var(--lagoon-deep)] transition hover:bg-[rgba(79,184,178,0.24)] disabled:opacity-30"
         >
           {m.cookbook_btn_play_all()}
         </button>
-        <button
-          type="button"
-          onClick={reset}
-          className="rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--sea-ink-soft)] transition hover:bg-[rgba(79,184,178,0.08)]"
-        >
-          {m.cookbook_btn_reset()}
-        </button>
+        {results.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onStepChange(undefined)}
+            className="rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--sea-ink-soft)] transition hover:bg-[rgba(79,184,178,0.08)]"
+          >
+            {m.cookbook_btn_reset()}
+          </button>
+        )}
       </div>
     </div>
   )

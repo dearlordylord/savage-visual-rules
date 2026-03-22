@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createActor } from "xstate"
 
+import { LocaleToggle } from "../components/LocaleToggle"
 import {
   afflictionType,
   blindedPenalty,
@@ -35,7 +36,6 @@ import {
   totalPenalty
 } from "../machine"
 import * as m from "../paraglide/messages"
-import { getLocale, locales, setLocale } from "../paraglide/runtime"
 import type { AfflictionType } from "../types"
 import {
   afflictionDuration,
@@ -205,23 +205,10 @@ function App() {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-[var(--sea-ink)]">{m.app_title()}</h1>
         <div className="flex items-center gap-3">
-          <div className="flex gap-1">
-            {locales.map((locale) => (
-              <button
-                key={locale}
-                onClick={() => setLocale(locale)}
-                className={`rounded-lg border px-2 py-1 text-xs font-semibold transition ${
-                  locale === getLocale()
-                    ? "border-[var(--lagoon)] bg-[rgba(79,184,178,0.2)] text-[var(--lagoon-deep)]"
-                    : "border-[var(--line)] text-[var(--sea-ink-soft)]"
-                }`}
-              >
-                {locale.toUpperCase()}
-              </button>
-            ))}
-          </div>
+          <LocaleToggle />
           <Link
-            to="/cookbook"
+            to="/cookbook/$"
+            params={{ _splat: "" }}
             className="rounded-lg border border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.14)] px-3 py-1.5 text-xs font-semibold text-[var(--lagoon-deep)] transition hover:bg-[rgba(79,184,178,0.24)]"
           >
             {m.cookbook_link()}
@@ -1194,7 +1181,7 @@ function AfflictionPanel({
         <label className="flex flex-col text-xs text-[var(--sea-ink-soft)]">
           {m.label_type()}
           <select
-            className="mt-0.5 rounded border border-[var(--line)] bg-white px-2 py-1 text-sm"
+            className="mt-0.5 rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-sm text-[var(--sea-ink)]"
             value={affType}
             onChange={(e) => {
               const v = e.target.value
@@ -1261,7 +1248,7 @@ function PowerEffectPanel({
         <label className="flex flex-col text-xs text-[var(--sea-ink-soft)]">
           {m.label_type()}
           <select
-            className="mt-0.5 rounded border border-[var(--line)] bg-white px-2 py-1 text-sm"
+            className="mt-0.5 rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-sm text-[var(--sea-ink)]"
             value={effectType}
             onChange={(e) => setEffectType(e.target.value)}
           >

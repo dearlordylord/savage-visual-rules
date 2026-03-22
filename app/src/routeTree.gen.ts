@@ -9,55 +9,48 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as CookbookRouteImport } from './routes/cookbook'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CookbookSplatRouteImport } from './routes/cookbook.$'
 
-const CookbookRoute = CookbookRouteImport.update({
-  id: '/cookbook',
-  path: '/cookbook',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CookbookSplatRoute = CookbookSplatRouteImport.update({
+  id: '/cookbook/$',
+  path: '/cookbook/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/cookbook': typeof CookbookRoute
+  '/cookbook/$': typeof CookbookSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/cookbook': typeof CookbookRoute
+  '/cookbook/$': typeof CookbookSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/cookbook': typeof CookbookRoute
+  '/cookbook/$': typeof CookbookSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/cookbook'
+  fullPaths: '/' | '/cookbook/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/cookbook'
-  id: '__root__' | '/' | '/cookbook'
+  to: '/' | '/cookbook/$'
+  id: '__root__' | '/' | '/cookbook/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  CookbookRoute: typeof CookbookRoute
+  CookbookSplatRoute: typeof CookbookSplatRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/cookbook': {
-      id: '/cookbook'
-      path: '/cookbook'
-      fullPath: '/cookbook'
-      preLoaderRoute: typeof CookbookRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -65,12 +58,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cookbook/$': {
+      id: '/cookbook/$'
+      path: '/cookbook/$'
+      fullPath: '/cookbook/$'
+      preLoaderRoute: typeof CookbookSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  CookbookRoute: CookbookRoute,
+  CookbookSplatRoute: CookbookSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

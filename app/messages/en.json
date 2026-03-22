@@ -17,7 +17,7 @@
   "bool_yes": "yes",
   "bool_no": "no",
   "state_dead": "DEAD",
-  "btn_fire": "Fire",
+  "btn_fire": "Apply",
   "btn_undo": "Undo",
   "btn_redo": "Redo",
   "btn_clear": "Clear",

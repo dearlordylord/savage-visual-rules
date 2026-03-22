@@ -17,7 +17,7 @@
   "bool_yes": "да",
   "bool_no": "нет",
   "state_dead": "МЁРТВ",
-  "btn_fire": "Огонь",
+  "btn_fire": "Применить",
   "btn_undo": "Отмена",
   "btn_redo": "Повтор",
   "btn_clear": "Сброс",
