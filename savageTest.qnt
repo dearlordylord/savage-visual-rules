@@ -559,6 +559,39 @@ module savageTest {
   }
 
   // ============================================================
+  // Entangled + Vulnerable tests
+  // ============================================================
+
+  /// Entangled sets Vulnerable (SWADE: "Entangled: ... Vulnerable until freed")
+  run entangledSetsVulnerableTest = {
+    initWildCard
+    .then(doApplyEntangled)
+    .expect(state.restrained == 0 and state.isVulnerable() and state.vulnerable == 99)
+  }
+
+  /// Escape from entangled clears Vulnerable
+  run entangledEscapeClearsVulnerableTest = {
+    initWildCard
+    .then(doApplyEntangled)
+    .expect(state.isVulnerable())
+    .then(doEscapeAttempt(1))
+    .expect(state.restrained == -1 and not(state.isVulnerable()) and state.vulnerable == -1)
+  }
+
+  /// Entangled + endOfTurn: Vulnerable persists (does not expire)
+  run entangledVulnerablePersistsTest = {
+    initWildCard
+    .then(doApplyEntangled)
+    .expect(state.isVulnerable() and state.vulnerable == 99)
+    .then(doStartOfTurn(0, 0))
+    .then(doEndOfTurn)
+    .expect(state.isVulnerable() and state.vulnerable == 99)
+    .then(doStartOfTurn(0, 0))
+    .then(doEndOfTurn)
+    .expect(state.isVulnerable() and state.vulnerable == 99)
+  }
+
+  // ============================================================
   // Injury tests
   // ============================================================
 

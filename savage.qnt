@@ -305,12 +305,12 @@ module savage {
     } else if (not(s.ownTurn)) {
       {success: false, newState: s}
     } else {
-      // Bound/pinned keep distracted + vulnerable; grabbed keeps vulnerable only
+      // Bound(1)/pinned(3) keep distracted frozen; grabbed(2) does not (M5 fix)
       val nd = if ((s.restrained == 1 or s.restrained == 3) and s.distracted >= 0) s.distracted
                else if (s.distracted > 0) s.distracted - 1
                else if (s.distracted == 0) -1
                else -1
-      val nv = if (s.restrained >= 1 and s.vulnerable >= 0) s.vulnerable
+      val nv = if (s.restrained >= 0 and s.vulnerable >= 0) s.vulnerable
                else if (s.vulnerable > 0) s.vulnerable - 1
                else if (s.vulnerable == 0) -1
                else -1
@@ -466,11 +466,13 @@ module savage {
   }
 
   /// Apply entangled. Guard: isActive. Sets restrained = max(restrained, 0).
+  /// SWADE: "Entangled: character cannot move and is Vulnerable until freed."
+  /// Sets vulnerable to 99 (sentinel for "until freed").
   pure def pApplyEntangled(s: State): {success: bool, newState: State} = {
     if (not(s.isConscious())) {
       {success: false, newState: s}
     } else {
-      {success: true, newState: {...s, restrained: max(s.restrained, 0)}}
+      {success: true, newState: {...s, restrained: max(s.restrained, 0), vulnerable: 99}}
     }
   }
 
@@ -509,7 +511,8 @@ module savage {
     } else {
       // Entangled
       if (rollResult >= 1) {
-        {success: true, newState: {...s, restrained: -1}}
+        // Freed from entangled: clear persistent vulnerable
+        {success: true, newState: {...s, restrained: -1, vulnerable: -1}}
       } else {
         {success: false, newState: s}
       }
@@ -715,6 +718,9 @@ module savage {
     (state.restrained == 2) implies state.isVulnerable()
   }
 
+  /// Entangled implies vulnerable (SWADE: "Entangled: ... Vulnerable until freed")
+  val entangledImpliesVulnerable = (state.restrained == 0) implies state.isVulnerable()
+
   /// Restrained implies active
   val restrainedImpliesActive = (state.restrained >= 0) implies state.isConscious()
 
@@ -770,6 +776,7 @@ module savage {
     proneImpliesActive,
     holdImpliesActive,
     boundImpliesConditions,
+    entangledImpliesVulnerable,
     restrainedImpliesActive,
     restrainedValid,
     grappledByConsistent,

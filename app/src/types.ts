@@ -10,9 +10,11 @@ export function wounds(n: number): Wounds {
   return Wounds.make(Math.max(0, Math.min(3, Math.floor(n))) as 0 | 1 | 2 | 3)
 }
 
-const ConditionTimer = Schema.Literal(-1, 0, 1).pipe(Schema.brand("ConditionTimer"))
+// 99 = persistent sentinel ("until freed", e.g., entangled → vulnerable)
+const ConditionTimer = Schema.Literal(-1, 0, 1, 99).pipe(Schema.brand("ConditionTimer"))
 type ConditionTimer = typeof ConditionTimer.Type
 export function conditionTimer(n: number): ConditionTimer {
+  if (n >= 99) return ConditionTimer.make(99)
   return ConditionTimer.make(Math.max(-1, Math.min(1, Math.floor(n))) as -1 | 0 | 1)
 }
 
