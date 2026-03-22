@@ -499,7 +499,8 @@ module savage {
     } else if (s.restrained == 1) {
       // Bound
       if (rollResult >= 2) {
-        {success: true, newState: {...s, restrained: -1}}
+        // Raise: free entirely, clear conditions that came with the restraint
+        {success: true, newState: {...s, restrained: -1, distracted: -1, vulnerable: -1}}
       } else if (rollResult >= 1) {
         {success: true, newState: {...s, restrained: 0}}
       } else {

@@ -872,6 +872,24 @@ describe("grapple", () => {
     a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(1) })
     expect(isGrappled(snap(a))).toBe(false)
   })
+
+  it("APPLY_BOUND from grabbed → transitions to bound", () => {
+    const a = createWC()
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    expect(isGrabbed(snap(a))).toBe(true)
+    a.send({ type: "APPLY_BOUND" })
+    expect(isBound(snap(a))).toBe(true)
+    expect(isGrabbed(snap(a))).toBe(false)
+  })
+
+  it("APPLY_BOUND from pinned → transitions to bound", () => {
+    const a = createWC()
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(2) })
+    expect(isPinned(snap(a))).toBe(true)
+    a.send({ type: "APPLY_BOUND" })
+    expect(isBound(snap(a))).toBe(true)
+    expect(isPinned(snap(a))).toBe(false)
+  })
 })
 
 // ============================================================

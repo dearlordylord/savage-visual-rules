@@ -113,7 +113,7 @@ const savageDriver = defineDriver(
         })
       },
       doEndOfTurn: () => {
-        ensureActor().send({ type: "END_OF_TURN" })
+        ensureActor().send({ type: "END_OF_TURN", vigorRoll: vigorRollResult(0) })
       },
       doUnshake: () => {
         ensureActor().send({ type: "SPEND_BENNY" })

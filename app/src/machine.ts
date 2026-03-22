@@ -331,6 +331,7 @@ export const savageMachine = setup({
       if (roll === undefined) return {}
       return { injuries: [...context.injuries, resolveInjury(roll)] }
     }),
+    clearDistractedTimer: assign({ distractedTimer: conditionTimer(-1) }),
     setAfflictionTimer: assign(({ event }) => ({
       afflictionTimer: asAffliction(event).duration
     })),
@@ -959,7 +960,7 @@ export const savageMachine = setup({
             bound: {
               on: {
                 ESCAPE_ATTEMPT: [
-                  { guard: "escapeRaise", target: "free" },
+                  { guard: "escapeRaise", target: "free", actions: ["clearDistractedTimer", "clearVulnerableTimer"] },
                   { guard: "escapeSuccess", target: "entangled" }
                 ],
                 GRAPPLE_ATTEMPT: [
@@ -987,6 +988,9 @@ export const savageMachine = setup({
                 GRAPPLE_ESCAPE: {
                   guard: "grappleEscapeSuccess",
                   target: "free"
+                },
+                APPLY_BOUND: {
+                  target: "bound"
                 }
               },
               always: {
@@ -1005,7 +1009,10 @@ export const savageMachine = setup({
                     guard: "grappleEscapeSuccessNoRaise",
                     target: "grabbed"
                   }
-                ]
+                ],
+                APPLY_BOUND: {
+                  target: "bound"
+                }
               },
               always: {
                 guard: not(stateIn(DAMAGE_ACTIVE)),
