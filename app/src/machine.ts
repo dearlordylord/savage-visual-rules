@@ -252,6 +252,8 @@ export const savageMachine = setup({
     grappleSuccess: ({ event }) => asGrapple(event).rollResult >= 1,
     grappleRaise: ({ event }) => asGrapple(event).rollResult >= 2,
     grappleEscapeSuccess: ({ event }) => asGrappleEscape(event).rollResult >= 1,
+    grappleEscapeRaise: ({ event }) => asGrappleEscape(event).rollResult >= 2,
+    grappleEscapeSuccessNoRaise: ({ event }) => asGrappleEscape(event).rollResult === 1,
     pinSuccess: ({ event }) => asPin(event).rollResult >= 1,
 
     // --- Blinded guards ---
@@ -602,7 +604,7 @@ export const savageMachine = setup({
                       actions: ["setDistractedTimer"]
                     },
                     GRAPPLE_ATTEMPT: {
-                      guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "grappleSuccess"]),
+                      guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "grappleRaise"]),
                       target: "distracted",
                       actions: ["setDistractedTimer"]
                     }
@@ -623,7 +625,7 @@ export const savageMachine = setup({
                       actions: ["setDistractedTimer"]
                     },
                     GRAPPLE_ATTEMPT: {
-                      guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "grappleSuccess"]),
+                      guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "grappleRaise"]),
                       actions: ["setDistractedTimer"]
                     }
                   },
@@ -631,7 +633,6 @@ export const savageMachine = setup({
                     guard: and([
                       "distractedTimerExpired",
                       not(stateIn(BOUND_STATE)),
-                      not(stateIn(GRABBED_STATE)),
                       not(stateIn(PINNED_STATE))
                     ]),
                     target: "clear"
@@ -971,11 +972,17 @@ export const savageMachine = setup({
             },
             pinned: {
               on: {
-                GRAPPLE_ESCAPE: {
-                  guard: "grappleEscapeSuccess",
-                  target: "free",
-                  actions: ["clearGrappledBy"]
-                }
+                GRAPPLE_ESCAPE: [
+                  {
+                    guard: "grappleEscapeRaise",
+                    target: "free",
+                    actions: ["clearGrappledBy"]
+                  },
+                  {
+                    guard: "grappleEscapeSuccessNoRaise",
+                    target: "grabbed"
+                  }
+                ]
               },
               always: {
                 guard: not(stateIn(DAMAGE_ACTIVE)),

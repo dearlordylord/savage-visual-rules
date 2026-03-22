@@ -92,10 +92,10 @@ export function grappleRollResult(n: number): GrappleRollResult {
   return GrappleRollResult.make(Math.max(0, Math.min(2, Math.floor(n))) as 0 | 1 | 2)
 }
 
-const GrappleEscapeRollResult = Schema.Literal(0, 1).pipe(Schema.brand("GrappleEscapeRollResult"))
+const GrappleEscapeRollResult = Schema.Literal(0, 1, 2).pipe(Schema.brand("GrappleEscapeRollResult"))
 type GrappleEscapeRollResult = typeof GrappleEscapeRollResult.Type
 export function grappleEscapeRollResult(n: number): GrappleEscapeRollResult {
-  return GrappleEscapeRollResult.make(Math.max(0, Math.min(1, Math.floor(n))) as 0 | 1)
+  return GrappleEscapeRollResult.make(Math.max(0, Math.min(2, Math.floor(n))) as 0 | 1 | 2)
 }
 
 const PinRollResult = Schema.Literal(0, 1).pipe(Schema.brand("PinRollResult"))

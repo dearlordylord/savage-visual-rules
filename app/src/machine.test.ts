@@ -753,20 +753,22 @@ describe("restraint", () => {
 // ============================================================
 
 describe("grapple", () => {
-  it("grapple attempt success → grabbed + distracted + vulnerable", () => {
+  it("grapple attempt success → grabbed + vulnerable only (not distracted)", () => {
     const a = createWC()
     a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
     expect(isGrabbed(snap(a))).toBe(true)
     expect(isGrappled(snap(a))).toBe(true)
-    expect(isDistracted(snap(a))).toBe(true)
+    expect(isDistracted(snap(a))).toBe(false)
     expect(isVulnerable(snap(a))).toBe(true)
   })
 
-  it("grapple attempt raise → pinned", () => {
+  it("grapple attempt raise → pinned + distracted + vulnerable", () => {
     const a = createWC()
     a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(2) })
     expect(isPinned(snap(a))).toBe(true)
     expect(isGrappled(snap(a))).toBe(true)
+    expect(isDistracted(snap(a))).toBe(true)
+    expect(isVulnerable(snap(a))).toBe(true)
   })
 
   it("grapple attempt fail → still free", () => {
@@ -798,12 +800,23 @@ describe("grapple", () => {
     expect(isPinned(snap(a))).toBe(true)
   })
 
-  it("grapple escape from pinned → free", () => {
+  it("grapple escape from pinned: raise → free", () => {
+    const a = createWC()
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(2) })
+    expect(isPinned(snap(a))).toBe(true)
+    a.send({ type: "GRAPPLE_ESCAPE", rollResult: ger(2) })
+    expect(isGrappled(snap(a))).toBe(false)
+    expect(snap(a).context.grappledBy).toBeNull()
+  })
+
+  it("grapple escape from pinned: success → step down to grabbed", () => {
     const a = createWC()
     a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(2) })
     expect(isPinned(snap(a))).toBe(true)
     a.send({ type: "GRAPPLE_ESCAPE", rollResult: ger(1) })
-    expect(isGrappled(snap(a))).toBe(false)
+    expect(isGrabbed(snap(a))).toBe(true)
+    expect(isPinned(snap(a))).toBe(false)
+    expect(isGrappled(snap(a))).toBe(true)
   })
 
   it("grapple and restraint are mutually exclusive", () => {

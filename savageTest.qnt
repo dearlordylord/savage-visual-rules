@@ -643,18 +643,18 @@ module savageTest {
   // Grapple tests
   // ============================================================
 
-  /// Grapple attempt success → grabbed with distracted + vulnerable
+  /// Grapple attempt success → grabbed with vulnerable only (not distracted)
   run grappleSuccessTest = {
     initWildCard
     .then(doGrappleAttempt(1, "opp1"))
-    .expect(state.restrained == 2 and state.grappledBy == "opp1" and state.isDistracted() and state.isVulnerable())
+    .expect(state.restrained == 2 and state.grappledBy == "opp1" and not(state.isDistracted()) and state.isVulnerable())
   }
 
-  /// Grapple attempt raise → pinned
+  /// Grapple attempt raise → pinned with distracted + vulnerable
   run grappleRaisePinnedTest = {
     initWildCard
     .then(doGrappleAttempt(2, "opp1"))
-    .expect(state.restrained == 3 and state.grappledBy == "opp1")
+    .expect(state.restrained == 3 and state.grappledBy == "opp1" and state.isDistracted() and state.isVulnerable())
   }
 
   /// Grapple attempt fail → no change
@@ -698,17 +698,45 @@ module savageTest {
     .fail()
   }
 
-  /// Grapple conditions persist across turns (don't expire at endOfTurn)
+  /// Grapple conditions persist across turns (grabbed: vulnerable persists, distracted not set)
   run grappleConditionsPersistTest = {
     initWildCard
     .then(doGrappleAttempt(1, "opp1"))
-    .expect(state.distracted >= 0 and state.vulnerable >= 0)
+    .expect(state.distracted == -1 and state.vulnerable >= 0)
     .then(doStartOfTurn(0, 0))
     .then(doEndOfTurn)
-    .expect(state.distracted >= 0 and state.vulnerable >= 0 and state.restrained == 2)
+    .expect(state.vulnerable >= 0 and state.restrained == 2)
     .then(doStartOfTurn(0, 0))
     .then(doEndOfTurn)
-    .expect(state.distracted >= 0 and state.vulnerable >= 0)
+    .expect(state.vulnerable >= 0)
+  }
+
+  /// Grapple success (1) → grabbed, vulnerable but NOT distracted
+  run grappleSuccessVulnerableOnlyTest = {
+    initWildCard
+    .then(doGrappleAttempt(1, "opp1"))
+    .expect(state.restrained == 2 and state.isVulnerable() and not(state.isDistracted()))
+  }
+
+  /// Grapple raise (2) → pinned, both distracted and vulnerable
+  run grappleRaiseDistractedAndVulnerableTest = {
+    initWildCard
+    .then(doGrappleAttempt(2, "opp1"))
+    .expect(state.restrained == 3 and state.isDistracted() and state.isVulnerable())
+  }
+
+  /// Escape from pinned success (1) → grabbed (step-down), grappledBy preserved
+  run pinnedEscapeSuccessStepDownTest = {
+    all { state' = {...FRESH_WILD_CARD, restrained: 3, grappledBy: "opp1", distracted: 0, vulnerable: 0} }
+    .then(doGrappleEscape(1))
+    .expect(state.restrained == 2 and state.grappledBy == "opp1")
+  }
+
+  /// Escape from pinned raise (2) → free entirely
+  run pinnedEscapeRaiseFreesEntirelyTest = {
+    all { state' = {...FRESH_WILD_CARD, restrained: 3, grappledBy: "opp1", distracted: 0, vulnerable: 0} }
+    .then(doGrappleEscape(2))
+    .expect(state.restrained == -1 and state.grappledBy == "")
   }
 
   /// Grapple and restraint are mutually exclusive — grapple replaces entangled

@@ -151,7 +151,7 @@ module savage {
   pure def isConscious(s: State): bool =
     not(s.dead) and not(s.incapacitated) and not(s.incapByFatigue)
 
-  /// Active: conscious and capable of being in the scene (alias for isConscious).
+  /// Alias for isConscious (used as guard for restraint, grapple, etc.)
   pure def isActive(s: State): bool = s.isConscious()
 
   /// Can take standard actions (not Shaken, not Stunned, and active)
@@ -327,8 +327,8 @@ module savage {
     } else if (not(s.ownTurn)) {
       {success: false, newState: s}
     } else {
-      // Bound/grabbed/pinned characters keep distracted + vulnerable (conditions don't expire)
-      val nd = if (s.restrained >= 1 and s.distracted >= 0) s.distracted
+      // Bound/pinned keep distracted + vulnerable; grabbed keeps vulnerable only
+      val nd = if ((s.restrained == 1 or s.restrained == 3) and s.distracted >= 0) s.distracted
                else if (s.distracted > 0) s.distracted - 1
                else if (s.distracted == 0) -1
                else -1
@@ -540,10 +540,12 @@ module savage {
     } else {
       val timer = if (s.ownTurn) 1 else 0
       val newRestrained = if (rollResult >= 2) 3 else 2
+      // Grabbed (success) = Vulnerable only; Pinned (raise) = Distracted + Vulnerable
+      val newDistracted = if (rollResult >= 2) max(s.distracted, timer) else s.distracted
       {success: true, newState: {...s,
         restrained: newRestrained,
         grappledBy: opponent,
-        distracted: max(s.distracted, timer),
+        distracted: newDistracted,
         vulnerable: max(s.vulnerable, timer)
       }}
     }
@@ -696,8 +698,11 @@ module savage {
   /// Hold only when active, not shaken, not stunned
   val holdImpliesActive = state.onHold implies (state.isConscious() and not(state.shaken) and not(state.stunned))
 
-  /// Bound/grabbed/pinned implies distracted and vulnerable
-  val boundImpliesConditions = (state.restrained >= 1) implies (state.isDistracted() and state.isVulnerable())
+  /// Bound/pinned implies distracted and vulnerable; grabbed implies vulnerable only
+  val boundImpliesConditions = and {
+    (state.restrained == 1 or state.restrained == 3) implies (state.isDistracted() and state.isVulnerable()),
+    (state.restrained == 2) implies state.isVulnerable()
+  }
 
   /// Restrained implies active
   val restrainedImpliesActive = (state.restrained >= 0) implies state.isConscious()
