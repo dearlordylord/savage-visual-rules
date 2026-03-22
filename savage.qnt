@@ -49,7 +49,11 @@ module savage {
     blinded: int,           // 0 = clear, 2 = impaired, 4 = blinded
 
     // Injuries (permanent, from Injury Table on incapacitation)
-    injuries: List[str]     // list of injury type identifiers
+    injuries: List[str],    // list of injury type identifiers
+
+    // Afflictions (poison/disease)
+    afflictionType: str,    // "none", "paralytic", "weak", "lethal", "sleep"
+    afflictionTimer: int    // -1 = none, >= 0 = turns remaining
   }
 
   // ============================================================
@@ -62,7 +66,8 @@ module savage {
     fatigue: 0, incapByFatigue: false,
     isWildCard: true, maxWounds: 3, ownTurn: false,
     prone: false, onHold: false, restrained: -1, grappledBy: "",
-    blinded: 0, injuries: List()
+    blinded: 0, injuries: List(),
+    afflictionType: "none", afflictionTimer: -1
   }
 
   pure val FRESH_EXTRA: State = {
@@ -71,7 +76,8 @@ module savage {
     fatigue: 0, incapByFatigue: false,
     isWildCard: false, maxWounds: 1, ownTurn: false,
     prone: false, onHold: false, restrained: -1, grappledBy: "",
-    blinded: 0, injuries: List()
+    blinded: 0, injuries: List(),
+    afflictionType: "none", afflictionTimer: -1
   }
 
   // Bounded ranges for nondeterministic exploration
@@ -119,7 +125,8 @@ module savage {
     incapacitated: false, bleedingOut: false,
     fatigue: 0, incapByFatigue: false,
     prone: false, onHold: false, restrained: -1, grappledBy: "",
-    blinded: 0, injuries: List()
+    blinded: 0, injuries: List(),
+    afflictionType: "none", afflictionTimer: -1
   }
 
   // --- Derived state ---
@@ -225,15 +232,15 @@ module savage {
         // Success: still bleeding, survived this turn
         {success: true, newState: {...s, ownTurn: true}}
       }
-    } else if (s.incapacitated or s.incapByFatigue) {
-      // Incapacitated but stable — no per-turn recovery (daily recovery out of scope)
+    } else if (s.incapacitated or s.incapByFatigue or s.afflictionType == "sleep") {
+      // Incapacitated/sleeping — no per-turn recovery
       {success: true, newState: {...s, ownTurn: true}}
     } else {
       // Active: attempt Stunned and Shaken recovery independently
       val s1 = {...s, ownTurn: true}
 
-      // Stunned recovery (Vigor check)
-      val s2 = if (s1.stunned) {
+      // Stunned recovery (Vigor check) — blocked by paralytic affliction
+      val s2 = if (s1.stunned and s1.afflictionType != "paralytic") {
         if (vigorRoll >= 2) {
           // Raise: clear Stunned, Vulnerable until end of current turn
           {...s1, stunned: false, vulnerable: max(s1.vulnerable, 0)}
@@ -271,7 +278,27 @@ module savage {
         s3
       }
 
-      {success: true, newState: s4}
+      // Affliction per-turn effects
+      val s5 = if (s4.afflictionType == "weak") {
+        // Weak: +1 fatigue
+        val r = pApplyFatigue(s4)
+        r.newState
+      } else if (s4.afflictionType == "lethal") {
+        // Lethal: +1 fatigue + shaken + 1 wound (can cascade to incap/death)
+        val sf = pApplyFatigue(s4)
+        val sw = {...sf.newState, shaken: true, wounds: sf.newState.wounds + 1}
+        if (sw.wounds > sw.maxWounds) {
+          // Exceeds max — incapacitate (no incapRoll for affliction damage)
+          {...sw, wounds: sw.maxWounds, incapacitated: true, bleedingOut: true,
+           stunned: false, prone: false, onHold: false, restrained: -1, grappledBy: "", blinded: 0}
+        } else {
+          sw
+        }
+      } else {
+        s4
+      }
+
+      {success: true, newState: s5}
     }
   }
 
@@ -293,7 +320,13 @@ module savage {
                else if (s.vulnerable > 0) s.vulnerable - 1
                else if (s.vulnerable == 0) -1
                else -1
-      {success: true, newState: {...s, ownTurn: false, distracted: nd, vulnerable: nv}}
+      // Tick affliction timer
+      val newAffTimer = if (s.afflictionTimer > 0) s.afflictionTimer - 1
+                        else if (s.afflictionTimer == 0) -1
+                        else -1
+      val newAffType = if (newAffTimer == -1 and s.afflictionTimer >= 0) "none" else s.afflictionType
+      {success: true, newState: {...s, ownTurn: false, distracted: nd, vulnerable: nv,
+        afflictionTimer: newAffTimer, afflictionType: newAffType}}
     }
   }
 
@@ -551,6 +584,26 @@ module savage {
     }
   }
 
+  /// Apply affliction (poison/disease). Guard: not dead.
+  /// type: "paralytic", "weak", "lethal", "sleep"
+  /// duration: number of turns (>= 0)
+  pure def pApplyAffliction(s: State, aType: str, duration: int): {success: bool, newState: State} = {
+    if (s.dead) {
+      {success: false, newState: s}
+    } else {
+      {success: true, newState: {...s, afflictionType: aType, afflictionTimer: duration}}
+    }
+  }
+
+  /// Cure affliction: clear type and timer.
+  pure def pCureAffliction(s: State): {success: bool, newState: State} = {
+    if (s.afflictionType == "none") {
+      {success: false, newState: s}
+    } else {
+      {success: true, newState: {...s, afflictionType: "none", afflictionTimer: -1}}
+    }
+  }
+
   // ============================================================
   // 4. STATE VARIABLE
   // ============================================================
@@ -613,6 +666,16 @@ module savage {
   /// Dead characters have no injuries (cleared on death)
   val deadClearsInjuries = state.dead implies state.injuries.length() == 0
 
+  /// Affliction type is valid
+  val VALID_AFFLICTIONS = Set("none", "paralytic", "weak", "lethal", "sleep")
+  val afflictionTypeValid = VALID_AFFLICTIONS.contains(state.afflictionType)
+
+  /// Affliction timer consistent with type
+  val afflictionTimerConsistent = (state.afflictionType == "none") == (state.afflictionTimer == -1)
+
+  /// Dead characters have no affliction
+  val deadClearsAffliction = state.dead implies (state.afflictionType == "none" and state.afflictionTimer == -1)
+
   /// Combined safety invariant
   val safetyInv = and {
     woundsBounded,
@@ -631,7 +694,10 @@ module savage {
     blindedValid,
     blindedImpliesActive,
     injuriesValid,
-    deadClearsInjuries
+    deadClearsInjuries,
+    afflictionTypeValid,
+    afflictionTimerConsistent,
+    deadClearsAffliction
   }
 
   // Action witnesses (should be VIOLATED = reachable)
@@ -755,6 +821,16 @@ module savage {
     all { r.success, state' = r.newState }
   }
 
+  action doApplyAffliction(aType: str, duration: int): bool = {
+    val r = pApplyAffliction(state, aType, duration)
+    all { r.success, state' = r.newState }
+  }
+
+  action doCureAffliction: bool = {
+    val r = pCureAffliction(state)
+    all { r.success, state' = r.newState }
+  }
+
   // ============================================================
   // 7. INITIALIZATION
   // ============================================================
@@ -833,6 +909,12 @@ module savage {
         doGrappleEscape(grappleEscapeRoll),
         nondet pinRoll = ROLL_RANGE.oneOf()
         doPinAttempt(pinRoll),
+
+        // Afflictions
+        nondet affType = Set("paralytic", "weak", "lethal", "sleep").oneOf()
+        nondet affDuration = 0.to(3).oneOf()
+        doApplyAffliction(affType, affDuration),
+        doCureAffliction,
       }
     }
   }

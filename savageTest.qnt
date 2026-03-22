@@ -879,4 +879,116 @@ module savageTest {
       fearTableResult(10, -5) == List("APPLY_DISTRACTED")
     )
   }
+
+  // ============================================================
+  // Affliction tests
+  // ============================================================
+
+  /// Apply and cure affliction
+  run afflictionApplyAndCureTest = {
+    initWildCard
+    .then(doApplyAffliction("weak", 3))
+    .expect(state.afflictionType == "weak" and state.afflictionTimer == 3)
+    .then(doCureAffliction)
+    .expect(state.afflictionType == "none" and state.afflictionTimer == -1)
+  }
+
+  /// Affliction blocked when dead
+  run afflictionBlockedWhenDeadTest = {
+    all { state' = die(FRESH_WILD_CARD) }
+    .then(doApplyAffliction("weak", 2))
+    .fail()
+  }
+
+  /// Cure fails when no affliction
+  run cureFailsWhenNoAfflictionTest = {
+    initWildCard
+    .then(doCureAffliction)
+    .fail()
+  }
+
+  /// Affliction timer ticks down and expires
+  run afflictionTimerExpiresTest = {
+    initWildCard
+    .then(doApplyAffliction("paralytic", 1))
+    .expect(state.afflictionType == "paralytic" and state.afflictionTimer == 1)
+    .then(doStartOfTurn(0, 0))
+    .then(doEndOfTurn)
+    .expect(state.afflictionType == "paralytic" and state.afflictionTimer == 0)
+    .then(doStartOfTurn(0, 0))
+    .then(doEndOfTurn)
+    .expect(state.afflictionType == "none" and state.afflictionTimer == -1)
+  }
+
+  /// Death clears affliction
+  run deathClearsAfflictionTest = {
+    initWildCard
+    .then(doApplyAffliction("lethal", 5))
+    .expect(state.afflictionType == "lethal")
+    .then(doTakeDamage(16, 0, -1, 0))
+    .expect(state.dead and state.afflictionType == "none" and state.afflictionTimer == -1)
+  }
+
+  /// Paralytic blocks stunned recovery
+  run paralyticBlocksStunRecoveryTest = {
+    initWildCard
+    .then(doApplyAffliction("paralytic", 5))
+    .then(doApplyStunned)
+    .expect(state.stunned)
+    .then(doStartOfTurn(2, 0))
+    .expect(state.stunned)
+  }
+
+  /// Paralytic does not block shaken recovery
+  run paralyticDoesNotBlockShakenRecoveryTest = {
+    initWildCard
+    .then(doApplyAffliction("paralytic", 5))
+    .then(doTakeDamage(0, 0, 0, 0))
+    .expect(state.shaken)
+    .then(doStartOfTurn(0, 1))
+    .expect(not(state.shaken))
+  }
+
+  /// Weak adds fatigue each turn
+  run weakAddsFatigueTest = {
+    initWildCard
+    .then(doApplyAffliction("weak", 5))
+    .expect(state.fatigue == 0)
+    .then(doStartOfTurn(0, 0))
+    .expect(state.fatigue == 1)
+    .then(doEndOfTurn)
+    .then(doStartOfTurn(0, 0))
+    .expect(state.fatigue == 2)
+  }
+
+  /// Lethal adds fatigue + shaken + wound
+  run lethalDamagePerTurnTest = {
+    initWildCard
+    .then(doApplyAffliction("lethal", 5))
+    .then(doStartOfTurn(0, 0))
+    .expect(state.fatigue == 1 and state.shaken and state.wounds == 1)
+  }
+
+  /// Lethal can cascade to incap
+  run lethalCascadesToIncapTest = {
+    all { state' = {...FRESH_WILD_CARD, wounds: 3, afflictionType: "lethal", afflictionTimer: 5} }
+    .then(doStartOfTurn(0, 0))
+    .expect(state.incapacitated and state.bleedingOut)
+  }
+
+  /// Sleep blocks recovery (treated like incapacitated for actions)
+  run sleepBlocksRecoveryTest = {
+    all { state' = {...FRESH_WILD_CARD, stunned: true, shaken: true, distracted: 0, afflictionType: "sleep", afflictionTimer: 3} }
+    .then(doStartOfTurn(2, 1))
+    .expect(state.stunned and state.shaken)
+  }
+
+  /// Affliction replaces previous affliction
+  run afflictionReplacesExistingTest = {
+    initWildCard
+    .then(doApplyAffliction("weak", 3))
+    .expect(state.afflictionType == "weak")
+    .then(doApplyAffliction("lethal", 5))
+    .expect(state.afflictionType == "lethal" and state.afflictionTimer == 5)
+  }
 }
