@@ -701,4 +701,75 @@ module savageTest {
     .then(doTakeDamage(16, 0, -1, 0))
     .expect(state.dead and state.restrained == -1 and state.grappledBy == "")
   }
+
+  // ============================================================
+  // Blinded tests
+  // ============================================================
+
+  /// Apply blinded (full severity)
+  run applyBlindedFullTest = {
+    initWildCard
+    .then(doApplyBlinded(4))
+    .expect(state.blinded == 4)
+  }
+
+  /// Apply impaired, then upgrade to blinded
+  run blindedSeverityUpgradeTest = {
+    initWildCard
+    .then(doApplyBlinded(2))
+    .expect(state.blinded == 2)
+    .then(doApplyBlinded(4))
+    .expect(state.blinded == 4)
+  }
+
+  /// Impaired does not downgrade blinded
+  run impairedDoesNotDowngradeBlindedTest = {
+    initWildCard
+    .then(doApplyBlinded(4))
+    .then(doApplyBlinded(2))
+    .expect(state.blinded == 4)
+  }
+
+  /// Blinded recovery: success steps down by 2 (4→2, 2→0)
+  run blindedRecoverySuccessTest = {
+    initWildCard
+    .then(doApplyBlinded(4))
+    .expect(state.blinded == 4)
+    .then(doStartOfTurn(1, 0))
+    .expect(state.blinded == 2)
+    .then(doEndOfTurn)
+    .then(doStartOfTurn(1, 0))
+    .expect(state.blinded == 0)
+  }
+
+  /// Blinded recovery: raise clears entirely
+  run blindedRecoveryRaiseClearsTest = {
+    initWildCard
+    .then(doApplyBlinded(4))
+    .then(doStartOfTurn(2, 0))
+    .expect(state.blinded == 0)
+  }
+
+  /// Blinded recovery: fail, no change
+  run blindedRecoveryFailTest = {
+    initWildCard
+    .then(doApplyBlinded(4))
+    .then(doStartOfTurn(0, 0))
+    .expect(state.blinded == 4)
+  }
+
+  /// Death clears blinded
+  run blindedClearsOnDeathTest = {
+    initWildCard
+    .then(doApplyBlinded(4))
+    .then(doTakeDamage(16, 0, -1, 0))
+    .expect(state.dead and state.blinded == 0)
+  }
+
+  /// Blinded blocked when incapacitated
+  run blindedBlockedWhenIncapTest = {
+    all { state' = {...FRESH_WILD_CARD, wounds: 3, incapacitated: true} }
+    .then(doApplyBlinded(4))
+    .fail()
+  }
 }

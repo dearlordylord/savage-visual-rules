@@ -45,6 +45,9 @@ module savage {
     restrained: int,        // -1 = free, 0 = entangled, 1 = bound, 2 = grabbed, 3 = pinned
     grappledBy: str,        // opponent identifier ("" = not grappled)
 
+    // Vision
+    blinded: int,           // 0 = clear, 2 = impaired, 4 = blinded
+
     // Injuries (permanent, from Injury Table on incapacitation)
     injuries: List[str]     // list of injury type identifiers
   }
@@ -59,7 +62,7 @@ module savage {
     fatigue: 0, incapByFatigue: false,
     isWildCard: true, maxWounds: 3, ownTurn: false,
     prone: false, onHold: false, restrained: -1, grappledBy: "",
-    injuries: List()
+    blinded: 0, injuries: List()
   }
 
   pure val FRESH_EXTRA: State = {
@@ -68,7 +71,7 @@ module savage {
     fatigue: 0, incapByFatigue: false,
     isWildCard: false, maxWounds: 1, ownTurn: false,
     prone: false, onHold: false, restrained: -1, grappledBy: "",
-    injuries: List()
+    blinded: 0, injuries: List()
   }
 
   // Bounded ranges for nondeterministic exploration
@@ -116,7 +119,7 @@ module savage {
     incapacitated: false, bleedingOut: false,
     fatigue: 0, incapByFatigue: false,
     prone: false, onHold: false, restrained: -1, grappledBy: "",
-    injuries: List()
+    blinded: 0, injuries: List()
   }
 
   // --- Derived state ---
@@ -181,7 +184,7 @@ module savage {
         {success: true, newState: die({...s, wounds: s.maxWounds})}
       } else if (s.isWildCard and newWounds > s.maxWounds) {
         // Wild Card: exceeds max wounds = incapacitated + immediate vigor roll
-        val base = {...s, wounds: s.maxWounds, shaken: false, stunned: false, incapacitated: true, prone: false, onHold: false, restrained: -1, grappledBy: ""}
+        val base = {...s, wounds: s.maxWounds, shaken: false, stunned: false, incapacitated: true, prone: false, onHold: false, restrained: -1, grappledBy: "", blinded: 0}
         if (incapRoll < 0) {
           {success: true, newState: die(base)}
         } else if (incapRoll == 0) {
@@ -255,7 +258,20 @@ module savage {
         s2
       }
 
-      {success: true, newState: s3}
+      // Blinded recovery (reuses vigorRoll): raise → clear, success → step down by 2
+      val s4 = if (s3.blinded > 0) {
+        if (vigorRoll >= 2) {
+          {...s3, blinded: 0}
+        } else if (vigorRoll >= 1) {
+          {...s3, blinded: max(0, s3.blinded - 2)}
+        } else {
+          s3
+        }
+      } else {
+        s3
+      }
+
+      {success: true, newState: s4}
     }
   }
 
@@ -328,7 +344,7 @@ module savage {
       {success: false, newState: s}
     } else if (s.fatigue >= 2) {
       // Already Exhausted, one more = incapacitated by fatigue
-      {success: true, newState: {...s, incapByFatigue: true, prone: false, onHold: false, restrained: -1, grappledBy: ""}}
+      {success: true, newState: {...s, incapByFatigue: true, prone: false, onHold: false, restrained: -1, grappledBy: "", blinded: 0}}
     } else {
       {success: true, newState: {...s, fatigue: s.fatigue + 1}}
     }
@@ -508,6 +524,16 @@ module savage {
     }
   }
 
+  /// Apply blinded condition. severity: 2 = impaired, 4 = blinded.
+  /// Guard: isActive. Severity only increases (max).
+  pure def pApplyBlinded(s: State, severity: int): {success: bool, newState: State} = {
+    if (not(s.isActive())) {
+      {success: false, newState: s}
+    } else {
+      {success: true, newState: {...s, blinded: max(s.blinded, severity)}}
+    }
+  }
+
   // ============================================================
   // 4. STATE VARIABLE
   // ============================================================
@@ -557,6 +583,12 @@ module savage {
   /// grappledBy empty when not grabbed/pinned
   val grappledByEmpty = (state.restrained < 2) implies (state.grappledBy == "")
 
+  /// Blinded within valid range
+  val blindedValid = state.blinded >= 0 and state.blinded <= 4
+
+  /// Blinded implies active
+  val blindedImpliesActive = (state.blinded > 0) implies state.isActive()
+
   /// Injuries are valid strings (all entries are recognized injury types)
   val VALID_INJURIES = Set("unmentionables", "arm", "guts_broken", "guts_battered", "guts_busted", "leg", "head_scar", "head_blinded", "head_brain_damage")
   val injuriesValid = state.injuries.foldl(true, (acc, i) => acc and VALID_INJURIES.contains(i))
@@ -579,6 +611,8 @@ module savage {
     restrainedValid,
     grappledByConsistent,
     grappledByEmpty,
+    blindedValid,
+    blindedImpliesActive,
     injuriesValid,
     deadClearsInjuries
   }
@@ -699,6 +733,11 @@ module savage {
     all { r.success, state' = r.newState }
   }
 
+  action doApplyBlinded(severity: int): bool = {
+    val r = pApplyBlinded(state, severity)
+    all { r.success, state' = r.newState }
+  }
+
   // ============================================================
   // 7. INITIALIZATION
   // ============================================================
@@ -765,6 +804,10 @@ module savage {
         doApplyBound,
         nondet escapeRoll = ROLL_RANGE.oneOf()
         doEscapeAttempt(escapeRoll),
+
+        // Blinded
+        nondet blindSev = Set(2, 4).oneOf()
+        doApplyBlinded(blindSev),
 
         // Grapple
         nondet grappleRoll = ROLL_RANGE.oneOf()

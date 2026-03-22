@@ -113,7 +113,7 @@
 
 > Blinded condition with severity levels and per-turn Vigor recovery.
 
-### Slice 6.1: Quint spec for blinded
+### Slice 6.1: Quint spec for blinded [DONE]
 
 - Add `blinded: int` to State (0 = clear, 2 = impaired, 4 = blinded)
 - Add `pApplyBlinded(s, severity: int)`: guard `isActive(s)`, sets `blinded = max(blinded, severity)`
