@@ -836,6 +836,47 @@ describe("restraint", () => {
     expect(isVulnerable(snap(a))).toBe(true)
     expect(snap(a).context.vulnerableTimer).toBe(99)
   })
+
+  it("entangled cannot be downgraded to free by re-applying entangled", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_ENTANGLED" })
+    expect(isEntangled(snap(a))).toBe(true)
+    a.send({ type: "APPLY_ENTANGLED" })
+    expect(isEntangled(snap(a))).toBe(true)
+    expect(isRestrained(snap(a))).toBe(true)
+  })
+
+  it("escape from bound fail → still bound", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_BOUND" })
+    expect(isBound(snap(a))).toBe(true)
+    a.send({ type: "ESCAPE_ATTEMPT", rollResult: er(0) })
+    expect(isBound(snap(a))).toBe(true)
+  })
+
+  it("bound clears on death (extra)", () => {
+    const b = createExtra()
+    b.send({ type: "APPLY_BOUND" })
+    expect(isBound(snap(b))).toBe(true)
+    expect(isRestrained(snap(b))).toBe(true)
+    b.send({ type: "TAKE_DAMAGE", margin: dm(4), soakSuccesses: sk(0), incapRoll: ir(0) })
+    expect(isDead(snap(b))).toBe(true)
+    expect(isRestrained(snap(b))).toBe(false)
+  })
+
+  it("escape from bound success → step down to entangled, keeps distracted", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_BOUND" })
+    expect(isBound(snap(a))).toBe(true)
+    expect(isDistracted(snap(a))).toBe(true)
+    expect(isVulnerable(snap(a))).toBe(true)
+    // Escape success → step down to entangled
+    a.send({ type: "ESCAPE_ATTEMPT", rollResult: er(1) })
+    expect(isEntangled(snap(a))).toBe(true)
+    expect(isBound(snap(a))).toBe(false)
+    // Distracted persists (only raise clears it)
+    expect(isDistracted(snap(a))).toBe(true)
+  })
 })
 
 // ============================================================
@@ -944,6 +985,75 @@ describe("grapple", () => {
     a.send({ type: "APPLY_BOUND" })
     expect(isBound(snap(a))).toBe(true)
     expect(isPinned(snap(a))).toBe(false)
+  })
+
+  it("grapple blocked when already grappled", () => {
+    const a = createWC()
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    expect(isGrabbed(snap(a))).toBe(true)
+    // Another grapple attempt while already grabbed — no handler on grabbed state
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    expect(isGrabbed(snap(a))).toBe(true)
+    expect(isPinned(snap(a))).toBe(false)
+  })
+
+  it("grapple conditions persist across turn boundaries", () => {
+    const a = createWC()
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    expect(isGrabbed(snap(a))).toBe(true)
+    expect(isVulnerable(snap(a))).toBe(true)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    expect(isGrabbed(snap(a))).toBe(true)
+    expect(isVulnerable(snap(a))).toBe(true)
+
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
+    expect(isGrabbed(snap(a))).toBe(true)
+    // Vulnerable persists because grabbed state blocks vulnerable clear
+    expect(isVulnerable(snap(a))).toBe(true)
+  })
+
+  it("grapple clears on death", () => {
+    const b = createExtra()
+    b.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    expect(isGrabbed(snap(b))).toBe(true)
+    expect(isGrappled(snap(b))).toBe(true)
+    b.send({ type: "TAKE_DAMAGE", margin: dm(4), soakSuccesses: sk(0), incapRoll: ir(0) })
+    expect(isDead(snap(b))).toBe(true)
+    expect(isGrappled(snap(b))).toBe(false)
+  })
+
+  it("pin fail → still grabbed", () => {
+    const a = createWC()
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    expect(isGrabbed(snap(a))).toBe(true)
+    a.send({ type: "PIN_ATTEMPT", rollResult: pr(0) })
+    expect(isGrabbed(snap(a))).toBe(true)
+    expect(isPinned(snap(a))).toBe(false)
+  })
+
+  it("grapple from entangled replaces restraint and vulnerable persists via grabbed", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_ENTANGLED" })
+    expect(isEntangled(snap(a))).toBe(true)
+    expect(isVulnerable(snap(a))).toBe(true)
+    // Entangled sets persistent vulnerable timer (99)
+    expect(snap(a).context.vulnerableTimer).toBe(99)
+
+    // Grapple replaces entangled → grabbed
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    expect(isGrabbed(snap(a))).toBe(true)
+    expect(isEntangled(snap(a))).toBe(false)
+    // Vulnerable persists: grabbed state also blocks vulnerable clear
+    expect(isVulnerable(snap(a))).toBe(true)
+
+    // After escaping grapple, vulnerable should eventually expire
+    a.send({ type: "GRAPPLE_ESCAPE", rollResult: ger(1) })
+    expect(isGrappled(snap(a))).toBe(false)
+    // Timer was still 99 from entangled, but now no restraint/grapple blocks clear
+    // However the timer value is still 99 (setVulnerableTimer takes max), so it persists
+    // until a full clear action happens. Vulnerable persists because timer is still high.
+    expect(isVulnerable(snap(a))).toBe(true)
   })
 })
 
