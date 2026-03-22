@@ -19,53 +19,53 @@ module savageTest {
   /// Damage that meets Toughness but no raises: just Shaken
   run shakenFromDamageTest = {
     initWildCard
-    .then(doTakeDamage(2, 0, 0))
+    .then(doTakeDamage(2, 0, 0, 0))
     .expect(state.shaken and state.wounds == 0)
   }
 
   /// Damage with 1 raise (margin 4-7): Shaken + 1 wound
   run woundFromRaiseTest = {
     initWildCard
-    .then(doTakeDamage(5, 0, 0))
+    .then(doTakeDamage(5, 0, 0, 0))
     .expect(state.shaken and state.wounds == 1)
   }
 
   /// Shaken character hit again with no raises: Shaken-on-Shaken = 1 wound
   run shakenOnShakenTest = {
     initWildCard
-    .then(doTakeDamage(2, 0, 0))
+    .then(doTakeDamage(2, 0, 0, 0))
     .expect(state.shaken and state.wounds == 0)
-    .then(doTakeDamage(1, 0, 0))
+    .then(doTakeDamage(1, 0, 0, 0))
     .expect(state.shaken and state.wounds == 1)
   }
 
   /// Shaken character hit with 1 raise: still just 1 wound (not 2)
   run shakenWithRaiseTest = {
     initWildCard
-    .then(doTakeDamage(0, 0, 0))
+    .then(doTakeDamage(0, 0, 0, 0))
     .expect(state.shaken)
-    .then(doTakeDamage(4, 0, 0))
+    .then(doTakeDamage(4, 0, 0, 0))
     .expect(state.wounds == 1)
   }
 
   /// Soak removes all wounds and clears pre-existing Shaken
   run soakClearsShakenTest = {
     all { state' = {...FRESH_WILD_CARD, shaken: true} }
-    .then(doTakeDamage(0, 1, 0))
+    .then(doTakeDamage(0, 1, 0, 0))
     .expect(not(state.shaken) and state.wounds == 0)
   }
 
   /// Partial soak: reduce wounds but stay Shaken
   run partialSoakTest = {
     initWildCard
-    .then(doTakeDamage(8, 1, 0))
+    .then(doTakeDamage(8, 1, 0, 0))
     .expect(state.shaken and state.wounds == 1)
   }
 
   /// No damage when margin < 0: state unchanged
   run noDamageOnMissTest = {
     initWildCard
-    .then(doTakeDamage(0, 0, 0))
+    .then(doTakeDamage(0, 0, 0, 0))
     .expect(state.shaken)
     // margin 0 does cause Shaken — that's a hit. Use the action filter:
     // pTakeDamage with margin < 0 returns success: false, which means doTakeDamage fails.
@@ -80,14 +80,14 @@ module savageTest {
   /// Extra dies from any wound
   run extraDiesFromWoundTest = {
     initExtra
-    .then(doTakeDamage(4, 0, 0))
+    .then(doTakeDamage(4, 0, 0, 0))
     .expect(state.dead and state.wounds == 1)
   }
 
   /// Extra becomes Shaken but survives when no wound
   run extraShakenSurvivesTest = {
     initExtra
-    .then(doTakeDamage(2, 0, 0))
+    .then(doTakeDamage(2, 0, 0, 0))
     .expect(state.shaken and not(state.dead) and state.wounds == 0)
   }
 
@@ -98,21 +98,21 @@ module savageTest {
   /// 3 wounds + Shaken-on-Shaken → incapacitated. IncapRoll fail → bleeding out.
   run incapBleedingOutTest = {
     all { state' = {...FRESH_WILD_CARD, wounds: 3, shaken: true} }
-    .then(doTakeDamage(0, 0, 0))
+    .then(doTakeDamage(0, 0, 0, 0))
     .expect(state.incapacitated and state.bleedingOut and state.wounds == 3)
   }
 
   /// IncapRoll critfail → dead
   run incapCritFailDeadTest = {
     all { state' = {...FRESH_WILD_CARD, wounds: 3, shaken: true} }
-    .then(doTakeDamage(0, 0, -1))
+    .then(doTakeDamage(0, 0, -1, 0))
     .expect(state.dead)
   }
 
   /// IncapRoll success → incapacitated but not bleeding
   run incapSuccessTest = {
     all { state' = {...FRESH_WILD_CARD, wounds: 3, shaken: true} }
-    .then(doTakeDamage(0, 0, 1))
+    .then(doTakeDamage(0, 0, 1, 51))
     .expect(state.incapacitated and not(state.bleedingOut) and not(state.dead))
   }
 
@@ -196,7 +196,7 @@ module savageTest {
   /// Shaken recovery success
   run shakenRecoveryTest = {
     initWildCard
-    .then(doTakeDamage(0, 0, 0))
+    .then(doTakeDamage(0, 0, 0, 0))
     .expect(state.shaken)
     .then(doStartOfTurn(0, 1))
     .expect(not(state.shaken) and state.ownTurn)
@@ -205,7 +205,7 @@ module savageTest {
   /// Shaken recovery fail
   run shakenRecoveryFailTest = {
     initWildCard
-    .then(doTakeDamage(0, 0, 0))
+    .then(doTakeDamage(0, 0, 0, 0))
     .then(doStartOfTurn(0, 0))
     .expect(state.shaken and state.ownTurn)
   }
@@ -213,7 +213,7 @@ module savageTest {
   /// Benny unshake works any time
   run bennyUnshakeTest = {
     initWildCard
-    .then(doTakeDamage(2, 0, 0))
+    .then(doTakeDamage(2, 0, 0, 0))
     .expect(state.shaken)
     .then(doUnshake)
     .expect(not(state.shaken))
@@ -301,8 +301,9 @@ module savageTest {
     nondet margin = MARGINS.oneOf()
     nondet soak = SOAK_RANGE.oneOf()
     nondet incapRoll = ROLL_RANGE.oneOf()
+    nondet injuryRoll = INJURY_ROLL_RANGE.oneOf()
     initWildCard
-    .then(doTakeDamage(margin, soak, incapRoll))
+    .then(doTakeDamage(margin, soak, incapRoll, injuryRoll))
     .expect(state.wounds >= 0 and state.wounds <= state.maxWounds)
   }
 
@@ -338,7 +339,7 @@ module savageTest {
     initWildCard
     .then(doDropProne)
     .expect(state.prone)
-    .then(doTakeDamage(16, 0, -1))
+    .then(doTakeDamage(16, 0, -1, 0))
     .expect(state.dead and not(state.prone))
   }
 
@@ -397,7 +398,7 @@ module savageTest {
     .then(doStartOfTurn(0, 0))
     .then(doGoOnHold)
     .expect(state.onHold)
-    .then(doTakeDamage(0, 0, 0))
+    .then(doTakeDamage(0, 0, 0, 0))
     .expect(state.shaken and not(state.onHold))
   }
 
@@ -514,14 +515,95 @@ module savageTest {
   /// Restraint clears on death
   run restraintClearsOnDeathTest = {
     all { state' = {...FRESH_WILD_CARD, restrained: 1, distracted: 0, vulnerable: 0} }
-    .then(doTakeDamage(16, 0, -1))
+    .then(doTakeDamage(16, 0, -1, 0))
     .expect(state.dead and state.restrained == -1)
   }
 
   /// Restraint clears on incapacitation
   run restraintClearsOnIncapTest = {
     all { state' = {...FRESH_WILD_CARD, wounds: 3, shaken: true, restrained: 1, distracted: 0, vulnerable: 0} }
-    .then(doTakeDamage(0, 0, 1))
+    .then(doTakeDamage(0, 0, 1, 51))
     .expect(state.incapacitated and state.restrained == -1)
+  }
+
+  // ============================================================
+  // Injury tests
+  // ============================================================
+
+  /// Incap success appends injury to list
+  run injuryOnIncapSuccessTest = {
+    all { state' = {...FRESH_WILD_CARD, wounds: 3, shaken: true} }
+    .then(doTakeDamage(0, 0, 1, 51))
+    .expect(state.incapacitated and state.injuries.length() == 1 and state.injuries[0] == "guts_broken")
+  }
+
+  /// Incap raise also appends injury
+  run injuryOnIncapRaiseTest = {
+    all { state' = {...FRESH_WILD_CARD, wounds: 3, shaken: true} }
+    .then(doTakeDamage(0, 0, 2, 110))
+    .expect(state.incapacitated and state.injuries.length() == 1 and state.injuries[0] == "leg")
+  }
+
+  /// Incap fail (bleeding out) does NOT append injury
+  run noInjuryOnIncapFailTest = {
+    all { state' = {...FRESH_WILD_CARD, wounds: 3, shaken: true} }
+    .then(doTakeDamage(0, 0, 0, 0))
+    .expect(state.incapacitated and state.bleedingOut and state.injuries.length() == 0)
+  }
+
+  /// Incap critfail (death) does NOT append injury
+  run noInjuryOnIncapCritFailTest = {
+    all { state' = {...FRESH_WILD_CARD, wounds: 3, shaken: true} }
+    .then(doTakeDamage(0, 0, -1, 0))
+    .expect(state.dead and state.injuries.length() == 0)
+  }
+
+  /// Injuries persist through healing
+  run injuriesPersistThroughHealingTest = {
+    all { state' = {...FRESH_WILD_CARD, wounds: 3, shaken: true} }
+    .then(doTakeDamage(0, 0, 1, 30))
+    .expect(state.injuries.length() == 1 and state.injuries[0] == "arm")
+    .then(doHeal(2))
+    .expect(state.wounds == 1 and state.injuries.length() == 1 and state.injuries[0] == "arm")
+  }
+
+  /// Death clears injuries
+  run deathClearsInjuriesTest = {
+    all { state' = {...FRESH_WILD_CARD, wounds: 3, shaken: true} }
+    .then(doTakeDamage(0, 0, 1, 121))
+    .expect(state.injuries.length() == 1 and state.injuries[0] == "head_scar")
+    .then(doHeal(1))
+    .expect(not(state.incapacitated))
+    .then(doTakeDamage(16, 0, -1, 0))
+    .expect(state.dead and state.injuries.length() == 0)
+  }
+
+  /// ResolveInjury maps table brackets correctly
+  run resolveInjuryMappingTest = {
+    initWildCard
+    .expect(
+      pResolveInjury(20) == "unmentionables" and
+      pResolveInjury(30) == "arm" and
+      pResolveInjury(40) == "arm" and
+      pResolveInjury(51) == "guts_broken" and
+      pResolveInjury(53) == "guts_battered" and
+      pResolveInjury(55) == "guts_busted" and
+      pResolveInjury(100) == "leg" and
+      pResolveInjury(110) == "leg" and
+      pResolveInjury(121) == "head_scar" and
+      pResolveInjury(124) == "head_blinded" and
+      pResolveInjury(126) == "head_brain_damage"
+    )
+  }
+
+  /// Multiple injuries accumulate
+  run multipleInjuriesAccumulateTest = {
+    all { state' = {...FRESH_WILD_CARD, wounds: 3, shaken: true} }
+    .then(doTakeDamage(0, 0, 1, 51))
+    .expect(state.injuries.length() == 1)
+    .then(doHeal(3))
+    .expect(state.wounds == 0 and state.injuries.length() == 1)
+    .then(doTakeDamage(16, 0, 1, 110))
+    .expect(state.incapacitated and state.injuries.length() == 2 and state.injuries[1] == "leg")
   }
 }

@@ -46,7 +46,7 @@
 
 > Incapacitation produces permanent injuries that persist after healing.
 
-### Slice 4.1: Quint spec for injuries
+### Slice 4.1: Quint spec for injuries [DONE]
 
 - Define injury types as constants (arm, leg, head, gut, broken, scarred — per SWADE Injury Table)
 - Add `injuries: List[str]` to State (list of injury type identifiers)

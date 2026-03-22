@@ -42,7 +42,10 @@ module savage {
     onHold: bool,
 
     // Restraint
-    restrained: int         // -1 = free, 0 = entangled, 1 = bound
+    restrained: int,        // -1 = free, 0 = entangled, 1 = bound
+
+    // Injuries (permanent, from Injury Table on incapacitation)
+    injuries: List[str]     // list of injury type identifiers
   }
 
   // ============================================================
@@ -54,7 +57,8 @@ module savage {
     wounds: 0, incapacitated: false, bleedingOut: false, dead: false,
     fatigue: 0, incapByFatigue: false,
     isWildCard: true, maxWounds: 3, ownTurn: false,
-    prone: false, onHold: false, restrained: -1
+    prone: false, onHold: false, restrained: -1,
+    injuries: List()
   }
 
   pure val FRESH_EXTRA: State = {
@@ -62,7 +66,8 @@ module savage {
     wounds: 0, incapacitated: false, bleedingOut: false, dead: false,
     fatigue: 0, incapByFatigue: false,
     isWildCard: false, maxWounds: 1, ownTurn: false,
-    prone: false, onHold: false, restrained: -1
+    prone: false, onHold: false, restrained: -1,
+    injuries: List()
   }
 
   // Bounded ranges for nondeterministic exploration
@@ -71,6 +76,9 @@ module savage {
   pure val ROLL_RANGE = (-1).to(3)  // -1 = critfail, 0 = fail, 1 = success, 2+ = raises
   pure val HEAL_RANGE = 1.to(3)
 
+  // Injury Table roll range: tableRoll * 10 + subRoll (e.g., 52 = table 5, sub 2)
+  pure val INJURY_ROLL_RANGE = Set(20, 30, 40, 51, 52, 53, 54, 55, 56, 100, 110, 121, 122, 123, 124, 125, 126)
+
   // ============================================================
   // 3. PURE FUNCTIONS
   // ============================================================
@@ -78,13 +86,36 @@ module savage {
   // --- Helpers ---
   pure def max(a: int, b: int): int = if (a > b) a else b
 
+  /// Resolve Injury Table roll to injury type string.
+  /// injuryRoll encodes 2d6 table roll and d6 sub-roll: tableRoll * 10 + subRoll.
+  /// Table: 2 = unmentionables, 3-4 = arm, 5-9 = guts (sub: 1-2 broken, 3-4 battered, 5-6 busted),
+  /// 10-11 = leg, 12 = head (sub: 1-3 scar, 4-5 blinded, 6 brain_damage)
+  pure def pResolveInjury(injuryRoll: int): str = {
+    val tableRoll = injuryRoll / 10
+    val subRoll = injuryRoll % 10
+    if (tableRoll <= 2) "unmentionables"
+    else if (tableRoll <= 4) "arm"
+    else if (tableRoll <= 9) {
+      if (subRoll <= 2) "guts_broken"
+      else if (subRoll <= 4) "guts_battered"
+      else "guts_busted"
+    }
+    else if (tableRoll <= 11) "leg"
+    else {
+      if (subRoll <= 3) "head_scar"
+      else if (subRoll <= 5) "head_blinded"
+      else "head_brain_damage"
+    }
+  }
+
   /// Clear all conditions when dying — dead is absorbing, no residual state
   pure def die(s: State): State = {
     ...s, dead: true, shaken: false, stunned: false,
     distracted: -1, vulnerable: -1,
     incapacitated: false, bleedingOut: false,
     fatigue: 0, incapByFatigue: false,
-    prone: false, onHold: false, restrained: -1
+    prone: false, onHold: false, restrained: -1,
+    injuries: List()
   }
 
   // --- Derived state ---
@@ -122,11 +153,13 @@ module savage {
   /// soakSuccesses: 0 = no soak or failed vigor roll, 1+ = wounds negated by soak.
   /// incapRoll: -1 = critfail, 0 = fail, 1+ = success/raise.
   ///            Only used when a Wild Card becomes incapacitated from this hit.
+  /// injuryRoll: tableRoll * 10 + subRoll, used only on incap success/raise.
   pure def pTakeDamage(
     s: State,
     margin: int,
     soakSuccesses: int,
-    incapRoll: int
+    incapRoll: int,
+    injuryRoll: int
   ): {success: bool, newState: State} = {
     if (s.dead or s.incapacitated or s.incapByFatigue or margin < 0) {
       {success: false, newState: s}
@@ -151,10 +184,12 @@ module savage {
         if (incapRoll < 0) {
           {success: true, newState: die(base)}
         } else if (incapRoll == 0) {
+          // Fail: bleeding out, no injury roll
           {success: true, newState: {...base, bleedingOut: true}}
         } else {
-          // Success/raise: incapacitated with injury (injury table out of scope)
-          {success: true, newState: base}
+          // Success/raise: incapacitated with injury from table
+          val injury = pResolveInjury(injuryRoll)
+          {success: true, newState: {...base, injuries: s.injuries.append(injury)}}
         }
       } else {
         // Becoming shaken clears hold
@@ -464,6 +499,13 @@ module savage {
   /// Restrained range valid
   val restrainedValid = state.restrained >= -1 and state.restrained <= 1
 
+  /// Injuries are valid strings (all entries are recognized injury types)
+  val VALID_INJURIES = Set("unmentionables", "arm", "guts_broken", "guts_battered", "guts_busted", "leg", "head_scar", "head_blinded", "head_brain_damage")
+  val injuriesValid = state.injuries.foldl(true, (acc, i) => acc and VALID_INJURIES.contains(i))
+
+  /// Dead characters have no injuries (cleared on death)
+  val deadClearsInjuries = state.dead implies state.injuries.length() == 0
+
   /// Combined safety invariant
   val safetyInv = and {
     woundsBounded,
@@ -476,7 +518,9 @@ module savage {
     holdImpliesActive,
     boundImpliesConditions,
     restrainedImpliesActive,
-    restrainedValid
+    restrainedValid,
+    injuriesValid,
+    deadClearsInjuries
   }
 
   // Action witnesses (should be VIOLATED = reachable)
@@ -490,8 +534,8 @@ module savage {
   // 6. ACTIONS
   // ============================================================
 
-  action doTakeDamage(margin: int, soak: int, incapRoll: int): bool = {
-    val r = pTakeDamage(state, margin, soak, incapRoll)
+  action doTakeDamage(margin: int, soak: int, incapRoll: int, injuryRoll: int): bool = {
+    val r = pTakeDamage(state, margin, soak, incapRoll, injuryRoll)
     all { r.success, state' = r.newState }
   }
 
@@ -602,7 +646,8 @@ module savage {
         nondet margin = MARGINS.oneOf()
         nondet soak = SOAK_RANGE.oneOf()
         nondet incapRoll = ROLL_RANGE.oneOf()
-        doTakeDamage(margin, soak, incapRoll),
+        nondet injuryRoll = INJURY_ROLL_RANGE.oneOf()
+        doTakeDamage(margin, soak, incapRoll, injuryRoll),
 
         // Start of turn (recovery attempts)
         nondet vigorRoll = 0.to(3).oneOf()
