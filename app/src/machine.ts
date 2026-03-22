@@ -910,6 +910,11 @@ export const savageMachine = setup({
                   guard: stateIn(SHAKEN_STATE),
                   target: "othersTurn",
                   actions: ["clearOnHold", "setOwnTurnFalse"]
+                },
+                {
+                  guard: stateIn(FATIGUE_INCAP),
+                  target: "othersTurn",
+                  actions: ["clearOnHold", "setOwnTurnFalse"]
                 }
               ]
             }
