@@ -1323,6 +1323,14 @@ export function isGrappled(snap: SavageSnapshot): boolean {
   return isGrabbed(snap) || isPinned(snap)
 }
 
+export function isBleedingOut(snap: SavageSnapshot): boolean {
+  return snap.matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } })
+}
+
+export function isIncapStable(snap: SavageSnapshot): boolean {
+  return snap.matches({ alive: { damageTrack: { incapacitated: "stable" } } })
+}
+
 export function isBlinded(snap: SavageSnapshot): boolean {
   return (
     snap.matches({ alive: { conditionTrack: { vision: "blinded" } } }) ||

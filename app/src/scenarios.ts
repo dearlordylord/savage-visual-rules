@@ -5,6 +5,7 @@ import {
   afflictionType,
   blindedPenalty,
   hasEffect,
+  isBleedingOut,
   isBlinded,
   isBound,
   isDead,
@@ -14,6 +15,7 @@ import {
   isFullyBlinded,
   isGrabbed,
   isGrappled,
+  isIncapStable,
   isOnHold,
   isPinned,
   isProne,
@@ -87,7 +89,17 @@ const CATEGORY_LABELS_INTERNAL = {
   afflictions: m.cat_afflictions,
   powers: m.cat_powers,
   defense: m.cat_defense,
-  fear: m.cat_fear
+  fear: m.cat_fear,
+  // Phase 2: cross-feature interactions
+  crossCombat: m.cat_crossCombat,
+  crossRecovery: m.cat_crossRecovery,
+  crossHold: m.cat_crossHold,
+  crossRestraint: m.cat_crossRestraint,
+  crossAffliction: m.cat_crossAffliction,
+  crossDefense: m.cat_crossDefense,
+  crossHealing: m.cat_crossHealing,
+  crossFear: m.cat_crossFear,
+  crossDeath: m.cat_crossDeath
 } as const satisfies Record<string, () => string>
 
 export type ScenarioCategory = keyof typeof CATEGORY_LABELS_INTERNAL
@@ -331,7 +343,7 @@ export const scenarios: Array<Scenario> = [
         expect: [
           {
             desc: m.sc_chk_bleeding_out,
-            check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } })
+            check: isBleedingOut
           }
         ]
       }
@@ -353,7 +365,7 @@ export const scenarios: Array<Scenario> = [
         event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(1), injuryRoll: ij(52) },
         label: m.sc_incap_stable_s1,
         expect: [
-          { desc: m.sc_chk_stable, check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "stable" } } }) },
+          { desc: m.sc_chk_stable, check: isIncapStable },
           { desc: m.sc_incap_stable_s1_e1, check: (s) => s.context.injuries.includes("guts_broken") }
         ]
       }
@@ -381,7 +393,7 @@ export const scenarios: Array<Scenario> = [
         expect: [
           {
             desc: m.sc_chk_bleeding_out,
-            check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } })
+            check: isBleedingOut
           }
         ]
       },
@@ -410,7 +422,7 @@ export const scenarios: Array<Scenario> = [
         expect: [
           {
             desc: m.sc_chk_bleeding_out,
-            check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } })
+            check: isBleedingOut
           }
         ]
       },
@@ -418,7 +430,7 @@ export const scenarios: Array<Scenario> = [
         event: { type: "START_OF_TURN", vigorRoll: vr(2), spiritRoll: sr(0) },
         label: m.sc_bleeding_stabilized_s2,
         expect: [
-          { desc: m.sc_chk_stable, check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "stable" } } }) },
+          { desc: m.sc_chk_stable, check: isIncapStable },
           { desc: m.sc_chk_alive, check: (s) => !isDead(s) }
         ]
       }
@@ -746,7 +758,7 @@ export const scenarios: Array<Scenario> = [
         expect: [
           {
             desc: m.sc_chk_bleeding_out,
-            check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } })
+            check: isBleedingOut
           }
         ]
       },
@@ -1395,6 +1407,827 @@ export const scenarios: Array<Scenario> = [
         event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
         label: m.sc_fear_shaken_s1,
         expect: [{ desc: m.sc_chk_shaken, check: isShaken }]
+      }
+    ]
+  },
+
+  // ========================================================
+  // Phase 2: Cross-feature mechanics
+  // ========================================================
+
+  // ========================================
+  // 2.1 — Full combat round
+  // ========================================
+  {
+    id: "cross-full-round",
+    title: m.sc_cross_full_round_title,
+    description: m.sc_cross_full_round_desc,
+    category: "crossCombat",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: m.sc_cross_full_round_s0,
+        expect: [
+          { desc: m.sc_chk_shaken, check: isShaken },
+          { desc: m.sc_chk_wounds_0, check: (s) => s.context.wounds === 0 }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) },
+        label: m.sc_cross_full_round_s1,
+        expect: [
+          { desc: m.sc_chk_not_shaken, check: (s) => !isShaken(s) },
+          { desc: m.sc_chk_acting, check: (s) => s.matches({ alive: { turnPhase: "acting" } }) }
+        ]
+      },
+      {
+        event: { type: "END_OF_TURN", vigorRoll: vr(0) },
+        label: m.sc_cross_full_round_s2,
+        expect: [{ desc: m.sc_chk_idle, check: (s) => s.matches({ alive: { turnPhase: "idle" } }) }]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.2 — Stunned + Shaken: both recoveries succeed
+  // ========================================
+  {
+    id: "cross-stun-shaken-both-ok",
+    title: m.sc_cross_stun_shaken_both_ok_title,
+    description: m.sc_cross_stun_shaken_both_ok_desc,
+    category: "crossRecovery",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: m.sc_cross_stun_shaken_both_ok_s0,
+        expect: [{ desc: m.sc_chk_shaken, check: isShaken }]
+      },
+      {
+        event: { type: "APPLY_STUNNED" },
+        label: m.sc_cross_stun_shaken_both_ok_s1,
+        expect: [
+          { desc: m.sc_chk_stunned, check: isStunned },
+          { desc: m.sc_chk_shaken, check: isShaken },
+          { desc: m.sc_chk_prone, check: isProne }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(1), spiritRoll: sr(1) },
+        label: m.sc_cross_stun_shaken_both_ok_s2,
+        expect: [
+          { desc: m.sc_chk_not_stunned, check: (s) => !isStunned(s) },
+          { desc: m.sc_chk_not_shaken, check: (s) => !isShaken(s) },
+          { desc: m.sc_chk_vulnerable_after_stun, check: isVulnerable }
+        ]
+      }
+    ]
+  },
+  {
+    id: "cross-stun-shaken-vigor-ok-spirit-fail",
+    title: m.sc_cross_stun_shaken_vigor_ok_spirit_fail_title,
+    description: m.sc_cross_stun_shaken_vigor_ok_spirit_fail_desc,
+    category: "crossRecovery",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: m.sc_cross_stun_shaken_vigor_ok_spirit_fail_s0,
+        expect: [{ desc: m.sc_chk_shaken, check: isShaken }]
+      },
+      {
+        event: { type: "APPLY_STUNNED" },
+        label: m.sc_cross_stun_shaken_vigor_ok_spirit_fail_s1,
+        expect: [{ desc: m.sc_chk_stunned, check: isStunned }]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(1), spiritRoll: sr(0) },
+        label: m.sc_cross_stun_shaken_vigor_ok_spirit_fail_s2,
+        expect: [
+          { desc: m.sc_chk_not_stunned, check: (s) => !isStunned(s) },
+          { desc: m.sc_chk_shaken, check: isShaken },
+          { desc: m.sc_chk_vulnerable, check: isVulnerable }
+        ]
+      }
+    ]
+  },
+  {
+    id: "cross-stun-shaken-vigor-fail",
+    title: m.sc_cross_stun_shaken_vigor_fail_title,
+    description: m.sc_cross_stun_shaken_vigor_fail_desc,
+    category: "crossRecovery",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: m.sc_cross_stun_shaken_vigor_fail_s0,
+        expect: [{ desc: m.sc_chk_shaken, check: isShaken }]
+      },
+      {
+        event: { type: "APPLY_STUNNED" },
+        label: m.sc_cross_stun_shaken_vigor_fail_s1,
+        expect: [{ desc: m.sc_chk_stunned, check: isStunned }]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) },
+        label: m.sc_cross_stun_shaken_vigor_fail_s2,
+        expect: [
+          { desc: m.sc_chk_stunned, check: isStunned },
+          { desc: m.sc_chk_shaken, check: isShaken }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.3 — Shaken breaks Hold
+  // ========================================
+  {
+    id: "cross-hold-broken-by-damage",
+    title: m.sc_cross_hold_broken_by_damage_title,
+    description: m.sc_cross_hold_broken_by_damage_desc,
+    category: "crossHold",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: m.sc_cross_hold_broken_by_damage_s0,
+        expect: []
+      },
+      {
+        event: { type: "GO_ON_HOLD" },
+        label: m.sc_cross_hold_broken_by_damage_s1,
+        expect: [{ desc: m.sc_chk_on_hold, check: isOnHold }]
+      },
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: m.sc_cross_hold_broken_by_damage_s2,
+        expect: [
+          { desc: m.sc_chk_shaken, check: isShaken },
+          { desc: m.sc_chk_not_on_hold, check: (s) => !isOnHold(s) }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.4 — Vulnerability persists while Entangled
+  // ========================================
+  {
+    id: "cross-entangled-persistent-vulnerable",
+    title: m.sc_cross_entangled_persistent_vulnerable_title,
+    description: m.sc_cross_entangled_persistent_vulnerable_desc,
+    category: "crossRestraint",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "APPLY_ENTANGLED" },
+        label: m.sc_cross_entangled_persistent_vulnerable_s0,
+        expect: [
+          { desc: m.sc_chk_entangled, check: isEntangled },
+          { desc: m.sc_chk_vulnerable, check: isVulnerable },
+          { desc: m.sc_chk_vulnerable_timer_99, check: (s) => s.context.vulnerableTimer === 99 }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: m.sc_cross_entangled_persistent_vulnerable_s1,
+        expect: [{ desc: m.sc_chk_vulnerable, check: isVulnerable }]
+      },
+      {
+        event: { type: "END_OF_TURN", vigorRoll: vr(0) },
+        label: m.sc_cross_entangled_persistent_vulnerable_s2,
+        expect: [
+          { desc: m.sc_chk_vulnerable, check: isVulnerable },
+          { desc: m.sc_chk_vulnerable_timer_99_frozen, check: (s) => s.context.vulnerableTimer === 99 }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: m.sc_cross_entangled_persistent_vulnerable_s3,
+        expect: [{ desc: m.sc_chk_vulnerable, check: isVulnerable }]
+      },
+      {
+        event: { type: "ESCAPE_ATTEMPT", rollResult: er(1) },
+        label: m.sc_cross_entangled_persistent_vulnerable_s4,
+        expect: [
+          { desc: m.sc_chk_free, check: (s) => !isRestrained(s) },
+          { desc: m.sc_chk_not_vulnerable, check: (s) => !isVulnerable(s) }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.5 — Bound freezes timers
+  // ========================================
+  {
+    id: "cross-bound-freezes-timers",
+    title: m.sc_cross_bound_freezes_timers_title,
+    description: m.sc_cross_bound_freezes_timers_desc,
+    category: "crossRestraint",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: m.sc_cross_bound_freezes_timers_s0,
+        expect: []
+      },
+      {
+        event: { type: "APPLY_DISTRACTED" },
+        label: m.sc_cross_bound_freezes_timers_s1,
+        expect: [
+          { desc: m.sc_chk_distracted, check: isDistracted },
+          { desc: m.sc_chk_distracted_timer_1, check: (s) => s.context.distractedTimer === 1 }
+        ]
+      },
+      {
+        event: { type: "APPLY_BOUND" },
+        label: m.sc_cross_bound_freezes_timers_s2,
+        expect: [
+          { desc: m.sc_chk_bound, check: isBound },
+          { desc: m.sc_chk_distracted, check: isDistracted }
+        ]
+      },
+      {
+        event: { type: "END_OF_TURN", vigorRoll: vr(0) },
+        label: m.sc_cross_bound_freezes_timers_s3,
+        expect: [
+          { desc: m.sc_chk_distracted_timer_1_frozen, check: (s) => s.context.distractedTimer === 1 },
+          { desc: m.sc_chk_distracted, check: isDistracted }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.6 — Grapple → Pin → Bound
+  // ========================================
+  {
+    id: "cross-grapple-to-bound",
+    title: m.sc_cross_grapple_to_bound_title,
+    description: m.sc_cross_grapple_to_bound_desc,
+    category: "crossRestraint",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(1) },
+        label: m.sc_cross_grapple_to_bound_s0,
+        expect: [
+          { desc: m.sc_chk_grabbed_label, check: isGrabbed },
+          { desc: m.sc_chk_grappled_by_opp1, check: (s) => s.context.grappledBy === "opp1" }
+        ]
+      },
+      {
+        event: { type: "PIN_ATTEMPT", rollResult: pr(1) },
+        label: m.sc_cross_grapple_to_bound_s1,
+        expect: [
+          { desc: m.sc_chk_pinned_label, check: isPinned },
+          { desc: m.sc_chk_grappled_by_opp1, check: (s) => s.context.grappledBy === "opp1" }
+        ]
+      },
+      {
+        event: { type: "APPLY_BOUND" },
+        label: m.sc_cross_grapple_to_bound_s2,
+        expect: [
+          { desc: m.sc_chk_bound_label, check: isBound },
+          { desc: m.sc_chk_grappled_by_empty, check: (s) => s.context.grappledBy === "" },
+          { desc: m.sc_chk_distracted, check: isDistracted },
+          { desc: m.sc_chk_vulnerable, check: isVulnerable }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.7 — Lethal affliction + existing wounds
+  // ========================================
+  {
+    id: "cross-lethal-plus-wounds",
+    title: m.sc_cross_lethal_plus_wounds_title,
+    description: m.sc_cross_lethal_plus_wounds_desc,
+    category: "crossAffliction",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: m.sc_cross_lethal_plus_wounds_s0,
+        expect: [
+          { desc: m.sc_chk_wounds_3, check: (s) => s.context.wounds === 3 },
+          { desc: m.sc_chk_shaken, check: isShaken }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) },
+        label: m.sc_cross_lethal_plus_wounds_s1,
+        expect: [{ desc: m.sc_chk_not_shaken, check: (s) => !isShaken(s) }]
+      },
+      {
+        event: { type: "APPLY_AFFLICTION", afflictionType: "lethal", duration: ad(3) },
+        label: m.sc_cross_lethal_plus_wounds_s2,
+        expect: [
+          {
+            desc: m.sc_chk_bleeding_out,
+            check: isBleedingOut
+          }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.8 — Sleep blocks blinded recovery
+  // ========================================
+  {
+    id: "cross-sleep-blocks-blinded",
+    title: m.sc_cross_sleep_blocks_blinded_title,
+    description: m.sc_cross_sleep_blocks_blinded_desc,
+    category: "crossAffliction",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "APPLY_AFFLICTION", afflictionType: "sleep", duration: ad(5) },
+        label: m.sc_cross_sleep_blocks_blinded_s0,
+        expect: [{ desc: m.sc_chk_affliction_sleep, check: (s) => afflictionType(s) === "sleep" }]
+      },
+      {
+        event: { type: "APPLY_BLINDED", severity: bs(4) },
+        label: m.sc_cross_sleep_blocks_blinded_s1,
+        expect: [{ desc: m.sc_chk_fully_blinded, check: isFullyBlinded }]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: m.sc_cross_sleep_blocks_blinded_s2,
+        expect: []
+      },
+      {
+        event: { type: "END_OF_TURN", vigorRoll: vr(2) },
+        label: m.sc_cross_sleep_blocks_blinded_s3,
+        expect: [{ desc: m.sc_chk_fully_blinded_no_change, check: isFullyBlinded }]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.9 — Fatigue incap clears restraints and blindness
+  // ========================================
+  {
+    id: "cross-fatigue-incap-clears-all",
+    title: m.sc_cross_fatigue_incap_clears_all_title,
+    description: m.sc_cross_fatigue_incap_clears_all_desc,
+    category: "crossAffliction",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "APPLY_ENTANGLED" },
+        label: m.sc_cross_fatigue_incap_clears_all_s0,
+        expect: [{ desc: m.sc_chk_entangled, check: isEntangled }]
+      },
+      {
+        event: { type: "APPLY_BLINDED", severity: bs(4) },
+        label: m.sc_cross_fatigue_incap_clears_all_s1,
+        expect: [{ desc: m.sc_chk_fully_blinded, check: isFullyBlinded }]
+      },
+      {
+        event: { type: "APPLY_FATIGUE" },
+        label: m.sc_cross_fatigue_incap_clears_all_s2,
+        expect: [{ desc: m.sc_chk_fatigued, check: (s) => s.matches({ alive: { fatigueTrack: "fatigued" } }) }]
+      },
+      {
+        event: { type: "APPLY_FATIGUE" },
+        label: m.sc_cross_fatigue_incap_clears_all_s3,
+        expect: [{ desc: m.sc_chk_exhausted, check: (s) => s.matches({ alive: { fatigueTrack: "exhausted" } }) }]
+      },
+      {
+        event: { type: "APPLY_FATIGUE" },
+        label: m.sc_cross_fatigue_incap_clears_all_s4,
+        expect: [
+          { desc: m.sc_chk_incap_by_fatigue, check: (s) => s.matches({ alive: { fatigueTrack: "incapByFatigue" } }) },
+          { desc: m.sc_chk_not_entangled, check: (s) => !isEntangled(s) },
+          { desc: m.sc_chk_not_blinded, check: (s) => !isBlinded(s) }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.10 — Stunned breaks Full Defense
+  // ========================================
+  {
+    id: "cross-stun-breaks-defense",
+    title: m.sc_cross_stun_breaks_defense_title,
+    description: m.sc_cross_stun_breaks_defense_desc,
+    category: "crossDefense",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: m.sc_cross_stun_breaks_defense_s0,
+        expect: [{ desc: m.sc_chk_acting, check: (s) => s.matches({ alive: { turnPhase: "acting" } }) }]
+      },
+      {
+        event: { type: "DEFEND" },
+        label: m.sc_cross_stun_breaks_defense_s1,
+        expect: [{ desc: m.sc_chk_defending, check: isDefending }]
+      },
+      {
+        event: { type: "APPLY_STUNNED" },
+        label: m.sc_cross_stun_breaks_defense_s2,
+        expect: [
+          { desc: m.sc_chk_stunned, check: isStunned },
+          { desc: m.sc_chk_not_defending, check: (s) => !isDefending(s) }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.11 — Progressive damage to incap
+  // ========================================
+  {
+    id: "cross-progressive-damage",
+    title: m.sc_cross_progressive_damage_title,
+    description: m.sc_cross_progressive_damage_desc,
+    category: "crossCombat",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(4), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: m.sc_cross_progressive_damage_s0,
+        expect: [
+          { desc: m.sc_chk_wounds_1, check: (s) => s.context.wounds === 1 },
+          { desc: m.sc_chk_shaken, check: isShaken }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) },
+        label: m.sc_cross_progressive_damage_s1,
+        expect: [{ desc: m.sc_chk_not_shaken, check: (s) => !isShaken(s) }]
+      },
+      {
+        event: { type: "END_OF_TURN", vigorRoll: vr(0) },
+        label: m.sc_cross_progressive_damage_s2,
+        expect: []
+      },
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(5), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: m.sc_cross_progressive_damage_s3,
+        expect: [
+          { desc: m.sc_chk_wounds_2, check: (s) => s.context.wounds === 2 },
+          { desc: m.sc_chk_shaken, check: isShaken }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: m.sc_cross_progressive_damage_s4,
+        expect: [{ desc: m.sc_chk_shaken, check: isShaken }]
+      },
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(8), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: m.sc_cross_progressive_damage_s5,
+        expect: [
+          {
+            desc: m.sc_chk_bleeding_out,
+            check: isBleedingOut
+          }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.12 — Healing returns from incap
+  // ========================================
+  {
+    id: "cross-heal-from-incap",
+    title: m.sc_cross_heal_from_incap_title,
+    description: m.sc_cross_heal_from_incap_desc,
+    category: "crossHealing",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: m.sc_cross_heal_from_incap_s0,
+        expect: [{ desc: m.sc_chk_wounds_3, check: (s) => s.context.wounds === 3 }]
+      },
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: m.sc_cross_heal_from_incap_s1,
+        expect: [
+          {
+            desc: m.sc_chk_bleeding_out,
+            check: isBleedingOut
+          }
+        ]
+      },
+      {
+        event: { type: "HEAL", amount: ha(1) },
+        label: m.sc_cross_heal_from_incap_s2,
+        expect: [
+          { desc: m.sc_chk_wounds_2, check: (s) => s.context.wounds === 2 },
+          { desc: m.sc_chk_back_in_fight, check: (s) => s.matches({ alive: { damageTrack: "active" } }) }
+        ]
+      },
+      {
+        event: { type: "HEAL", amount: ha(2) },
+        label: m.sc_cross_heal_from_incap_s3,
+        expect: [
+          { desc: m.sc_chk_wounds_0, check: (s) => s.context.wounds === 0 },
+          { desc: m.sc_chk_fully_healed, check: (s) => !isShaken(s) && s.context.wounds === 0 }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.13 — Hold persists across rounds
+  // ========================================
+  {
+    id: "cross-hold-persists-rounds",
+    title: m.sc_cross_hold_persists_rounds_title,
+    description: m.sc_cross_hold_persists_rounds_desc,
+    category: "crossHold",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: m.sc_cross_hold_persists_rounds_s0,
+        expect: []
+      },
+      {
+        event: { type: "GO_ON_HOLD" },
+        label: m.sc_cross_hold_persists_rounds_s1,
+        expect: [{ desc: m.sc_chk_on_hold, check: isOnHold }]
+      },
+      {
+        event: { type: "END_OF_TURN", vigorRoll: vr(0) },
+        label: m.sc_cross_hold_persists_rounds_s2,
+        expect: [{ desc: m.sc_chk_on_hold_context, check: (s) => s.context.onHold }]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: m.sc_cross_hold_persists_rounds_s3,
+        expect: [{ desc: m.sc_chk_on_hold, check: isOnHold }]
+      },
+      {
+        event: { type: "END_OF_TURN", vigorRoll: vr(0) },
+        label: m.sc_cross_hold_persists_rounds_s4,
+        expect: [{ desc: m.sc_chk_on_hold_context, check: (s) => s.context.onHold }]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: m.sc_cross_hold_persists_rounds_s5,
+        expect: [{ desc: m.sc_chk_on_hold, check: isOnHold }]
+      },
+      {
+        event: { type: "ACT_FROM_HOLD" },
+        label: m.sc_cross_hold_persists_rounds_s6,
+        expect: [
+          { desc: m.sc_chk_acting, check: (s) => s.matches({ alive: { turnPhase: "acting" } }) },
+          { desc: m.sc_chk_not_on_hold, check: (s) => !isOnHold(s) }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.14 — Distracted timer frozen on hold
+  // ========================================
+  {
+    id: "cross-distracted-frozen-on-hold",
+    title: m.sc_cross_distracted_frozen_on_hold_title,
+    description: m.sc_cross_distracted_frozen_on_hold_desc,
+    category: "crossHold",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "APPLY_DISTRACTED" },
+        label: m.sc_cross_distracted_frozen_on_hold_s0,
+        expect: [
+          { desc: m.sc_chk_distracted, check: isDistracted },
+          { desc: m.sc_chk_distracted_timer_0, check: (s) => s.context.distractedTimer === 0 }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: m.sc_cross_distracted_frozen_on_hold_s1,
+        expect: []
+      },
+      {
+        event: { type: "GO_ON_HOLD" },
+        label: m.sc_cross_distracted_frozen_on_hold_s2,
+        expect: [{ desc: m.sc_chk_on_hold, check: isOnHold }]
+      },
+      {
+        event: { type: "END_OF_TURN", vigorRoll: vr(0) },
+        label: m.sc_cross_distracted_frozen_on_hold_s3,
+        expect: [
+          { desc: m.sc_chk_distracted, check: isDistracted },
+          { desc: m.sc_chk_distracted_timer_0_frozen, check: (s) => s.context.distractedTimer === 0 }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.16 — Backlash chain
+  // ========================================
+  {
+    id: "cross-backlash-chain",
+    title: m.sc_cross_backlash_chain_title,
+    description: m.sc_cross_backlash_chain_desc,
+    category: "crossAffliction",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "APPLY_POWER_EFFECT", etype: "armor", duration: 3 },
+        label: m.sc_cross_backlash_chain_s0,
+        expect: [{ desc: m.sc_chk_effects_1, check: (s) => activeEffectsList(s).length === 1 }]
+      },
+      {
+        event: { type: "APPLY_POWER_EFFECT", etype: "boost", duration: 2 },
+        label: m.sc_cross_backlash_chain_s1,
+        expect: [{ desc: m.sc_chk_effects_2, check: (s) => activeEffectsList(s).length === 2 }]
+      },
+      {
+        event: { type: "APPLY_FATIGUE" },
+        label: m.sc_cross_backlash_chain_s2,
+        expect: [{ desc: m.sc_chk_fatigued, check: (s) => s.matches({ alive: { fatigueTrack: "fatigued" } }) }]
+      },
+      {
+        event: { type: "BACKLASH" },
+        label: m.sc_cross_backlash_chain_s3,
+        expect: [
+          { desc: m.sc_chk_effects_0, check: (s) => activeEffectsList(s).length === 0 },
+          { desc: m.sc_chk_exhausted, check: (s) => s.matches({ alive: { fatigueTrack: "exhausted" } }) }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.17 — Fear → Stun cascade
+  // ========================================
+  {
+    id: "cross-fear-stun-cascade",
+    title: m.sc_cross_fear_stun_cascade_title,
+    description: m.sc_cross_fear_stun_cascade_desc,
+    category: "crossFear",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: null,
+        label: m.sc_cross_fear_stun_cascade_s0,
+        expect: []
+      },
+      {
+        event: { type: "APPLY_STUNNED" },
+        label: m.sc_cross_fear_stun_cascade_s1,
+        expect: [
+          { desc: m.sc_chk_stunned, check: isStunned },
+          { desc: m.sc_chk_prone, check: isProne },
+          { desc: m.sc_chk_distracted, check: isDistracted },
+          { desc: m.sc_chk_vulnerable, check: isVulnerable }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(1), spiritRoll: sr(0) },
+        label: m.sc_cross_fear_stun_cascade_s2,
+        expect: [
+          { desc: m.sc_chk_not_stunned, check: (s) => !isStunned(s) },
+          { desc: m.sc_chk_prone_must_stand, check: isProne },
+          { desc: m.sc_chk_vulnerable_after_stun, check: isVulnerable }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.18 — Wild Card survives heavy hit
+  // ========================================
+  {
+    id: "cross-wc-survives-heavy-hit",
+    title: m.sc_cross_wc_survives_heavy_hit_title,
+    description: m.sc_cross_wc_survives_heavy_hit_desc,
+    category: "crossCombat",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(8), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: m.sc_cross_wc_survives_heavy_hit_s0,
+        expect: [
+          { desc: m.sc_chk_alive, check: (s) => !isDead(s) },
+          { desc: m.sc_chk_shaken, check: isShaken },
+          { desc: m.sc_chk_wounds_2, check: (s) => s.context.wounds === 2 }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.19 — Death race
+  // ========================================
+  {
+    id: "cross-death-race",
+    title: m.sc_cross_death_race_title,
+    description: m.sc_cross_death_race_desc,
+    category: "crossDeath",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: m.sc_cross_death_race_s0,
+        expect: [{ desc: m.sc_chk_wounds_3, check: (s) => s.context.wounds === 3 }]
+      },
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: m.sc_cross_death_race_s1,
+        expect: [
+          {
+            desc: m.sc_chk_bleeding_out,
+            check: isBleedingOut
+          }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(1), spiritRoll: sr(0) },
+        label: m.sc_cross_death_race_s2,
+        expect: [
+          {
+            desc: m.sc_chk_still_bleeding_out,
+            check: isBleedingOut
+          },
+          { desc: m.sc_chk_alive, check: (s) => !isDead(s) }
+        ]
+      },
+      {
+        event: { type: "END_OF_TURN", vigorRoll: vr(0) },
+        label: m.sc_cross_death_race_s3,
+        expect: []
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(2), spiritRoll: sr(0) },
+        label: m.sc_cross_death_race_s4,
+        expect: [
+          { desc: m.sc_chk_stable, check: isIncapStable },
+          { desc: m.sc_chk_alive, check: (s) => !isDead(s) }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.20 — Defense restrictions
+  // ========================================
+  {
+    id: "cross-defense-blocked-shaken",
+    title: m.sc_cross_defense_blocked_shaken_title,
+    description: m.sc_cross_defense_blocked_shaken_desc,
+    category: "crossDefense",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: m.sc_cross_defense_blocked_shaken_s0,
+        expect: [{ desc: m.sc_chk_shaken, check: isShaken }]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: m.sc_cross_defense_blocked_shaken_s1,
+        expect: [{ desc: m.sc_chk_shaken, check: isShaken }]
+      },
+      {
+        event: { type: "DEFEND" },
+        label: m.sc_cross_defense_blocked_shaken_s2,
+        expect: [{ desc: m.sc_chk_not_defending, check: (s) => !isDefending(s) }]
+      }
+    ]
+  },
+  {
+    id: "cross-defense-blocked-hold",
+    title: m.sc_cross_defense_blocked_hold_title,
+    description: m.sc_cross_defense_blocked_hold_desc,
+    category: "crossDefense",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: m.sc_cross_defense_blocked_hold_s0,
+        expect: [{ desc: m.sc_chk_acting, check: (s) => s.matches({ alive: { turnPhase: "acting" } }) }]
+      },
+      {
+        event: { type: "DEFEND" },
+        label: m.sc_cross_defense_blocked_hold_s1,
+        expect: [{ desc: m.sc_chk_defending, check: isDefending }]
+      },
+      {
+        event: { type: "GO_ON_HOLD" },
+        label: m.sc_cross_defense_blocked_hold_s2,
+        expect: [
+          { desc: m.sc_chk_not_on_hold, check: (s) => !isOnHold(s) },
+          { desc: m.sc_chk_defending, check: isDefending }
+        ]
       }
     ]
   }
