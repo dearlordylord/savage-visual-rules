@@ -589,6 +589,8 @@ function StateLeaf({ active, label, title }: { label: string; active: boolean; t
 
 function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
   const ctx = snapshot.context
+  const currentAfflictionType = afflictionType(snapshot)
+  const afflictionLabel = currentAfflictionType ? AFFLICTION_LABELS[currentAfflictionType] : "Unknown"
 
   const items: Array<{ label: string; value: string | boolean; title?: string }> = [
     { label: "Wounds", value: `${ctx.wounds} / ${ctx.maxWounds}` },
@@ -648,7 +650,7 @@ function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
           <p className="mb-1 text-xs font-semibold text-[var(--sea-ink-soft)]">Affliction</p>
           <div className="flex items-center gap-2">
             <span className="rounded-md bg-purple-500/15 px-2 py-0.5 text-xs font-medium text-purple-700">
-              {(() => { const aType = afflictionType(snapshot); return aType ? AFFLICTION_LABELS[aType] : "Unknown" })()}
+              {afflictionLabel}
             </span>
             <span className="text-xs text-[var(--sea-ink-soft)]">
               {ctx.afflictionTimer >= 0 ? `${ctx.afflictionTimer} turn(s) remaining` : ""}
@@ -1323,6 +1325,16 @@ function formatEvent(e: SavageEvent): string {
       return `GRAPPLE_ESCAPE(r:${e.rollResult})`
     case "PIN_ATTEMPT":
       return `PIN_ATTEMPT(r:${e.rollResult})`
+    case "APPLY_AFFLICTION":
+      return `APPLY_AFFLICTION(${(e as Extract<SavageEvent, { type: "APPLY_AFFLICTION" }>).afflictionType}:${(e as Extract<SavageEvent, { type: "APPLY_AFFLICTION" }>).duration})`
+    case "APPLY_BLINDED":
+      return `APPLY_BLINDED(sev:${(e as Extract<SavageEvent, { type: "APPLY_BLINDED" }>).severity})`
+    case "APPLY_POWER_EFFECT":
+      return `APPLY_POWER_EFFECT(${(e as Extract<SavageEvent, { type: "APPLY_POWER_EFFECT" }>).etype}:${(e as Extract<SavageEvent, { type: "APPLY_POWER_EFFECT" }>).duration})`
+    case "DISMISS_EFFECT":
+      return `DISMISS_EFFECT(${(e as Extract<SavageEvent, { type: "DISMISS_EFFECT" }>).etype})`
+    case "END_OF_TURN":
+      return `END_OF_TURN(vig:${(e as Extract<SavageEvent, { type: "END_OF_TURN" }>).vigorRoll})`
     default:
       return e.type
   }
