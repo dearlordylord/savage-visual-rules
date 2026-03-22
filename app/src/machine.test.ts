@@ -1041,3 +1041,82 @@ describe("afflictions", () => {
     expect(snap(a).context.afflictionTimer).toBe(5)
   })
 })
+
+// ============================================================
+// Power effect tests
+// ============================================================
+
+describe("power effects", () => {
+  it("apply and dismiss effect", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_POWER_EFFECT", etype: "armor", duration: 3 })
+    expect(hasEffect(snap(a), "armor")).toBe(true)
+    expect(activeEffectsList(snap(a))).toHaveLength(1)
+    expect(activeEffectsList(snap(a))[0]).toEqual({ etype: "armor", timer: 3 })
+
+    a.send({ type: "DISMISS_EFFECT", etype: "armor" })
+    expect(hasEffect(snap(a), "armor")).toBe(false)
+    expect(activeEffectsList(snap(a))).toHaveLength(0)
+  })
+
+  it("effect timer ticks down and expires", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_POWER_EFFECT", etype: "shield", duration: 1 })
+    expect(activeEffectsList(snap(a))).toHaveLength(1)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "END_OF_TURN" })
+    expect(activeEffectsList(snap(a))).toHaveLength(0)
+  })
+
+  it("multiple effects stack and tick independently", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_POWER_EFFECT", etype: "armor", duration: 3 })
+    a.send({ type: "APPLY_POWER_EFFECT", etype: "smite", duration: 2 })
+    expect(activeEffectsList(snap(a))).toHaveLength(2)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "END_OF_TURN" })
+    expect(activeEffectsList(snap(a))).toHaveLength(2)
+    expect(activeEffectsList(snap(a))[0].timer).toBe(2)
+    expect(activeEffectsList(snap(a))[1].timer).toBe(1)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "END_OF_TURN" })
+    expect(activeEffectsList(snap(a))).toHaveLength(1)
+    expect(activeEffectsList(snap(a))[0].etype).toBe("armor")
+  })
+
+  it("backlash clears all effects and adds fatigue", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_POWER_EFFECT", etype: "armor", duration: 3 })
+    a.send({ type: "APPLY_POWER_EFFECT", etype: "boost", duration: 2 })
+    expect(activeEffectsList(snap(a))).toHaveLength(2)
+    expect(snap(a).matches({ alive: { fatigueTrack: "fresh" } })).toBe(true)
+
+    a.send({ type: "BACKLASH" })
+    expect(activeEffectsList(snap(a))).toHaveLength(0)
+    expect(snap(a).matches({ alive: { fatigueTrack: "fatigued" } })).toBe(true)
+  })
+
+  it("dismiss removes only first match", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_POWER_EFFECT", etype: "armor", duration: 3 })
+    a.send({ type: "APPLY_POWER_EFFECT", etype: "armor", duration: 5 })
+    expect(activeEffectsList(snap(a))).toHaveLength(2)
+
+    a.send({ type: "DISMISS_EFFECT", etype: "armor" })
+    expect(activeEffectsList(snap(a))).toHaveLength(1)
+    expect(activeEffectsList(snap(a))[0].timer).toBe(5)
+  })
+
+  it("death clears active effects", () => {
+    const b = createExtra()
+    b.send({ type: "APPLY_POWER_EFFECT", etype: "shield", duration: 3 })
+    expect(activeEffectsList(snap(b))).toHaveLength(1)
+
+    b.send({ type: "TAKE_DAMAGE", margin: dm(4), soakSuccesses: sk(0), incapRoll: ir(0) })
+    expect(isDead(snap(b))).toBe(true)
+    expect(activeEffectsList(snap(b))).toHaveLength(0)
+  })
+})
