@@ -345,6 +345,7 @@ export const savageMachine = setup({
     })),
     raiseApplyFatigue: raise({ type: "APPLY_FATIGUE" }),
     raiseLethalTick: raise({ type: "_LETHAL_TICK" }),
+    raiseDropProne: raise({ type: "DROP_PRONE" }),
     lethalAddWound: assign(({ context }) => ({
       wounds: wounds(context.wounds + 1)
     }))
@@ -538,7 +539,8 @@ export const savageMachine = setup({
                   on: {
                     APPLY_STUNNED: {
                       guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
-                      target: "stunned"
+                      target: "stunned",
+                      actions: ["raiseDropProne"]
                     }
                   }
                 },
