@@ -60,7 +60,7 @@ export interface SavageContext {
 export type SavageEvent =
   | { type: "TAKE_DAMAGE"; margin: DamageMargin; soakSuccesses: SoakSuccesses; incapRoll: IncapRollResult; injuryRoll?: InjuryRoll }
   | { type: "START_OF_TURN"; vigorRoll: VigorRollResult; spiritRoll: SpiritRollResult }
-  | { type: "END_OF_TURN" }
+  | { type: "END_OF_TURN"; vigorRoll: VigorRollResult }
   | { type: "SPEND_BENNY" }
   | { type: "APPLY_STUNNED" }
   | { type: "APPLY_DISTRACTED" }
@@ -153,6 +153,9 @@ function asPin(event: SavageEvent) {
 function asAffliction(event: SavageEvent) {
   return event as Extract<SavageEvent, { type: "APPLY_AFFLICTION" }>
 }
+function asEndOfTurn(event: SavageEvent) {
+  return event as Extract<SavageEvent, { type: "END_OF_TURN" }>
+}
 
 // ============================================================
 // State path constants
@@ -166,6 +169,7 @@ const ENTANGLED_STATE = { alive: { restraintTrack: "entangled" as const } }
 const BOUND_STATE = { alive: { restraintTrack: "bound" as const } }
 const GRABBED_STATE = { alive: { restraintTrack: "grabbed" as const } }
 const PINNED_STATE = { alive: { restraintTrack: "pinned" as const } }
+const ON_HOLD_STATE = { alive: { turnPhase: "onHold" as const } }
 const PARALYTIC_STATE = { alive: { afflictionTrack: { afflicted: "paralytic" as const } } }
 const SLEEP_STATE = { alive: { afflictionTrack: { afflicted: "sleep" as const } } }
 
@@ -269,6 +273,11 @@ export const savageMachine = setup({
     afflictionTimerExpired: ({ context }) => context.afflictionTimer === -1,
     lethalExtraDies: ({ context }) => !context.isWildCard,
     lethalExceedsMax: ({ context }) => context.isWildCard && context.wounds + 1 > context.maxWounds,
+
+    // --- End-of-turn vigor guards (for blinded recovery) ---
+    endVigorRaise: ({ event }) => asEndOfTurn(event).vigorRoll >= 2,
+    endVigorSuccessNoRaise: ({ event }) => asEndOfTurn(event).vigorRoll === 1,
+    endVigorSuccess: ({ event }) => asEndOfTurn(event).vigorRoll >= 1,
 
     // --- Power effect guards ---
     hasActiveEffects: ({ context }) => context.activeEffects.length > 0,
@@ -747,9 +756,9 @@ export const savageMachine = setup({
                       guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "blindedSeverityFull"]),
                       target: "blinded"
                     },
-                    START_OF_TURN: [
+                    END_OF_TURN: [
                       {
-                        guard: and([stateIn(OTHERS_TURN), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), not(stateIn(SLEEP_STATE)), "vigorSuccess"]),
+                        guard: and([not(stateIn(ON_HOLD_STATE)), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), not(stateIn(SLEEP_STATE)), "endVigorSuccess"]),
                         target: "clear"
                       }
                     ]
@@ -761,13 +770,13 @@ export const savageMachine = setup({
                 },
                 blinded: {
                   on: {
-                    START_OF_TURN: [
+                    END_OF_TURN: [
                       {
-                        guard: and([stateIn(OTHERS_TURN), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), not(stateIn(SLEEP_STATE)), "vigorRaise"]),
+                        guard: and([not(stateIn(ON_HOLD_STATE)), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), not(stateIn(SLEEP_STATE)), "endVigorRaise"]),
                         target: "clear"
                       },
                       {
-                        guard: and([stateIn(OTHERS_TURN), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), not(stateIn(SLEEP_STATE)), "vigorSuccessNoRaise"]),
+                        guard: and([not(stateIn(ON_HOLD_STATE)), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), not(stateIn(SLEEP_STATE)), "endVigorSuccessNoRaise"]),
                         target: "impaired"
                       }
                     ]

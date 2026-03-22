@@ -237,12 +237,12 @@ describe("stunned recovery", () => {
     expect(snap(a).context.vulnerableTimer).toBe(1)
     expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
 
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(snap(a).context.vulnerableTimer).toBe(0)
     expect(snap(a).context.distractedTimer).toBe(-1)
 
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(snap(a).context.vulnerableTimer).toBe(-1)
     expect(snap(a).matches({ alive: { conditionTrack: { vulnerability: "clear" } } })).toBe(true)
   })
@@ -255,7 +255,7 @@ describe("stunned recovery", () => {
     expect(snap(a).matches({ alive: { conditionTrack: { stun: "normal" } } })).toBe(true)
     expect(snap(a).context.vulnerableTimer).toBe(0)
 
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(snap(a).context.vulnerableTimer).toBe(-1)
     expect(snap(a).matches({ alive: { conditionTrack: { vulnerability: "clear" } } })).toBe(true)
   })
@@ -344,7 +344,7 @@ describe("condition timers", () => {
     expect(snap(a).context.distractedTimer).toBe(0)
 
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(snap(a).context.distractedTimer).toBe(-1)
     expect(snap(a).matches({ alive: { conditionTrack: { distraction: "clear" } } })).toBe(true)
   })
@@ -357,11 +357,11 @@ describe("condition timers", () => {
     a.send({ type: "APPLY_DISTRACTED" })
     expect(snap(a).context.distractedTimer).toBe(1)
 
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(snap(a).context.distractedTimer).toBe(0)
 
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(snap(a).context.distractedTimer).toBe(-1)
     expect(snap(a).matches({ alive: { conditionTrack: { distraction: "clear" } } })).toBe(true)
   })
@@ -512,7 +512,7 @@ describe("prone", () => {
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(isProne(snap(a))).toBe(true)
 
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(isProne(snap(a))).toBe(true)
 
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
@@ -624,7 +624,7 @@ describe("hold/interrupt", () => {
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     a.send({ type: "GO_ON_HOLD" })
 
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(snap(a).matches({ alive: { turnPhase: "onHold" } })).toBe(true)
     expect(isOnHold(snap(a))).toBe(true)
   })
@@ -635,10 +635,10 @@ describe("hold/interrupt", () => {
     a.send({ type: "GO_ON_HOLD" })
     expect(isOnHold(snap(a))).toBe(true)
 
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(isOnHold(snap(a))).toBe(true)
 
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(isOnHold(snap(a))).toBe(true)
   })
 
@@ -652,7 +652,7 @@ describe("hold/interrupt", () => {
     expect(isOnHold(snap(a))).toBe(true)
     expect(snap(a).context.distractedTimer).toBe(0)
 
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(isOnHold(snap(a))).toBe(true)
     expect(snap(a).context.distractedTimer).toBe(0) // NOT ticked
   })
@@ -772,12 +772,12 @@ describe("restraint", () => {
     expect(snap(a).context.vulnerableTimer).toBe(99)
 
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(isVulnerable(snap(a))).toBe(true)
     expect(snap(a).context.vulnerableTimer).toBe(99)
 
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(isVulnerable(snap(a))).toBe(true)
     expect(snap(a).context.vulnerableTimer).toBe(99)
   })
@@ -902,35 +902,39 @@ describe("blinded", () => {
     expect(isFullyBlinded(snap(a))).toBe(true)
   })
 
-  it("blinded recovery: vigor raise → clear", () => {
+  it("blinded recovery: vigor raise at end of turn → clear", () => {
     const a = createWC()
     a.send({ type: "APPLY_BLINDED", severity: bs(4) })
     expect(isFullyBlinded(snap(a))).toBe(true)
-    a.send({ type: "START_OF_TURN", vigorRoll: vr(2), spiritRoll: sr(0) })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(2) })
     expect(isBlinded(snap(a))).toBe(false)
     expect(blindedPenalty(snap(a))).toBe(0)
   })
 
-  it("blinded recovery: vigor success → step down to impaired", () => {
+  it("blinded recovery: vigor success at end of turn → step down to impaired", () => {
     const a = createWC()
     a.send({ type: "APPLY_BLINDED", severity: bs(4) })
-    a.send({ type: "START_OF_TURN", vigorRoll: vr(1), spiritRoll: sr(0) })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(1) })
     expect(isFullyBlinded(snap(a))).toBe(false)
     expect(isBlinded(snap(a))).toBe(true)
     expect(blindedPenalty(snap(a))).toBe(-2)
   })
 
-  it("impaired recovery: vigor success → clear", () => {
+  it("impaired recovery: vigor success at end of turn → clear", () => {
     const a = createWC()
     a.send({ type: "APPLY_BLINDED", severity: bs(2) })
-    a.send({ type: "START_OF_TURN", vigorRoll: vr(1), spiritRoll: sr(0) })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(1) })
     expect(isBlinded(snap(a))).toBe(false)
   })
 
-  it("blinded recovery: vigor fail → no change", () => {
+  it("blinded recovery: vigor fail at end of turn → no change", () => {
     const a = createWC()
     a.send({ type: "APPLY_BLINDED", severity: bs(4) })
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(isFullyBlinded(snap(a))).toBe(true)
   })
 
@@ -1034,11 +1038,11 @@ describe("afflictions", () => {
     expect(snap(a).context.afflictionTimer).toBe(1)
 
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(snap(a).context.afflictionTimer).toBe(0)
 
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(isAfflicted(snap(a))).toBe(false)
     expect(snap(a).context.afflictionTimer).toBe(-1)
   })
@@ -1089,7 +1093,7 @@ describe("afflictions", () => {
     // Still fatigued, NOT exhausted
     expect(snap(a).matches({ alive: { fatigueTrack: "fatigued" } })).toBe(true)
 
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(snap(a).matches({ alive: { fatigueTrack: "fatigued" } })).toBe(true)
   })
@@ -1110,7 +1114,7 @@ describe("afflictions", () => {
     expect(isShaken(snap(a))).toBe(true)
     // Recover shaken
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) })
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
 
     // Applying lethal immediately adds wound → exceeds max → incap
     a.send({ type: "APPLY_AFFLICTION", afflictionType: "lethal", duration: ad(5) })
@@ -1130,11 +1134,11 @@ describe("afflictions", () => {
     expect(snap(a).context.wounds).toBe(1)
 
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(snap(a).context.afflictionTimer).toBe(0)
 
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(isDead(snap(a))).toBe(true)
   })
 
@@ -1192,7 +1196,7 @@ describe("power effects", () => {
     expect(activeEffectsList(snap(a))).toHaveLength(1)
 
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(activeEffectsList(snap(a))).toHaveLength(0)
   })
 
@@ -1203,13 +1207,13 @@ describe("power effects", () => {
     expect(activeEffectsList(snap(a))).toHaveLength(2)
 
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(activeEffectsList(snap(a))).toHaveLength(2)
     expect(activeEffectsList(snap(a))[0].timer).toBe(2)
     expect(activeEffectsList(snap(a))[1].timer).toBe(1)
 
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
-    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(activeEffectsList(snap(a))).toHaveLength(1)
     expect(activeEffectsList(snap(a))[0].etype).toBe("armor")
   })

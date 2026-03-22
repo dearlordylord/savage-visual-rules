@@ -11,7 +11,7 @@ import {
   isAfflicted,
   isDead,
   isDistracted,
-  isBlinded,
+  isFullyBlinded,
   blindedPenalty,
   isBound,
   isEntangled,
@@ -496,7 +496,7 @@ function StateTree({ snapshot }: { snapshot: SavageSnapshot }) {
               />
               <StateLeaf
                 label={`blinded (-4)`}
-                active={isBlinded(snapshot)}
+                active={isFullyBlinded(snapshot)}
               />
             </div>
           </StateRegion>
@@ -791,51 +791,51 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
               title="Spirit check result. Used for Shaken recovery. 0 = fail. 1 = success. 2+ = raise."
             />
           </div>
-          <EventBtn disabled={dead} onClick={() => send({ type: "START_OF_TURN", vigorRoll: vigorRollResult(vigorRoll), spiritRoll: spiritRollResult(spiritRoll) })}>
+          <EventBtn disabled={!snapshot.can({ type: "START_OF_TURN", vigorRoll: vigorRollResult(0), spiritRoll: spiritRollResult(0) })} onClick={() => send({ type: "START_OF_TURN", vigorRoll: vigorRollResult(vigorRoll), spiritRoll: spiritRollResult(spiritRoll) })}>
             Fire
           </EventBtn>
         </div>
 
         {/* Simple events */}
         <div className="flex flex-wrap gap-2">
-          <EventBtn disabled={dead} onClick={() => send({ type: "END_OF_TURN" })}>
+          <EventBtn disabled={!snapshot.can({ type: "END_OF_TURN", vigorRoll: vigorRollResult(0) })} onClick={() => send({ type: "END_OF_TURN", vigorRoll: vigorRollResult(vigorRoll) })}>
             End of Turn
           </EventBtn>
           <EventBtn
-            disabled={dead}
+            disabled={!snapshot.can({ type: "SPEND_BENNY" })}
             onClick={() => send({ type: "SPEND_BENNY" })}
             title="Spend a Benny to immediately remove Shaken (any time, even on others' turns)."
           >
             Spend Benny
           </EventBtn>
-          <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_STUNNED" })}>
+          <EventBtn disabled={!snapshot.can({ type: "APPLY_STUNNED" })} onClick={() => send({ type: "APPLY_STUNNED" })}>
             Apply Stunned
           </EventBtn>
-          <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_DISTRACTED" })}>
+          <EventBtn disabled={!snapshot.can({ type: "APPLY_DISTRACTED" })} onClick={() => send({ type: "APPLY_DISTRACTED" })}>
             Apply Distracted
           </EventBtn>
-          <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_VULNERABLE" })}>
+          <EventBtn disabled={!snapshot.can({ type: "APPLY_VULNERABLE" })} onClick={() => send({ type: "APPLY_VULNERABLE" })}>
             Apply Vulnerable
           </EventBtn>
-          <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_FATIGUE" })}>
+          <EventBtn disabled={!snapshot.can({ type: "APPLY_FATIGUE" })} onClick={() => send({ type: "APPLY_FATIGUE" })}>
             Apply Fatigue
           </EventBtn>
-          <EventBtn disabled={dead} onClick={() => send({ type: "RECOVER_FATIGUE" })}>
+          <EventBtn disabled={!snapshot.can({ type: "RECOVER_FATIGUE" })} onClick={() => send({ type: "RECOVER_FATIGUE" })}>
             Recover Fatigue
           </EventBtn>
-          <EventBtn disabled={dead} onClick={() => send({ type: "DROP_PRONE" })}>
+          <EventBtn disabled={!snapshot.can({ type: "DROP_PRONE" })} onClick={() => send({ type: "DROP_PRONE" })}>
             Drop Prone
           </EventBtn>
-          <EventBtn disabled={dead} onClick={() => send({ type: "STAND_UP" })}>
+          <EventBtn disabled={!snapshot.can({ type: "STAND_UP" })} onClick={() => send({ type: "STAND_UP" })}>
             Stand Up
           </EventBtn>
-          <EventBtn disabled={dead} onClick={() => send({ type: "GO_ON_HOLD" })}>
+          <EventBtn disabled={!snapshot.can({ type: "GO_ON_HOLD" })} onClick={() => send({ type: "GO_ON_HOLD" })}>
             Go On Hold
           </EventBtn>
-          <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_ENTANGLED" })}>
+          <EventBtn disabled={!snapshot.can({ type: "APPLY_ENTANGLED" })} onClick={() => send({ type: "APPLY_ENTANGLED" })}>
             Apply Entangled
           </EventBtn>
-          <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_BOUND" })}>
+          <EventBtn disabled={!snapshot.can({ type: "APPLY_BOUND" })} onClick={() => send({ type: "APPLY_BOUND" })}>
             Apply Bound
           </EventBtn>
           <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_BLINDED", severity: blindedSeverity(2) })}>
@@ -844,7 +844,7 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
           <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_BLINDED", severity: blindedSeverity(4) })}>
             Blind
           </EventBtn>
-          {incapacitated && <EventBtn onClick={() => send({ type: "FINISHING_MOVE" })}>Finishing Move</EventBtn>}
+          {incapacitated && <EventBtn disabled={!snapshot.can({ type: "FINISHING_MOVE" })} onClick={() => send({ type: "FINISHING_MOVE" })}>Finishing Move</EventBtn>}
         </div>
 
         {/* INTERRUPT (visible when on hold) */}
@@ -926,7 +926,7 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
               title="Number of wounds healed (1-3). Healing while incapacitated also removes incapacitation."
             />
           </div>
-          <EventBtn disabled={dead} onClick={() => send({ type: "HEAL", amount: mkHealAmount(healAmount) })}>
+          <EventBtn disabled={!snapshot.can({ type: "HEAL", amount: mkHealAmount(1) })} onClick={() => send({ type: "HEAL", amount: mkHealAmount(healAmount) })}>
             Fire
           </EventBtn>
         </div>
@@ -935,10 +935,10 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
         <FearPanel send={send} dead={dead} />
 
         {/* AFFLICTION */}
-        <AfflictionPanel send={send} dead={dead} afflicted={!dead && isAfflicted(snapshot)} />
+        <AfflictionPanel send={send} snapshot={snapshot} afflicted={!dead && isAfflicted(snapshot)} />
 
         {/* POWER EFFECTS */}
-        <PowerEffectPanel send={send} dead={dead} effects={snapshot.context.activeEffects} />
+        <PowerEffectPanel send={send} snapshot={snapshot} effects={snapshot.context.activeEffects} />
       </div>
     </section>
   )
@@ -948,6 +948,7 @@ const FEAR_RESULT_LABELS: Record<FearResult, string> = {
   ADRENALINE: "Adrenaline Rush (Joker-like bonus)",
   APPLY_DISTRACTED: "Distracted",
   APPLY_VULNERABLE: "Vulnerable",
+  APPLY_SHAKEN: "Shaken (В шоке)",
   APPLY_STUNNED: "Stunned",
   HINDRANCE_SCAR: "Mark of Fear (scar injury)",
   HINDRANCE_SLOWNESS: "Hindrance: Slowness",
@@ -1018,7 +1019,7 @@ function FearPanel({ send, dead }: { send: (e: SavageEvent) => void; dead: boole
   )
 }
 
-function AfflictionPanel({ send, dead, afflicted }: { send: (e: SavageEvent) => void; dead: boolean; afflicted: boolean }) {
+function AfflictionPanel({ send, snapshot, afflicted }: { send: (e: SavageEvent) => void; snapshot: SavageSnapshot; afflicted: boolean }) {
   const [affType, setAffType] = useState<AfflictionType>("weak")
   const [affDur, setAffDur] = useState(3)
 
@@ -1052,11 +1053,11 @@ function AfflictionPanel({ send, dead, afflicted }: { send: (e: SavageEvent) => 
         />
       </div>
       <div className="flex gap-2">
-        <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_AFFLICTION", afflictionType: affType, duration: afflictionDuration(affDur) })}>
+        <EventBtn disabled={isDead(snapshot)} onClick={() => send({ type: "APPLY_AFFLICTION", afflictionType: affType, duration: afflictionDuration(affDur) })}>
           Apply
         </EventBtn>
         {afflicted && (
-          <EventBtn onClick={() => send({ type: "CURE_AFFLICTION" })}>
+          <EventBtn disabled={!snapshot.can({ type: "CURE_AFFLICTION" })} onClick={() => send({ type: "CURE_AFFLICTION" })}>
             Cure
           </EventBtn>
         )}
@@ -1067,7 +1068,7 @@ function AfflictionPanel({ send, dead, afflicted }: { send: (e: SavageEvent) => 
 
 const EFFECT_TYPES = ["armor", "shield", "smite", "boost", "lower_attribute", "speed", "fly"] as const
 
-function PowerEffectPanel({ send, dead, effects }: { send: (e: SavageEvent) => void; dead: boolean; effects: Array<{ etype: string; timer: number }> }) {
+function PowerEffectPanel({ send, snapshot, effects }: { send: (e: SavageEvent) => void; snapshot: SavageSnapshot; effects: Array<{ etype: string; timer: number }> }) {
   const [effectType, setEffectType] = useState("armor")
   const [effectDur, setEffectDur] = useState(3)
 
@@ -1095,10 +1096,10 @@ function PowerEffectPanel({ send, dead, effects }: { send: (e: SavageEvent) => v
         />
       </div>
       <div className="flex flex-wrap gap-2">
-        <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_POWER_EFFECT", etype: effectType, duration: effectDur })}>
+        <EventBtn disabled={isDead(snapshot)} onClick={() => send({ type: "APPLY_POWER_EFFECT", etype: effectType, duration: effectDur })}>
           Apply
         </EventBtn>
-        <EventBtn disabled={dead || effects.length === 0} onClick={() => send({ type: "BACKLASH" })}>
+        <EventBtn disabled={!snapshot.can({ type: "BACKLASH" })} onClick={() => send({ type: "BACKLASH" })}>
           Backlash
         </EventBtn>
       </div>
