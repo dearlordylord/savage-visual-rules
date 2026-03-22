@@ -1712,19 +1712,19 @@ describe("injuries", () => {
   })
 
   it("resolveInjury: 21 → unmentionables", () => {
-    expect(resolveInjury(21 as ReturnType<typeof ij>)).toBe("unmentionables")
+    expect(resolveInjury(ij(21))).toBe("unmentionables")
   })
 
   it("resolveInjury: 121 → head_scar", () => {
-    expect(resolveInjury(121 as ReturnType<typeof ij>)).toBe("head_scar")
+    expect(resolveInjury(ij(121))).toBe("head_scar")
   })
 
   it("resolveInjury: 124 → head_blinded", () => {
-    expect(resolveInjury(124 as ReturnType<typeof ij>)).toBe("head_blinded")
+    expect(resolveInjury(ij(124))).toBe("head_blinded")
   })
 
   it("resolveInjury: 126 → head_brain_damage", () => {
-    expect(resolveInjury(126 as ReturnType<typeof ij>)).toBe("head_brain_damage")
+    expect(resolveInjury(ij(126))).toBe("head_brain_damage")
   })
 
   it("injuryPenalty counts die-reducing injuries", () => {

@@ -1326,15 +1326,15 @@ function formatEvent(e: SavageEvent): string {
     case "PIN_ATTEMPT":
       return `PIN_ATTEMPT(r:${e.rollResult})`
     case "APPLY_AFFLICTION":
-      return `APPLY_AFFLICTION(${(e as Extract<SavageEvent, { type: "APPLY_AFFLICTION" }>).afflictionType}:${(e as Extract<SavageEvent, { type: "APPLY_AFFLICTION" }>).duration})`
+      return `APPLY_AFFLICTION(${e.afflictionType}:${e.duration})`
     case "APPLY_BLINDED":
-      return `APPLY_BLINDED(sev:${(e as Extract<SavageEvent, { type: "APPLY_BLINDED" }>).severity})`
+      return `APPLY_BLINDED(sev:${e.severity})`
     case "APPLY_POWER_EFFECT":
-      return `APPLY_POWER_EFFECT(${(e as Extract<SavageEvent, { type: "APPLY_POWER_EFFECT" }>).etype}:${(e as Extract<SavageEvent, { type: "APPLY_POWER_EFFECT" }>).duration})`
+      return `APPLY_POWER_EFFECT(${e.etype}:${e.duration})`
     case "DISMISS_EFFECT":
-      return `DISMISS_EFFECT(${(e as Extract<SavageEvent, { type: "DISMISS_EFFECT" }>).etype})`
+      return `DISMISS_EFFECT(${e.etype})`
     case "END_OF_TURN":
-      return `END_OF_TURN(vig:${(e as Extract<SavageEvent, { type: "END_OF_TURN" }>).vigorRoll})`
+      return `END_OF_TURN(vig:${e.vigorRoll})`
     default:
       return e.type
   }
