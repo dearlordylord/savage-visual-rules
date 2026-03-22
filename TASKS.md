@@ -141,7 +141,7 @@
 
 > Fear table results auto-dispatch as existing machine events.
 
-### Slice 7.1: Fear table pure function
+### Slice 7.1: Fear table pure function [DONE]
 
 - Implement `resolveFear(tableRoll: number, modifier: number): SavageEvent[]` as exported pure function (not a machine region)
 - Mapping (tableRoll + modifier):

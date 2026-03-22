@@ -772,4 +772,111 @@ module savageTest {
     .then(doApplyBlinded(4))
     .fail()
   }
+
+  // ============================================================
+  // Fear table tests
+  // ============================================================
+
+  /// 1-3: Adrenaline rush
+  run fearAdrenalineTest = {
+    initWildCard
+    .expect(
+      fearTableResult(1, 0) == List("ADRENALINE") and
+      fearTableResult(3, 0) == List("ADRENALINE")
+    )
+  }
+
+  /// 4-6: Distracted
+  run fearDistractedTest = {
+    initWildCard
+    .expect(
+      fearTableResult(4, 0) == List("APPLY_DISTRACTED") and
+      fearTableResult(6, 0) == List("APPLY_DISTRACTED")
+    )
+  }
+
+  /// 7-9: Vulnerable
+  run fearVulnerableTest = {
+    initWildCard
+    .expect(
+      fearTableResult(7, 0) == List("APPLY_VULNERABLE") and
+      fearTableResult(9, 0) == List("APPLY_VULNERABLE")
+    )
+  }
+
+  /// 10-12: Stunned
+  run fearStunnedTest = {
+    initWildCard
+    .expect(
+      fearTableResult(10, 0) == List("APPLY_STUNNED") and
+      fearTableResult(12, 0) == List("APPLY_STUNNED")
+    )
+  }
+
+  /// 13: Fear mark (stunned + scar)
+  run fearMarkTest = {
+    initWildCard
+    .expect(fearTableResult(13, 0) == List("APPLY_STUNNED", "HINDRANCE_SCAR"))
+  }
+
+  /// 14-15: Slowness
+  run fearSlownessTest = {
+    initWildCard
+    .expect(
+      fearTableResult(14, 0) == List("HINDRANCE_SLOWNESS") and
+      fearTableResult(15, 0) == List("HINDRANCE_SLOWNESS")
+    )
+  }
+
+  /// 16-17: Panic (stunned + flee)
+  run fearPanicTest = {
+    initWildCard
+    .expect(
+      fearTableResult(16, 0) == List("APPLY_STUNNED", "PANIC_FLEE") and
+      fearTableResult(17, 0) == List("APPLY_STUNNED", "PANIC_FLEE")
+    )
+  }
+
+  /// 18-19: Minor phobia
+  run fearMinorPhobiaTest = {
+    initWildCard
+    .expect(fearTableResult(18, 0) == List("HINDRANCE_MINOR_PHOBIA"))
+  }
+
+  /// 20-21: Major phobia
+  run fearMajorPhobiaTest = {
+    initWildCard
+    .expect(fearTableResult(20, 0) == List("HINDRANCE_MAJOR_PHOBIA"))
+  }
+
+  /// 22+: Heart attack
+  run fearHeartAttackTest = {
+    initWildCard
+    .expect(
+      fearTableResult(22, 0) == List("HEART_ATTACK") and
+      fearTableResult(25, 0) == List("HEART_ATTACK")
+    )
+  }
+
+  /// Modifier shifts bracket correctly
+  run fearModifierShiftTest = {
+    initWildCard
+    .expect(
+      // Roll 3 + modifier 5 = 8 → Vulnerable
+      fearTableResult(3, 5) == List("APPLY_VULNERABLE") and
+      // Roll 10 + modifier 3 = 13 → Fear mark
+      fearTableResult(10, 3) == List("APPLY_STUNNED", "HINDRANCE_SCAR") and
+      // Roll 18 + modifier 4 = 22 → Heart attack
+      fearTableResult(18, 4) == List("HEART_ATTACK")
+    )
+  }
+
+  /// Negative modifier reduces result
+  run fearNegativeModifierTest = {
+    initWildCard
+    .expect(
+      // Roll 10 + modifier -5 = 5 → Distracted
+      fearTableResult(10, -5) == List("APPLY_DISTRACTED")
+    )
+  }
 }

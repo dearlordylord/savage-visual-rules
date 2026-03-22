@@ -524,6 +524,23 @@ module savage {
     }
   }
 
+  /// Fear table result: maps d20 roll + modifier to list of event strings.
+  /// Returns event type names that the game layer dispatches.
+  /// "ADRENALINE" = joker-like bonus (game layer), "HINDRANCE_xxx" = game layer.
+  pure def fearTableResult(roll: int, modifier: int): List[str] = {
+    val total = roll + modifier
+    if (total <= 3) List("ADRENALINE")
+    else if (total <= 6) List("APPLY_DISTRACTED")
+    else if (total <= 9) List("APPLY_VULNERABLE")
+    else if (total <= 12) List("APPLY_STUNNED")
+    else if (total == 13) List("APPLY_STUNNED", "HINDRANCE_SCAR")
+    else if (total <= 15) List("HINDRANCE_SLOWNESS")
+    else if (total <= 17) List("APPLY_STUNNED", "PANIC_FLEE")
+    else if (total <= 19) List("HINDRANCE_MINOR_PHOBIA")
+    else if (total <= 21) List("HINDRANCE_MAJOR_PHOBIA")
+    else List("HEART_ATTACK")
+  }
+
   /// Apply blinded condition. severity: 2 = impaired, 4 = blinded.
   /// Guard: isActive. Severity only increases (max).
   pure def pApplyBlinded(s: State, severity: int): {success: bool, newState: State} = {

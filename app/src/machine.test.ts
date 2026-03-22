@@ -17,6 +17,7 @@ import {
   isRestrained,
   isShaken,
   isVulnerable,
+  resolveFear,
   savageMachine
 } from "./machine"
 
@@ -835,5 +836,70 @@ describe("blinded", () => {
     a.send({ type: "TAKE_DAMAGE", margin: 12, soakSuccesses: 0, incapRoll: 0 })
     a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 1 })
     expect(isBlinded(snap(a))).toBe(false)
+  })
+})
+
+// ============================================================
+// Fear table tests
+// ============================================================
+
+describe("Fear table", () => {
+  it("1-3: adrenaline rush", () => {
+    expect(resolveFear(1, 0)).toEqual(["ADRENALINE"])
+    expect(resolveFear(3, 0)).toEqual(["ADRENALINE"])
+  })
+
+  it("4-6: distracted", () => {
+    expect(resolveFear(4, 0)).toEqual(["APPLY_DISTRACTED"])
+    expect(resolveFear(6, 0)).toEqual(["APPLY_DISTRACTED"])
+  })
+
+  it("7-9: vulnerable", () => {
+    expect(resolveFear(7, 0)).toEqual(["APPLY_VULNERABLE"])
+    expect(resolveFear(9, 0)).toEqual(["APPLY_VULNERABLE"])
+  })
+
+  it("10-12: stunned", () => {
+    expect(resolveFear(10, 0)).toEqual(["APPLY_STUNNED"])
+    expect(resolveFear(12, 0)).toEqual(["APPLY_STUNNED"])
+  })
+
+  it("13: fear mark (stunned + scar)", () => {
+    expect(resolveFear(13, 0)).toEqual(["APPLY_STUNNED", "HINDRANCE_SCAR"])
+  })
+
+  it("14-15: slowness hindrance", () => {
+    expect(resolveFear(14, 0)).toEqual(["HINDRANCE_SLOWNESS"])
+    expect(resolveFear(15, 0)).toEqual(["HINDRANCE_SLOWNESS"])
+  })
+
+  it("16-17: panic (stunned + flee)", () => {
+    expect(resolveFear(16, 0)).toEqual(["APPLY_STUNNED", "PANIC_FLEE"])
+    expect(resolveFear(17, 0)).toEqual(["APPLY_STUNNED", "PANIC_FLEE"])
+  })
+
+  it("18-19: minor phobia", () => {
+    expect(resolveFear(18, 0)).toEqual(["HINDRANCE_MINOR_PHOBIA"])
+    expect(resolveFear(19, 0)).toEqual(["HINDRANCE_MINOR_PHOBIA"])
+  })
+
+  it("20-21: major phobia", () => {
+    expect(resolveFear(20, 0)).toEqual(["HINDRANCE_MAJOR_PHOBIA"])
+    expect(resolveFear(21, 0)).toEqual(["HINDRANCE_MAJOR_PHOBIA"])
+  })
+
+  it("22+: heart attack", () => {
+    expect(resolveFear(22, 0)).toEqual(["HEART_ATTACK"])
+    expect(resolveFear(25, 0)).toEqual(["HEART_ATTACK"])
+  })
+
+  it("modifier shifts bracket correctly", () => {
+    expect(resolveFear(3, 5)).toEqual(["APPLY_VULNERABLE"])
+    expect(resolveFear(10, 3)).toEqual(["APPLY_STUNNED", "HINDRANCE_SCAR"])
+    expect(resolveFear(18, 4)).toEqual(["HEART_ATTACK"])
+  })
+
+  it("negative modifier reduces result", () => {
+    expect(resolveFear(10, -5)).toEqual(["APPLY_DISTRACTED"])
   })
 })

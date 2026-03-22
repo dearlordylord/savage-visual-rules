@@ -1003,3 +1003,21 @@ export function totalPenalty(snap: SavageSnapshot): number {
         : 0
   return -(wp + fatigue)
 }
+
+// Fear table result types
+export type FearResult = string
+
+// Resolve fear table: d20 roll + modifier → list of event/effect strings
+export function resolveFear(tableRoll: number, modifier: number): FearResult[] {
+  const total = tableRoll + modifier
+  if (total <= 3) return ["ADRENALINE"]
+  if (total <= 6) return ["APPLY_DISTRACTED"]
+  if (total <= 9) return ["APPLY_VULNERABLE"]
+  if (total <= 12) return ["APPLY_STUNNED"]
+  if (total === 13) return ["APPLY_STUNNED", "HINDRANCE_SCAR"]
+  if (total <= 15) return ["HINDRANCE_SLOWNESS"]
+  if (total <= 17) return ["APPLY_STUNNED", "PANIC_FLEE"]
+  if (total <= 19) return ["HINDRANCE_MINOR_PHOBIA"]
+  if (total <= 21) return ["HINDRANCE_MAJOR_PHOBIA"]
+  return ["HEART_ATTACK"]
+}
