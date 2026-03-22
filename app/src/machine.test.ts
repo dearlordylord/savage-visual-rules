@@ -20,6 +20,8 @@ import {
   isShaken,
   isStunned,
   isVulnerable,
+  hasEffect,
+  activeEffectsList,
   resolveFear,
   savageMachine
 } from "./machine"
@@ -991,7 +993,22 @@ describe("afflictions", () => {
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(snap(a).matches({ alive: { fatigueTrack: "fatigued" } })).toBe(true)
     expect(isShaken(snap(a))).toBe(true)
-    expect(snap(a).context.wounds).toBe(0) // margin 0 with soak 0 = shaken only, no wound from TAKE_DAMAGE with margin 0
+    expect(snap(a).context.wounds).toBe(1)
+  })
+
+  it("lethal cascades to incapacitation", () => {
+    const a = createWC()
+    // Start with 3 wounds (max for WC)
+    a.send({ type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) })
+    expect(snap(a).context.wounds).toBe(3)
+    expect(isShaken(snap(a))).toBe(true)
+    // Recover shaken
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) })
+    a.send({ type: "END_OF_TURN" })
+
+    a.send({ type: "APPLY_AFFLICTION", afflictionType: "lethal", duration: ad(5) })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    expect(snap(a).matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } })).toBe(true)
   })
 
   it("sleep blocks stunned recovery", () => {

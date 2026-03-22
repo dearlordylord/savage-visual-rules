@@ -22,7 +22,7 @@ import type {
   AfflictionType,
   AfflictionDuration
 } from "./types"
-import { wounds, conditionTimer, maxWounds, damageMargin, soakSuccesses, incapRollResult } from "./types"
+import { wounds, conditionTimer, maxWounds } from "./types"
 
 // ============================================================
 // Types
@@ -40,6 +40,8 @@ export type InjuryType =
   | "head_blinded" // 12, sub 4-5: One Eye/Blind
   | "head_brain_damage" // 12, sub 6: Smarts reduced
 
+export { type AfflictionType } from "./types"
+
 export interface SavageContext {
   wounds: Wounds
   distractedTimer: ConditionTimer
@@ -51,7 +53,8 @@ export interface SavageContext {
   interruptedSuccessfully: boolean
   injuries: InjuryType[]
   grappledBy: CharacterId | null
-  afflictionTimer: number // -1 = none, >= 0 = turns remaining
+  afflictionTimer: number
+  activeEffects: Array<{ etype: string; timer: number }> // -1 = none, >= 0 = turns remaining
 }
 
 export type SavageEvent =
@@ -79,6 +82,10 @@ export type SavageEvent =
   | { type: "APPLY_BLINDED"; severity: BlindedSeverity }
   | { type: "APPLY_AFFLICTION"; afflictionType: AfflictionType; duration: AfflictionDuration }
   | { type: "CURE_AFFLICTION" }
+  | { type: "_LETHAL_TICK" }
+  | { type: "APPLY_POWER_EFFECT"; etype: string; duration: number }
+  | { type: "DISMISS_EFFECT"; etype: string }
+  | { type: "BACKLASH" }
 
 // ============================================================
 // Helpers (mirror Quint spec pure functions)
@@ -256,7 +263,9 @@ export const savageMachine = setup({
     afflictionWeak: ({ event }) => asAffliction(event).afflictionType === "weak",
     afflictionLethal: ({ event }) => asAffliction(event).afflictionType === "lethal",
     afflictionSleep: ({ event }) => asAffliction(event).afflictionType === "sleep",
-    afflictionTimerExpired: ({ context }) => context.afflictionTimer === -1
+    afflictionTimerExpired: ({ context }) => context.afflictionTimer === -1,
+    lethalExtraDies: ({ context }) => !context.isWildCard,
+    lethalExceedsMax: ({ context }) => context.isWildCard && context.wounds + 1 > context.maxWounds
   },
   actions: {
     addWounds: assign(({ context, event }) => {
@@ -310,13 +319,30 @@ export const savageMachine = setup({
       if (context.afflictionTimer === 0) return { afflictionTimer: -1 }
       return {}
     }),
+    applyPowerEffect: assign(({ context, event }) => {
+      const e = event as Extract<SavageEvent, { type: "APPLY_POWER_EFFECT" }>
+      return { activeEffects: [...context.activeEffects, { etype: e.etype, timer: e.duration }] }
+    }),
+    dismissEffect: assign(({ context, event }) => {
+      const e = event as Extract<SavageEvent, { type: "DISMISS_EFFECT" }>
+      let found = false
+      return { activeEffects: context.activeEffects.filter(eff => {
+        if (!found && eff.etype === e.etype) { found = true; return false }
+        return true
+      })}
+    }),
+    backlashClearEffects: assign({ activeEffects: [] }),
+    raiseBacklashFatigue: raise({ type: "APPLY_FATIGUE" }),
+    tickEffectTimers: assign(({ context }) => ({
+      activeEffects: context.activeEffects
+        .map(e => ({ ...e, timer: e.timer - 1 }))
+        .filter(e => e.timer > 0)
+    })),
     raiseApplyFatigue: raise({ type: "APPLY_FATIGUE" }),
-    raiseLethalDamage: raise({
-      type: "TAKE_DAMAGE",
-      margin: damageMargin(0),
-      soakSuccesses: soakSuccesses(0),
-      incapRoll: incapRollResult(0)
-    })
+    raiseLethalTick: raise({ type: "_LETHAL_TICK" }),
+    lethalAddWound: assign(({ context }) => ({
+      wounds: wounds(context.wounds + 1)
+    }))
   }
 }).createMachine({
   id: "savage",
@@ -332,11 +358,17 @@ export const savageMachine = setup({
     interruptedSuccessfully: false,
     injuries: [],
     grappledBy: null,
-    afflictionTimer: -1
+    afflictionTimer: -1,
+    activeEffects: []
   }),
   states: {
     alive: {
       type: "parallel",
+      on: {
+        APPLY_POWER_EFFECT: { actions: ["applyPowerEffect"] },
+        DISMISS_EFFECT: { actions: ["dismissEffect"] },
+        BACKLASH: { actions: ["backlashClearEffects", "raiseBacklashFatigue"] }
+      },
       states: {
         // ========================================
         // DAMAGE TRACK
@@ -370,6 +402,11 @@ export const savageMachine = setup({
                       { guard: "allSoaked" }, // All soaked from unshaken — no effect
                       { guard: "woundsNotExceedMax", target: "shaken", actions: ["addWounds"] },
                       { guard: "marginNonNeg", target: "shaken" } // Just shaken, no wounds
+                    ],
+                    _LETHAL_TICK: [
+                      { guard: "lethalExtraDies", target: "#savage.dead", actions: ["setWoundsToMax"] },
+                      { guard: "lethalExceedsMax", target: "#savage.alive.damageTrack.incapacitated.bleedingOut", actions: ["setWoundsToMax"] },
+                      { target: "shaken", actions: ["lethalAddWound"] }
                     ]
                   }
                 },
@@ -411,6 +448,11 @@ export const savageMachine = setup({
                     SPEND_BENNY: [{ guard: "hasWounds", target: "wounded" }, { target: "unshaken" }],
                     HEAL: [
                       { guard: "hasWounds", actions: ["healWounds"] } // Stay shaken, reduce wounds
+                    ],
+                    _LETHAL_TICK: [
+                      { guard: "lethalExtraDies", target: "#savage.dead", actions: ["setWoundsToMax"] },
+                      { guard: "lethalExceedsMax", target: "#savage.alive.damageTrack.incapacitated.bleedingOut", actions: ["setWoundsToMax"] },
+                      { actions: ["lethalAddWound"] }
                     ]
                   }
                 },
@@ -442,6 +484,11 @@ export const savageMachine = setup({
                     HEAL: [
                       { guard: "healToZero", target: "unshaken", actions: ["healWounds"] },
                       { actions: ["healWounds"] } // Partial heal, stay wounded
+                    ],
+                    _LETHAL_TICK: [
+                      { guard: "lethalExtraDies", target: "#savage.dead", actions: ["setWoundsToMax"] },
+                      { guard: "lethalExceedsMax", target: "#savage.alive.damageTrack.incapacitated.bleedingOut", actions: ["setWoundsToMax"] },
+                      { target: "shaken", actions: ["lethalAddWound"] }
                     ]
                   }
                 }
@@ -613,6 +660,8 @@ export const savageMachine = setup({
                           stateIn(OTHERS_TURN),
                           stateIn(DAMAGE_ACTIVE),
                           not(stateIn(FATIGUE_INCAP)),
+                          not(stateIn(PARALYTIC_STATE)),
+                          not(stateIn(SLEEP_STATE)),
                           stateIn(STUNNED_STATE),
                           "vigorSuccess"
                         ]),
@@ -747,7 +796,7 @@ export const savageMachine = setup({
             },
             ownTurn: {
               on: {
-                END_OF_TURN: { target: "othersTurn", actions: ["tickTimers", "tickAfflictionTimer", "setOwnTurnFalse"] },
+                END_OF_TURN: { target: "othersTurn", actions: ["tickTimers", "tickAfflictionTimer", "tickEffectTimers", "setOwnTurnFalse"] },
                 GO_ON_HOLD: {
                   guard: and([
                     stateIn(DAMAGE_ACTIVE),
@@ -773,7 +822,7 @@ export const savageMachine = setup({
                     actions: ["clearOnHold", "setOwnTurnTrue", "setInterruptFail"]
                   }
                 ],
-                END_OF_TURN: { target: "othersTurn", actions: ["clearOnHold", "tickTimers", "tickAfflictionTimer", "setOwnTurnFalse"] }
+                END_OF_TURN: { target: "othersTurn", actions: ["clearOnHold", "tickTimers", "tickAfflictionTimer", "tickEffectTimers", "setOwnTurnFalse"] }
               },
               always: [
                 {
@@ -966,7 +1015,7 @@ export const savageMachine = setup({
                 weak: {
                   on: {
                     START_OF_TURN: {
-                      guard: stateIn(OTHERS_TURN),
+                      guard: and([stateIn(OTHERS_TURN), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
                       actions: ["raiseApplyFatigue"]
                     }
                   }
@@ -974,8 +1023,8 @@ export const savageMachine = setup({
                 lethal: {
                   on: {
                     START_OF_TURN: {
-                      guard: stateIn(OTHERS_TURN),
-                      actions: ["raiseApplyFatigue", "raiseLethalDamage"]
+                      guard: and([stateIn(OTHERS_TURN), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
+                      actions: ["raiseApplyFatigue", "raiseLethalTick"]
                     }
                   }
                 },
@@ -995,7 +1044,8 @@ export const savageMachine = setup({
         onHold: false,
         interruptedSuccessfully: false,
         grappledBy: null,
-        afflictionTimer: -1
+        afflictionTimer: -1,
+        activeEffects: []
       })
     }
   }
@@ -1117,6 +1167,14 @@ export function afflictionType(snap: SavageSnapshot): AfflictionType | null {
   if (snap.matches({ alive: { afflictionTrack: { afflicted: "lethal" } } })) return "lethal"
   if (snap.matches({ alive: { afflictionTrack: { afflicted: "sleep" } } })) return "sleep"
   return null
+}
+
+export function hasEffect(snap: SavageSnapshot, etype: string): boolean {
+  return snap.context.activeEffects.some(e => e.etype === etype)
+}
+
+export function activeEffectsList(snap: SavageSnapshot): Array<{ etype: string; timer: number }> {
+  return snap.context.activeEffects
 }
 
 export function totalPenalty(snap: SavageSnapshot): number {

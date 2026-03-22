@@ -231,7 +231,7 @@
 - [ ] Paralytic blocks stun recovery
 - [ ] Cure and timer expiry both clear
 
-### Slice 8.2: XState port for afflictions
+### Slice 8.2: XState port for afflictions [DONE]
 
 - New parallel region `afflictionTrack` inside `alive`: `healthy | afflicted`
 - Afflicted sub-states: `paralytic | weak | lethal | sleep`
@@ -248,7 +248,7 @@
 - [ ] Affliction tests pass
 - [ ] Cross-region effects (blocked stun recovery, fatigue/wound generation) work
 
-### Slice 8.3: UI for afflictions
+### Slice 8.3: UI for afflictions [DONE]
 
 - Affliction indicator with type and remaining duration
 - Cure action
@@ -263,7 +263,7 @@
 
 > Buff/debuff timers with backlash cascade.
 
-### Slice 9.1: Quint spec for power effects
+### Slice 9.1: Quint spec for power effects [DONE]
 
 - Add `activeEffects: List[{etype: str, timer: int}]` to State
 - Add `pApplyEffect(s, type, duration)`: appends to list
