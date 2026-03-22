@@ -24,6 +24,9 @@ import {
   hasEffect,
   activeEffectsList,
   resolveFear,
+  resolveInjury,
+  hasInjury,
+  injuryPenalty,
   savageMachine
 } from "./machine"
 import { margin as dm, soak as sk, incap as ir, injury as ij, vigor as vr, spirit as sr, heal as ha, athletics as ar, escape as er, grapple as gr, grappleEsc as ger, pin as pr, severity as bs, affDur as ad } from "./test/helpers/brands"
@@ -656,6 +659,57 @@ describe("hold/interrupt", () => {
     a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(isOnHold(snap(a))).toBe(true)
     expect(snap(a).context.distractedTimer).toBe(0) // NOT ticked
+  })
+
+  it("startOfTurn from hold is rejected (already own turn)", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "GO_ON_HOLD" })
+    expect(isOnHold(snap(a))).toBe(true)
+
+    // Send START_OF_TURN while on hold — no handler, should be ignored
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    expect(isOnHold(snap(a))).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "onHold" } })).toBe(true)
+  })
+
+  it("hold lost on fatigue incapacitation", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "GO_ON_HOLD" })
+    expect(isOnHold(snap(a))).toBe(true)
+
+    // Apply 3x fatigue → incapByFatigue
+    a.send({ type: "APPLY_FATIGUE" })
+    a.send({ type: "APPLY_FATIGUE" })
+    a.send({ type: "APPLY_FATIGUE" })
+    expect(snap(a).matches({ alive: { fatigueTrack: "incapByFatigue" } })).toBe(true)
+    expect(isOnHold(snap(a))).toBe(false)
+  })
+
+  it("distracted timer preserved across multiple end-of-turns while on hold", () => {
+    const a = createWC()
+    // Apply distracted outside own turn → timer=0
+    a.send({ type: "APPLY_DISTRACTED" })
+    expect(snap(a).context.distractedTimer).toBe(0)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "GO_ON_HOLD" })
+    expect(isOnHold(snap(a))).toBe(true)
+    expect(snap(a).context.distractedTimer).toBe(0)
+
+    // Multiple END_OF_TURNs while on hold → timer stays at 0
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
+    expect(snap(a).context.distractedTimer).toBe(0)
+    expect(isOnHold(snap(a))).toBe(true)
+
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
+    expect(snap(a).context.distractedTimer).toBe(0)
+    expect(isOnHold(snap(a))).toBe(true)
+
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
+    expect(snap(a).context.distractedTimer).toBe(0)
+    expect(isOnHold(snap(a))).toBe(true)
   })
 })
 
@@ -1388,5 +1442,88 @@ describe("Defending (Full Defense)", () => {
     a.send({ type: "APPLY_FATIGUE" }) // exhausted → incapByFatigue
     expect(snap(a).matches({ alive: { fatigueTrack: "incapByFatigue" } })).toBe(true)
     expect(isDefending(snap(a))).toBe(false)
+  })
+})
+
+// ============================================================
+// Injury tests
+// ============================================================
+
+describe("injuries", () => {
+  it("incap success records injury from table", () => {
+    const a = createWC()
+    // margin 16 from unshaken: 4 raises → 4 wounds, exceeds max(3) → incap
+    // incapRoll=1 → success → stable + injury recorded
+    a.send({ type: "TAKE_DAMAGE", margin: dm(16), soakSuccesses: sk(0), incapRoll: ir(1), injuryRoll: ij(52) })
+    expect(snap(a).matches({ alive: { damageTrack: { incapacitated: "stable" } } })).toBe(true)
+    expect(hasInjury(snap(a), "guts_broken")).toBe(true)
+    expect(snap(a).context.injuries).toContain("guts_broken")
+  })
+
+  it("incap does not record injury on fail", () => {
+    const a = createWC()
+    // incapRoll=0 → fail → bleedingOut, no injury
+    a.send({ type: "TAKE_DAMAGE", margin: dm(16), soakSuccesses: sk(0), incapRoll: ir(0), injuryRoll: ij(52) })
+    expect(snap(a).matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } })).toBe(true)
+    expect(snap(a).context.injuries).toEqual([])
+  })
+
+  it("multiple injuries accumulate", () => {
+    const a = createWC()
+    // First incap with injury
+    a.send({ type: "TAKE_DAMAGE", margin: dm(16), soakSuccesses: sk(0), incapRoll: ir(1), injuryRoll: ij(52) })
+    expect(snap(a).matches({ alive: { damageTrack: { incapacitated: "stable" } } })).toBe(true)
+    expect(snap(a).context.injuries.length).toBe(1)
+
+    // Heal back to active
+    a.send({ type: "HEAL", amount: ha(3) })
+    expect(snap(a).matches({ alive: { damageTrack: "active" } })).toBe(true)
+
+    // Second incap with injury (hit hard again from unshaken state with 0 wounds)
+    a.send({ type: "TAKE_DAMAGE", margin: dm(16), soakSuccesses: sk(0), incapRoll: ir(1), injuryRoll: ij(111) })
+    expect(snap(a).matches({ alive: { damageTrack: { incapacitated: "stable" } } })).toBe(true)
+    expect(snap(a).context.injuries.length).toBe(2)
+  })
+
+  it("resolveInjury: 21 → unmentionables", () => {
+    expect(resolveInjury(21 as ReturnType<typeof ij>)).toBe("unmentionables")
+  })
+
+  it("resolveInjury: 121 → head_scar", () => {
+    expect(resolveInjury(121 as ReturnType<typeof ij>)).toBe("head_scar")
+  })
+
+  it("resolveInjury: 124 → head_blinded", () => {
+    expect(resolveInjury(124 as ReturnType<typeof ij>)).toBe("head_blinded")
+  })
+
+  it("resolveInjury: 126 → head_brain_damage", () => {
+    expect(resolveInjury(126 as ReturnType<typeof ij>)).toBe("head_brain_damage")
+  })
+
+  it("injuryPenalty counts die-reducing injuries", () => {
+    const a = createWC()
+    // First incap: guts_broken (die-reducing)
+    a.send({ type: "TAKE_DAMAGE", margin: dm(16), soakSuccesses: sk(0), incapRoll: ir(1), injuryRoll: ij(52) })
+    expect(hasInjury(snap(a), "guts_broken")).toBe(true)
+
+    // Heal back
+    a.send({ type: "HEAL", amount: ha(3) })
+
+    // Second incap: head_brain_damage (die-reducing)
+    a.send({ type: "TAKE_DAMAGE", margin: dm(16), soakSuccesses: sk(0), incapRoll: ir(1), injuryRoll: ij(126) })
+    expect(hasInjury(snap(a), "head_brain_damage")).toBe(true)
+
+    expect(injuryPenalty(snap(a))).toBe(2)
+
+    // Heal back
+    a.send({ type: "HEAL", amount: ha(3) })
+
+    // Third incap: leg (NOT die-reducing)
+    a.send({ type: "TAKE_DAMAGE", margin: dm(16), soakSuccesses: sk(0), incapRoll: ir(1), injuryRoll: ij(101) })
+    expect(hasInjury(snap(a), "leg")).toBe(true)
+
+    // Still 2 — leg doesn't count
+    expect(injuryPenalty(snap(a))).toBe(2)
   })
 })
