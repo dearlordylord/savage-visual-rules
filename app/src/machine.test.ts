@@ -841,7 +841,7 @@ describe("grapple", () => {
     expect(isPinned(snap(a))).toBe(true)
     a.send({ type: "GRAPPLE_ESCAPE", rollResult: ger(2) })
     expect(isGrappled(snap(a))).toBe(false)
-    expect(snap(a).context.grappledBy).toBeNull()
+    expect(isGrappled(snap(a))).toBe(false)
   })
 
   it("grapple escape from pinned: success → step down to grabbed", () => {

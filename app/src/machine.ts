@@ -4,7 +4,6 @@ import type {
   Wounds,
   ConditionTimer,
   MaxWounds,
-  CharacterId,
   DamageMargin,
   SoakSuccesses,
   IncapRollResult,
@@ -52,7 +51,6 @@ export interface SavageContext {
   onHold: boolean
   interruptedSuccessfully: boolean
   injuries: InjuryType[]
-  grappledBy: CharacterId | null
   afflictionTimer: number
   activeEffects: Array<{ etype: string; timer: number }> // empty = none; each entry has timer > 0
 }
@@ -333,7 +331,6 @@ export const savageMachine = setup({
       if (roll === undefined) return {}
       return { injuries: [...context.injuries, resolveInjury(roll)] }
     }),
-    clearGrappledBy: assign({ grappledBy: null }),
     setAfflictionTimer: assign(({ event }) => ({
       afflictionTimer: asAffliction(event).duration
     })),
@@ -382,7 +379,6 @@ export const savageMachine = setup({
     onHold: false,
     interruptedSuccessfully: false,
     injuries: [],
-    grappledBy: null,
     afflictionTimer: -1,
     activeEffects: []
   }),
@@ -990,8 +986,7 @@ export const savageMachine = setup({
                 },
                 GRAPPLE_ESCAPE: {
                   guard: "grappleEscapeSuccess",
-                  target: "free",
-                  actions: ["clearGrappledBy"]
+                  target: "free"
                 }
               },
               always: {
@@ -1004,8 +999,7 @@ export const savageMachine = setup({
                 GRAPPLE_ESCAPE: [
                   {
                     guard: "grappleEscapeRaise",
-                    target: "free",
-                    actions: ["clearGrappledBy"]
+                    target: "free"
                   },
                   {
                     guard: "grappleEscapeSuccessNoRaise",
@@ -1078,7 +1072,6 @@ export const savageMachine = setup({
         vulnerableTimer: conditionTimer(-1),
         onHold: false,
         interruptedSuccessfully: false,
-        grappledBy: null,
         afflictionTimer: -1,
         activeEffects: [],
         injuries: []

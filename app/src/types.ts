@@ -24,12 +24,6 @@ export function maxWounds(n: number): MaxWounds {
   return MaxWounds.make((n >= 3 ? 3 : 1) as 1 | 3)
 }
 
-const CharacterId = Schema.String.pipe(Schema.brand("CharacterId"))
-type CharacterId = typeof CharacterId.Type
-export function characterId(s: string): CharacterId {
-  return CharacterId.make(s)
-}
-
 // ============================================================
 // Event payload types
 // ============================================================
@@ -141,7 +135,6 @@ export type {
   AfflictionDuration,
   AthleticsRollResult,
   BlindedSeverity,
-  CharacterId,
   ConditionTimer,
   DamageMargin,
   EscapeRollResult,
