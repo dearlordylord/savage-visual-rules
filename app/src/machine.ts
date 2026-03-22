@@ -1050,7 +1050,8 @@ export const savageMachine = setup({
         interruptedSuccessfully: false,
         grappledBy: null,
         afflictionTimer: -1,
-        activeEffects: []
+        activeEffects: [],
+        injuries: []
       })
     }
   }

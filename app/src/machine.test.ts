@@ -25,7 +25,7 @@ import {
   resolveFear,
   savageMachine
 } from "./machine"
-import { margin as dm, soak as sk, incap as ir, vigor as vr, spirit as sr, heal as ha, athletics as ar, escape as er, grapple as gr, grappleEsc as ger, pin as pr, severity as bs, affDur as ad } from "./test/helpers/brands"
+import { margin as dm, soak as sk, incap as ir, injury as ij, vigor as vr, spirit as sr, heal as ha, athletics as ar, escape as er, grapple as gr, grappleEsc as ger, pin as pr, severity as bs, affDur as ad } from "./test/helpers/brands"
 
 // ============================================================
 // Helpers
@@ -192,6 +192,20 @@ describe("incapacitation", () => {
     a.send({ type: "START_OF_TURN", vigorRoll: vr(2), spiritRoll: sr(0) })
     expect(snap(a).matches({ alive: { damageTrack: { incapacitated: "stable" } } })).toBe(true)
     expect(isDead(snap(a))).toBe(false)
+  })
+
+  // deathClearsInjuriesTest: injuries cleared on death
+  it("death clears injuries", () => {
+    const a = createWC()
+    // Hit hard enough to incap with injury (incapRoll success → stable + injury)
+    a.send({ type: "TAKE_DAMAGE", margin: dm(16), soakSuccesses: sk(0), incapRoll: ir(1), injuryRoll: ij(52) })
+    expect(snap(a).matches({ alive: { damageTrack: { incapacitated: "stable" } } })).toBe(true)
+    expect(snap(a).context.injuries.length).toBeGreaterThan(0)
+
+    // Kill via finishing move
+    a.send({ type: "FINISHING_MOVE" })
+    expect(isDead(snap(a))).toBe(true)
+    expect(snap(a).context.injuries).toEqual([])
   })
 })
 
