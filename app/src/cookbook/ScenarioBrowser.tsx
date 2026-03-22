@@ -20,8 +20,9 @@ function groupByCategory(): Map<string, Array<Scenario>> {
   return groups
 }
 
+const groups = groupByCategory()
+
 export function ScenarioBrowser({ onSelect, selected }: ScenarioBrowserProps) {
-  const groups = groupByCategory()
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(selected ? [selected.category] : [categoryOrder[0]])
   )

@@ -5,6 +5,7 @@ import {
   afflictionType,
   blindedPenalty,
   hasEffect,
+  isBleedingOut,
   isBlinded,
   isBound,
   isDead,
@@ -14,6 +15,7 @@ import {
   isFullyBlinded,
   isGrabbed,
   isGrappled,
+  isIncapStable,
   isOnHold,
   isPinned,
   isProne,
@@ -84,7 +86,17 @@ export const categoryLabels: Record<string, string> = {
   afflictions: "Недуги",
   powers: "Мистические силы",
   defense: "Оборона",
-  fear: "Страх"
+  fear: "Страх",
+  // Phase 2: cross-feature interactions
+  crossCombat: "Бой: цикл раунда",
+  crossRecovery: "Оправление: комбинации",
+  crossHold: "Наготове: взаимодействия",
+  crossRestraint: "Путы и захват: связи",
+  crossAffliction: "Недуги: каскады",
+  crossDefense: "Оборона и состояния",
+  crossHealing: "Лечение и возврат в бой",
+  crossFear: "Страх: каскады",
+  crossDeath: "Гибель и выживание"
 }
 
 // ============================================================
@@ -326,7 +338,7 @@ export const scenarios: Array<Scenario> = [
         expect: [
           {
             desc: "Истекает кровью",
-            check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } })
+            check: isBleedingOut
           }
         ]
       }
@@ -348,7 +360,7 @@ export const scenarios: Array<Scenario> = [
         event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(1), injuryRoll: ij(52) },
         label: "Ещё удар — успех выносливости, увечье",
         expect: [
-          { desc: "Стабилен", check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "stable" } } }) },
+          { desc: "Стабилен", check: isIncapStable },
           { desc: "Увечье: корпус (сломлен)", check: (s) => s.context.injuries.includes("guts_broken") }
         ]
       }
@@ -376,7 +388,7 @@ export const scenarios: Array<Scenario> = [
         expect: [
           {
             desc: "Истекает кровью",
-            check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } })
+            check: isBleedingOut
           }
         ]
       },
@@ -405,7 +417,7 @@ export const scenarios: Array<Scenario> = [
         expect: [
           {
             desc: "Истекает кровью",
-            check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } })
+            check: isBleedingOut
           }
         ]
       },
@@ -413,7 +425,7 @@ export const scenarios: Array<Scenario> = [
         event: { type: "START_OF_TURN", vigorRoll: vr(2), spiritRoll: sr(0) },
         label: "Начало хода — выносливость подъём",
         expect: [
-          { desc: "Стабилен", check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "stable" } } }) },
+          { desc: "Стабилен", check: isIncapStable },
           { desc: "Персонаж жив", check: (s) => !isDead(s) }
         ]
       }
@@ -733,7 +745,7 @@ export const scenarios: Array<Scenario> = [
         expect: [
           {
             desc: "Истекает кровью",
-            check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } })
+            check: isBleedingOut
           }
         ]
       },
@@ -849,7 +861,7 @@ export const scenarios: Array<Scenario> = [
         label: "Конец раунда",
         expect: [
           { desc: "Idle", check: (s) => s.matches({ alive: { turnPhase: "idle" } }) },
-          { desc: "onHold сохраняется", check: (s) => s.context.onHold }
+          { desc: "Наготове сохраняется (контекст)", check: (s) => s.context.onHold }
         ]
       },
       {
@@ -928,7 +940,7 @@ export const scenarios: Array<Scenario> = [
         event: { type: "ESCAPE_ATTEMPT", rollResult: er(1) },
         label: "Попытка освободиться — успех",
         expect: [
-          { desc: "Свободен", check: (s: SavageSnapshot) => !isRestrained(s) },
+          { desc: "Свободен", check: (s) => !isRestrained(s) },
           { desc: "НЕ уязвим", check: (s) => !isVulnerable(s) }
         ]
       }
@@ -972,7 +984,7 @@ export const scenarios: Array<Scenario> = [
       {
         event: { type: "ESCAPE_ATTEMPT", rollResult: er(1) },
         label: "Ещё попытка — успех из схвачен",
-        expect: [{ desc: "Свободен", check: (s: SavageSnapshot) => !isRestrained(s) }]
+        expect: [{ desc: "Свободен", check: (s) => !isRestrained(s) }]
       }
     ]
   },
@@ -1055,7 +1067,7 @@ export const scenarios: Array<Scenario> = [
       {
         event: { type: "GRAPPLE_ESCAPE", rollResult: ger(1) },
         label: "Побег из схвачен — успех",
-        expect: [{ desc: "Свободен", check: (s: SavageSnapshot) => !isGrappled(s) }]
+        expect: [{ desc: "Свободен", check: (s) => !isGrappled(s) }]
       }
     ]
   },
@@ -1383,6 +1395,833 @@ export const scenarios: Array<Scenario> = [
         event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
         label: "Результат: шок (аналог урона, равного стойкости)",
         expect: [{ desc: "В шоке", check: isShaken }]
+      }
+    ]
+  },
+
+  // ========================================================
+  // Phase 2: Cross-feature mechanics
+  // ========================================================
+
+  // ========================================
+  // 2.1 — Полный боевой раунд
+  // ========================================
+  {
+    id: "cross-full-round",
+    title: "Полный боевой раунд",
+    description:
+      "Удар → шок → начало хода → оправление (характер успех) → действие → конец хода. Полный цикл одного раунда.",
+    category: "crossCombat",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: "Персонаж получает удар — в шоке",
+        expect: [
+          { desc: "В шоке", check: isShaken },
+          { desc: "Ранения = 0", check: (s) => s.context.wounds === 0 }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) },
+        label: "Начало хода — характер успех, шок снят",
+        expect: [
+          { desc: "НЕ в шоке", check: (s) => !isShaken(s) },
+          { desc: "Действует", check: (s) => s.matches({ alive: { turnPhase: "acting" } }) }
+        ]
+      },
+      {
+        event: { type: "END_OF_TURN", vigorRoll: vr(0) },
+        label: "Конец хода",
+        expect: [{ desc: "Idle", check: (s) => s.matches({ alive: { turnPhase: "idle" } }) }]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.2 — Оглушение + шок: одновременное оправление
+  // ========================================
+  {
+    id: "cross-stun-shaken-both-ok",
+    title: "Оглушён + шок: оба оправления успешны",
+    description:
+      "Персонаж оглушён и в шоке. В начале хода выносливость (оглушение) и характер (шок) проверяются независимо. Оба успешны.",
+    category: "crossRecovery",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: "Удар — шок",
+        expect: [{ desc: "В шоке", check: isShaken }]
+      },
+      {
+        event: { type: "APPLY_STUNNED" },
+        label: "Оглушение",
+        expect: [
+          { desc: "Оглушён", check: isStunned },
+          { desc: "В шоке", check: isShaken },
+          { desc: "Лежит", check: isProne }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(1), spiritRoll: sr(1) },
+        label: "Начало хода — выносливость успех, характер успех",
+        expect: [
+          { desc: "НЕ оглушён", check: (s) => !isStunned(s) },
+          { desc: "НЕ в шоке", check: (s) => !isShaken(s) },
+          { desc: "Уязвим (после оглушения)", check: isVulnerable }
+        ]
+      }
+    ]
+  },
+  {
+    id: "cross-stun-shaken-vigor-ok-spirit-fail",
+    title: "Оглушён + шок: выносливость ок, характер провал",
+    description: "Выносливость проходит (оглушение снято), но характер провален — персонаж остаётся в шоке.",
+    category: "crossRecovery",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: "Удар — шок",
+        expect: [{ desc: "В шоке", check: isShaken }]
+      },
+      {
+        event: { type: "APPLY_STUNNED" },
+        label: "Оглушение",
+        expect: [{ desc: "Оглушён", check: isStunned }]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(1), spiritRoll: sr(0) },
+        label: "Начало хода — выносливость успех, характер провал",
+        expect: [
+          { desc: "НЕ оглушён", check: (s) => !isStunned(s) },
+          { desc: "В шоке", check: isShaken },
+          { desc: "Уязвим", check: isVulnerable }
+        ]
+      }
+    ]
+  },
+  {
+    id: "cross-stun-shaken-vigor-fail",
+    title: "Оглушён + шок: выносливость провал",
+    description: "Выносливость провалена — оглушение остаётся. Характер не проверяется (заблокирован оглушением).",
+    category: "crossRecovery",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: "Удар — шок",
+        expect: [{ desc: "В шоке", check: isShaken }]
+      },
+      {
+        event: { type: "APPLY_STUNNED" },
+        label: "Оглушение",
+        expect: [{ desc: "Оглушён", check: isStunned }]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) },
+        label: "Начало хода — выносливость провал, характер успех (игнорируется)",
+        expect: [
+          { desc: "Оглушён", check: isStunned },
+          { desc: "В шоке", check: isShaken }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.3 — Шок отменяет наготове
+  // ========================================
+  {
+    id: "cross-hold-broken-by-damage",
+    title: "Шок отменяет наготове",
+    description: "Персонаж наготове. Враг попадает — шок. Состояние наготове сбрасывается.",
+    category: "crossHold",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: "Начало хода",
+        expect: []
+      },
+      {
+        event: { type: "GO_ON_HOLD" },
+        label: "Наготове",
+        expect: [{ desc: "Наготове", check: isOnHold }]
+      },
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: "Враг попадает — шок",
+        expect: [
+          { desc: "В шоке", check: isShaken },
+          { desc: "НЕ наготове", check: (s) => !isOnHold(s) }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.4 — Уязвимость не истекает, пока схвачен
+  // ========================================
+  {
+    id: "cross-entangled-persistent-vulnerable",
+    title: "Уязвимость не истекает, пока персонаж схвачен",
+    description:
+      "Схваченный персонаж уязвим с постоянным таймером (99). Ходы проходят — уязвимость остаётся. Освобождение снимает её.",
+    category: "crossRestraint",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "APPLY_ENTANGLED" },
+        label: "Персонаж схвачен сетью",
+        expect: [
+          { desc: "Схвачен", check: isEntangled },
+          { desc: "Уязвим", check: isVulnerable },
+          { desc: "Таймер уязвимости = 99", check: (s) => s.context.vulnerableTimer === 99 }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: "Начало хода",
+        expect: [{ desc: "Уязвим", check: isVulnerable }]
+      },
+      {
+        event: { type: "END_OF_TURN", vigorRoll: vr(0) },
+        label: "Конец хода — таймер уязвимости заморожен (схвачен)",
+        expect: [
+          { desc: "Уязвим", check: isVulnerable },
+          { desc: "Таймер = 99 (заморожен)", check: (s) => s.context.vulnerableTimer === 99 }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: "Следующий ход",
+        expect: [{ desc: "Уязвим", check: isVulnerable }]
+      },
+      {
+        event: { type: "ESCAPE_ATTEMPT", rollResult: er(1) },
+        label: "Освобождение — успех",
+        expect: [
+          { desc: "Свободен", check: (s) => !isRestrained(s) },
+          { desc: "НЕ уязвим", check: (s) => !isVulnerable(s) }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.5 — Обездвижен замораживает таймеры
+  // ========================================
+  {
+    id: "cross-bound-freezes-timers",
+    title: "Обездвижен замораживает таймеры отвлечения и уязвимости",
+    description: "Персонаж отвлечён, затем обездвижен. Таймер отвлечения не тикает на END_OF_TURN, пока обездвижен.",
+    category: "crossRestraint",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: "Начало хода",
+        expect: []
+      },
+      {
+        event: { type: "APPLY_DISTRACTED" },
+        label: "Персонаж отвлечён (во время хода, таймер = 1)",
+        expect: [
+          { desc: "Отвлечён", check: isDistracted },
+          { desc: "Таймер отвлечения = 1", check: (s) => s.context.distractedTimer === 1 }
+        ]
+      },
+      {
+        event: { type: "APPLY_BOUND" },
+        label: "Персонаж обездвижен",
+        expect: [
+          { desc: "Обездвижен", check: isBound },
+          { desc: "Отвлечён", check: isDistracted }
+        ]
+      },
+      {
+        event: { type: "END_OF_TURN", vigorRoll: vr(0) },
+        label: "Конец хода — таймеры заморожены (обездвижен)",
+        expect: [
+          { desc: "Таймер отвлечения = 1 (не тикнул)", check: (s) => s.context.distractedTimer === 1 },
+          { desc: "Отвлечён", check: isDistracted }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.6 — Захват → силовой приём → обездвижен
+  // ========================================
+  {
+    id: "cross-grapple-to-bound",
+    title: "Захват → силовой приём → обездвижен",
+    description: "Схватил → обездвижил → APPLY_BOUND переводит в путы, очищает grappledBy.",
+    category: "crossRestraint",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(1) },
+        label: "Захват — схвачен",
+        expect: [
+          { desc: "Схвачен (grabbed)", check: isGrabbed },
+          { desc: "grappledBy = opp1", check: (s) => s.context.grappledBy === "opp1" }
+        ]
+      },
+      {
+        event: { type: "PIN_ATTEMPT", rollResult: pr(1) },
+        label: "Силовой приём — обездвижен (pinned)",
+        expect: [
+          { desc: "Обездвижен (pinned)", check: isPinned },
+          { desc: "grappledBy = opp1", check: (s) => s.context.grappledBy === "opp1" }
+        ]
+      },
+      {
+        event: { type: "APPLY_BOUND" },
+        label: "Переход в путы (bound) — очистка grappledBy",
+        expect: [
+          { desc: "Обездвижен (bound)", check: isBound },
+          { desc: "grappledBy пуст", check: (s) => s.context.grappledBy === "" },
+          { desc: "Отвлечён", check: isDistracted },
+          { desc: "Уязвим", check: isVulnerable }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.7 — Смертельный яд + существующие ранения
+  // ========================================
+  {
+    id: "cross-lethal-plus-wounds",
+    title: "Смертельный яд на раненом персонаже",
+    description:
+      "Персонаж уже имеет 3 ранения. Смертельный яд добавляет ранение → превышение максимума → истекает кровью.",
+    category: "crossAffliction",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: "Тяжёлый удар — 3 ранения, шок",
+        expect: [
+          { desc: "Ранения = 3", check: (s) => s.context.wounds === 3 },
+          { desc: "В шоке", check: isShaken }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) },
+        label: "Оправление от шока",
+        expect: [{ desc: "НЕ в шоке", check: (s) => !isShaken(s) }]
+      },
+      {
+        event: { type: "APPLY_AFFLICTION", afflictionType: "lethal", duration: ad(3) },
+        label: "Смертельный яд — +1 ранение → превышение максимума",
+        expect: [
+          {
+            desc: "Истекает кровью",
+            check: isBleedingOut
+          }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.8 — Сон блокирует восстановление зрения
+  // ========================================
+  {
+    id: "cross-sleep-blocks-blinded",
+    title: "Сон блокирует восстановление зрения",
+    description:
+      "Спящий персонаж ослеплён. В конце хода проверка выносливости не применяется — зрение не восстанавливается.",
+    category: "crossAffliction",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "APPLY_AFFLICTION", afflictionType: "sleep", duration: ad(5) },
+        label: "Магический сон",
+        expect: [{ desc: "Недуг: сон", check: (s) => afflictionType(s) === "sleep" }]
+      },
+      {
+        event: { type: "APPLY_BLINDED", severity: bs(4) },
+        label: "Полное ослепление",
+        expect: [{ desc: "Полностью ослеплён", check: isFullyBlinded }]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: "Начало хода",
+        expect: []
+      },
+      {
+        event: { type: "END_OF_TURN", vigorRoll: vr(2) },
+        label: "Конец хода — выносливость подъём (заблокировано сном)",
+        expect: [{ desc: "Полностью ослеплён (без изменений)", check: isFullyBlinded }]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.9 — Усталость до потери сознания снимает путы и слепоту
+  // ========================================
+  {
+    id: "cross-fatigue-incap-clears-all",
+    title: "Потеря сознания от усталости снимает путы и слепоту",
+    description: "Персонаж схвачен и ослеплён. Третий уровень усталости → потеря сознания → путы и слепота снимаются.",
+    category: "crossAffliction",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "APPLY_ENTANGLED" },
+        label: "Персонаж схвачен",
+        expect: [{ desc: "Схвачен", check: isEntangled }]
+      },
+      {
+        event: { type: "APPLY_BLINDED", severity: bs(4) },
+        label: "Полное ослепление",
+        expect: [{ desc: "Полностью ослеплён", check: isFullyBlinded }]
+      },
+      {
+        event: { type: "APPLY_FATIGUE" },
+        label: "Усталость 1 — утомлён",
+        expect: [{ desc: "Утомлён", check: (s) => s.matches({ alive: { fatigueTrack: "fatigued" } }) }]
+      },
+      {
+        event: { type: "APPLY_FATIGUE" },
+        label: "Усталость 2 — истощён",
+        expect: [{ desc: "Истощён", check: (s) => s.matches({ alive: { fatigueTrack: "exhausted" } }) }]
+      },
+      {
+        event: { type: "APPLY_FATIGUE" },
+        label: "Усталость 3 — потеря сознания",
+        expect: [
+          { desc: "При смерти от усталости", check: (s) => s.matches({ alive: { fatigueTrack: "incapByFatigue" } }) },
+          { desc: "НЕ схвачен", check: (s) => !isEntangled(s) },
+          { desc: "НЕ ослеплён", check: (s) => !isBlinded(s) }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.10 — Оглушение отменяет оборону
+  // ========================================
+  {
+    id: "cross-stun-breaks-defense",
+    title: "Оглушение отменяет оборону",
+    description: "Персонаж в обороне. Оглушение → оборона сброшена.",
+    category: "crossDefense",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: "Начало хода",
+        expect: [{ desc: "Действует", check: (s) => s.matches({ alive: { turnPhase: "acting" } }) }]
+      },
+      {
+        event: { type: "DEFEND" },
+        label: "Оборона",
+        expect: [{ desc: "В обороне", check: isDefending }]
+      },
+      {
+        event: { type: "APPLY_STUNNED" },
+        label: "Оглушение",
+        expect: [
+          { desc: "Оглушён", check: isStunned },
+          { desc: "НЕ в обороне", check: (s) => !isDefending(s) }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.11 — Серия попаданий до потери сознания
+  // ========================================
+  {
+    id: "cross-progressive-damage",
+    title: "Серия попаданий до потери сознания",
+    description: "Четыре раунда боя: удары, оправления, нарастание ранений до incap.",
+    category: "crossCombat",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(4), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: "Раунд 1: удар с подъёмом — 1 ранение, шок",
+        expect: [
+          { desc: "Ранения = 1", check: (s) => s.context.wounds === 1 },
+          { desc: "В шоке", check: isShaken }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) },
+        label: "Раунд 2: оправление от шока",
+        expect: [{ desc: "НЕ в шоке", check: (s) => !isShaken(s) }]
+      },
+      {
+        event: { type: "END_OF_TURN", vigorRoll: vr(0) },
+        label: "Конец раунда 2",
+        expect: []
+      },
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(5), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: "Раунд 3: ещё удар — +1 ранение, шок",
+        expect: [
+          { desc: "Ранения = 2", check: (s) => s.context.wounds === 2 },
+          { desc: "В шоке", check: isShaken }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: "Раунд 4: оправление провал",
+        expect: [{ desc: "В шоке", check: isShaken }]
+      },
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(8), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: "Раунд 4: шок на шоке → +2 ранения → превышение максимума",
+        expect: [
+          {
+            desc: "Истекает кровью",
+            check: isBleedingOut
+          }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.12 — Лечение возвращает в бой
+  // ========================================
+  {
+    id: "cross-heal-from-incap",
+    title: "Лечение возвращает в бой из incap",
+    description: "Персонаж истекает кровью. Лечение 1 ранения → возврат в active. Лечение остальных ранений.",
+    category: "crossHealing",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: "3 ранения, шок",
+        expect: [{ desc: "Ранения = 3", check: (s) => s.context.wounds === 3 }]
+      },
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: "Шок на шоке → истекает кровью",
+        expect: [
+          {
+            desc: "Истекает кровью",
+            check: isBleedingOut
+          }
+        ]
+      },
+      {
+        event: { type: "HEAL", amount: ha(1) },
+        label: "Лечение 1 ранения → возврат в строй",
+        expect: [
+          { desc: "Ранения = 2", check: (s) => s.context.wounds === 2 },
+          { desc: "Снова в строю", check: (s) => s.matches({ alive: { damageTrack: "active" } }) }
+        ]
+      },
+      {
+        event: { type: "HEAL", amount: ha(2) },
+        label: "Лечение оставшихся ранений",
+        expect: [
+          { desc: "Ранения = 0", check: (s) => s.context.wounds === 0 },
+          { desc: "Полностью здоров", check: (s) => !isShaken(s) && s.context.wounds === 0 }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.13 — Наготове сохраняется между раундами
+  // ========================================
+  {
+    id: "cross-hold-persists-rounds",
+    title: "Наготове сохраняется между раундами",
+    description: "Персонаж наготове, пропускает два раунда, затем действует.",
+    category: "crossHold",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: "Раунд 1: начало хода",
+        expect: []
+      },
+      {
+        event: { type: "GO_ON_HOLD" },
+        label: "Наготове",
+        expect: [{ desc: "Наготове", check: isOnHold }]
+      },
+      {
+        event: { type: "END_OF_TURN", vigorRoll: vr(0) },
+        label: "Конец раунда 1",
+        expect: [{ desc: "Наготове сохраняется (контекст)", check: (s) => s.context.onHold }]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: "Раунд 2: наготове сохраняется",
+        expect: [{ desc: "Наготове", check: isOnHold }]
+      },
+      {
+        event: { type: "END_OF_TURN", vigorRoll: vr(0) },
+        label: "Конец раунда 2",
+        expect: [{ desc: "Наготове сохраняется (контекст)", check: (s) => s.context.onHold }]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: "Раунд 3: всё ещё наготове",
+        expect: [{ desc: "Наготове", check: isOnHold }]
+      },
+      {
+        event: { type: "ACT_FROM_HOLD" },
+        label: "Решает действовать",
+        expect: [
+          { desc: "Действует", check: (s) => s.matches({ alive: { turnPhase: "acting" } }) },
+          { desc: "НЕ наготове", check: (s) => !isOnHold(s) }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.14 — Таймер отвлечения замораживается наготове
+  // ========================================
+  {
+    id: "cross-distracted-frozen-on-hold",
+    title: "Таймер отвлечения не тикает наготове",
+    description:
+      "Персонаж отвлечён, уходит наготове. Пока наготове, таймер не тикает. После действия — тикает нормально.",
+    category: "crossHold",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "APPLY_DISTRACTED" },
+        label: "Отвлечён (вне хода, таймер = 0)",
+        expect: [
+          { desc: "Отвлечён", check: isDistracted },
+          { desc: "Таймер = 0", check: (s) => s.context.distractedTimer === 0 }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: "Начало хода",
+        expect: []
+      },
+      {
+        event: { type: "GO_ON_HOLD" },
+        label: "Наготове",
+        expect: [{ desc: "Наготове", check: isOnHold }]
+      },
+      {
+        event: { type: "END_OF_TURN", vigorRoll: vr(0) },
+        label: "Конец раунда (наготове → idle, таймер не тикает)",
+        expect: [
+          { desc: "Отвлечён", check: isDistracted },
+          { desc: "Таймер = 0 (заморожен)", check: (s) => s.context.distractedTimer === 0 }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.16 — Цепочка откатов
+  // ========================================
+  {
+    id: "cross-backlash-chain",
+    title: "Откат: все силы пропадают + усталость",
+    description: "Мистик поддерживает 2 силы, уже утомлён. Откат → все силы сброшены, +1 усталость → истощён.",
+    category: "crossAffliction",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "APPLY_POWER_EFFECT", etype: "armor", duration: 3 },
+        label: "Сила «доспех» (3 раунда)",
+        expect: [{ desc: "1 эффект", check: (s) => activeEffectsList(s).length === 1 }]
+      },
+      {
+        event: { type: "APPLY_POWER_EFFECT", etype: "boost", duration: 2 },
+        label: "Сила «усиление» (2 раунда)",
+        expect: [{ desc: "2 эффекта", check: (s) => activeEffectsList(s).length === 2 }]
+      },
+      {
+        event: { type: "APPLY_FATIGUE" },
+        label: "Уже утомлён",
+        expect: [{ desc: "Утомлён", check: (s) => s.matches({ alive: { fatigueTrack: "fatigued" } }) }]
+      },
+      {
+        event: { type: "BACKLASH" },
+        label: "Откат! Все силы сброшены + усталость",
+        expect: [
+          { desc: "0 эффектов", check: (s) => activeEffectsList(s).length === 0 },
+          { desc: "Истощён", check: (s) => s.matches({ alive: { fatigueTrack: "exhausted" } }) }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.17 — Страх → оглушение → каскад
+  // ========================================
+  {
+    id: "cross-fear-stun-cascade",
+    title: "Страх → оглушение → полный каскад",
+    description: "Бросок d20 = 13 по таблице страха → оглушение → лежит + отвлечён + уязвим. Попытка оправиться.",
+    category: "crossFear",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: null,
+        label: "Бросок по таблице страха: d20 = 13 → оглушение + метка страха",
+        expect: []
+      },
+      {
+        event: { type: "APPLY_STUNNED" },
+        label: "Результат: оглушение",
+        expect: [
+          { desc: "Оглушён", check: isStunned },
+          { desc: "Лежит", check: isProne },
+          { desc: "Отвлечён", check: isDistracted },
+          { desc: "Уязвим", check: isVulnerable }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(1), spiritRoll: sr(0) },
+        label: "Начало хода — выносливость успех, оглушение снято",
+        expect: [
+          { desc: "НЕ оглушён", check: (s) => !isStunned(s) },
+          { desc: "Лежит (надо вставать)", check: isProne },
+          { desc: "Уязвим (после оглушения)", check: isVulnerable }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.18 — Дикая карта vs статист: один и тот же урон
+  // ========================================
+  {
+    id: "cross-wc-survives-heavy-hit",
+    title: "Дикая карта выживает при тяжёлом ударе",
+    description: "Удар с превышением 8 (два подъёма). Дикая карта получает 2 ранения и шок, но остаётся в строю.",
+    category: "crossCombat",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(8), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: "Удар (превышение 8) по дикой карте",
+        expect: [
+          { desc: "Жив", check: (s) => !isDead(s) },
+          { desc: "В шоке", check: isShaken },
+          { desc: "Ранения = 2", check: (s) => s.context.wounds === 2 }
+        ]
+      }
+    ]
+  },
+  // ========================================
+  // 2.19 — Гонка со смертью
+  // ========================================
+  {
+    id: "cross-death-race",
+    title: "Гонка со смертью — серия проверок",
+    description:
+      "Персонаж истекает кровью. Раунд 1: выносливость 1 — выжил, кровотечение продолжается. Раунд 2: подъём — стабилизация.",
+    category: "crossDeath",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: "3 ранения, шок",
+        expect: [{ desc: "Ранения = 3", check: (s) => s.context.wounds === 3 }]
+      },
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: "Превышение максимума → истекает кровью",
+        expect: [
+          {
+            desc: "Истекает кровью",
+            check: isBleedingOut
+          }
+        ]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(1), spiritRoll: sr(0) },
+        label: "Раунд 1: выносливость 1 — выжил, но кровотечение",
+        expect: [
+          {
+            desc: "Всё ещё истекает кровью",
+            check: isBleedingOut
+          },
+          { desc: "Жив", check: (s) => !isDead(s) }
+        ]
+      },
+      {
+        event: { type: "END_OF_TURN", vigorRoll: vr(0) },
+        label: "Конец раунда 1",
+        expect: []
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(2), spiritRoll: sr(0) },
+        label: "Раунд 2: выносливость подъём — стабилизация",
+        expect: [
+          { desc: "Стабилен", check: isIncapStable },
+          { desc: "Жив", check: (s) => !isDead(s) }
+        ]
+      }
+    ]
+  },
+
+  // ========================================
+  // 2.20 — Ограничения обороны
+  // ========================================
+  {
+    id: "cross-defense-blocked-shaken",
+    title: "Оборона невозможна в шоке",
+    description: "Персонаж в шоке не может перейти в оборону.",
+    category: "crossDefense",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
+        label: "Персонаж в шоке",
+        expect: [{ desc: "В шоке", check: isShaken }]
+      },
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: "Начало хода — оправление провал",
+        expect: [{ desc: "В шоке", check: isShaken }]
+      },
+      {
+        event: { type: "DEFEND" },
+        label: "Попытка обороны (заблокирована шоком)",
+        expect: [{ desc: "НЕ в обороне", check: (s) => !isDefending(s) }]
+      }
+    ]
+  },
+  {
+    id: "cross-defense-blocked-hold",
+    title: "Оборона блокирует наготове",
+    description: "Персонаж в обороне не может перейти наготове (holdUsed = true).",
+    category: "crossDefense",
+    characterType: "wildCard",
+    steps: [
+      {
+        event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
+        label: "Начало хода",
+        expect: [{ desc: "Действует", check: (s) => s.matches({ alive: { turnPhase: "acting" } }) }]
+      },
+      {
+        event: { type: "DEFEND" },
+        label: "Оборона",
+        expect: [{ desc: "В обороне", check: isDefending }]
+      },
+      {
+        event: { type: "GO_ON_HOLD" },
+        label: "Попытка наготове (заблокирована обороной)",
+        expect: [
+          { desc: "НЕ наготове", check: (s) => !isOnHold(s) },
+          { desc: "В обороне", check: isDefending }
+        ]
       }
     ]
   }
