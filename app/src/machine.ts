@@ -1131,18 +1131,19 @@ export function blindedPenalty(snap: SavageSnapshot): 0 | -2 | -4 {
   return 0
 }
 
-export function isActive(snap: SavageSnapshot): boolean {
+/** Conscious and in the fight: not dead, not incapacitated. Does NOT imply ability to act or move. */
+export function isConscious(snap: SavageSnapshot): boolean {
   return (
     snap.matches({ alive: { damageTrack: "active" } }) && !snap.matches({ alive: { fatigueTrack: "incapByFatigue" } })
   )
 }
 
 export function canAct(snap: SavageSnapshot): boolean {
-  return isActive(snap) && !isShaken(snap) && !isStunned(snap) && !snap.matches(SLEEP_STATE)
+  return isConscious(snap) && !isShaken(snap) && !isStunned(snap) && !snap.matches(SLEEP_STATE)
 }
 
 export function canMove(snap: SavageSnapshot): boolean {
-  return isActive(snap) && !isStunned(snap) && !snap.matches(SLEEP_STATE)
+  return isConscious(snap) && !isStunned(snap) && !snap.matches(SLEEP_STATE)
 }
 
 export function hasInjury(snap: SavageSnapshot, type: InjuryType): boolean {
