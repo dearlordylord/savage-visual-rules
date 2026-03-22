@@ -1270,13 +1270,13 @@ describe("power effects", () => {
     expect(activeEffectsList(snap(b))).toHaveLength(0)
   })
 
-  it("backlash with no active effects does not add fatigue", () => {
+  it("backlash with no active effects still adds fatigue (SWADE)", () => {
     const a = createWC()
     expect(activeEffectsList(snap(a))).toHaveLength(0)
     expect(snap(a).matches({ alive: { fatigueTrack: "fresh" } })).toBe(true)
 
     a.send({ type: "BACKLASH" })
-    expect(snap(a).matches({ alive: { fatigueTrack: "fresh" } })).toBe(true)
+    expect(snap(a).matches({ alive: { fatigueTrack: "fatigued" } })).toBe(true)
   })
 
   it("apply power effect with duration 0 is a no-op", () => {

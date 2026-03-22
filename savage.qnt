@@ -162,11 +162,11 @@ module savage {
 
   /// Can take standard actions (not Shaken, not Stunned, and active)
   pure def canAct(s: State): bool =
-    s.isConscious() and not(s.shaken) and not(s.stunned)
+    s.isConscious() and not(s.shaken) and not(s.stunned) and s.afflictionType != "sleep"
 
   /// Can move (Shaken allows movement, Stunned does not)
   pure def canMove(s: State): bool =
-    s.isConscious() and not(s.stunned)
+    s.isConscious() and not(s.stunned) and s.afflictionType != "sleep"
 
   /// Defending: +4 Parry, uses whole turn, lasts until start of next turn
   pure def isDefending(s: State): bool = s.defending
@@ -686,7 +686,7 @@ module savage {
 
   /// Backlash: clear all active effects + apply 1 fatigue.
   pure def pBacklash(s: State): {success: bool, newState: State} = {
-    if (s.dead or s.activeEffects.length() == 0) {
+    if (s.dead) {
       {success: false, newState: s}
     } else {
       val cleared = {...s, activeEffects: List()}

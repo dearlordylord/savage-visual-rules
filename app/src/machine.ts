@@ -392,7 +392,7 @@ export const savageMachine = setup({
       on: {
         APPLY_POWER_EFFECT: { guard: "durationPositive", actions: ["applyPowerEffect"] },
         DISMISS_EFFECT: { actions: ["dismissEffect"] },
-        BACKLASH: { guard: "hasActiveEffects", actions: ["backlashClearEffects", "raiseBacklashFatigue"] }
+        BACKLASH: { actions: ["backlashClearEffects", "raiseBacklashFatigue"] }
       },
       states: {
         // ========================================

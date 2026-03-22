@@ -1182,11 +1182,11 @@ module savageTest {
     .expect(state.activeEffects.length() == 0 and state.fatigue == 1)
   }
 
-  /// Backlash fails when no effects
-  run backlashFailsWhenNoEffectsTest = {
+  /// Backlash succeeds even with no effects (SWADE: always causes fatigue)
+  run backlashSucceedsWhenNoEffectsTest = {
     initWildCard
     .then(doBacklash)
-    .fail()
+    .expect(state.fatigue == 1)
   }
 
   /// Dismiss removes only first match
