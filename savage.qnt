@@ -650,7 +650,8 @@ module savage {
         {success: true, newState: r.newState}
       } else if (aType == "lethal") {
         // Lethal: one-time +1 wound + shaken
-        val sw = {...s1, shaken: true, wounds: s1.wounds + 1}
+        // Shaken clears hold (same as pTakeDamage)
+        val sw = {...s1, shaken: true, wounds: s1.wounds + 1, onHold: if (s1.onHold) false else s1.onHold}
         if (not(sw.isWildCard) and sw.wounds > 0) {
           // Extra: any wound = eliminated
           {success: true, newState: die(sw)}

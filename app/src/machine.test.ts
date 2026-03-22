@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest"
 import { createActor } from "xstate"
 
 import {
+  activeEffectsList,
   afflictionType,
   blindedPenalty,
+  hasEffect,
+  hasInjury,
+  injuryPenalty,
   isAfflicted,
   isBlinded,
   isBound,
@@ -21,15 +25,26 @@ import {
   isShaken,
   isStunned,
   isVulnerable,
-  hasEffect,
-  activeEffectsList,
   resolveFear,
   resolveInjury,
-  hasInjury,
-  injuryPenalty,
   savageMachine
 } from "./machine"
-import { damageMargin as dm, soakSuccesses as sk, incapRollResult as ir, injuryRoll as ij, vigorRollResult as vr, spiritRollResult as sr, healAmount as ha, athleticsRollResult as ar, escapeRollResult as er, grappleRollResult as gr, grappleEscapeRollResult as ger, pinRollResult as pr, blindedSeverity as bs, afflictionDuration as ad } from "./types"
+import {
+  afflictionDuration as ad,
+  athleticsRollResult as ar,
+  blindedSeverity as bs,
+  damageMargin as dm,
+  escapeRollResult as er,
+  grappleEscapeRollResult as ger,
+  grappleRollResult as gr,
+  healAmount as ha,
+  incapRollResult as ir,
+  injuryRoll as ij,
+  pinRollResult as pr,
+  soakSuccesses as sk,
+  spiritRollResult as sr,
+  vigorRollResult as vr
+} from "./types"
 
 // ============================================================
 // Helpers
@@ -239,7 +254,7 @@ describe("stunned recovery", () => {
     expect(snap(a).matches({ alive: { conditionTrack: { stun: "normal" } } })).toBe(true)
     expect(snap(a).matches({ alive: { conditionTrack: { vulnerability: "vulnerable" } } })).toBe(true)
     expect(snap(a).context.vulnerableTimer).toBe(1)
-    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "acting" } })).toBe(true)
 
     a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
     expect(snap(a).context.vulnerableTimer).toBe(0)
@@ -313,7 +328,7 @@ describe("shaken recovery", () => {
     expect(isShaken(snap(a))).toBe(true)
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) })
     expect(isShaken(snap(a))).toBe(false)
-    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "acting" } })).toBe(true)
   })
 
   // shakenRecoveryFailTest
@@ -322,7 +337,7 @@ describe("shaken recovery", () => {
     a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) })
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(isShaken(snap(a))).toBe(true)
-    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "acting" } })).toBe(true)
   })
 
   // bennyUnshakeTest
@@ -343,7 +358,7 @@ describe("condition timers", () => {
   // distractedOutsideTurnTest
   it("distracted outside own turn → clears at end of next own turn", () => {
     const a = createWC()
-    expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "idle" } })).toBe(true)
     a.send({ type: "APPLY_DISTRACTED" })
     expect(snap(a).context.distractedTimer).toBe(0)
 
@@ -357,7 +372,7 @@ describe("condition timers", () => {
   it("distracted during own turn → lasts through current + next turn", () => {
     const a = createWC()
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
-    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "acting" } })).toBe(true)
     a.send({ type: "APPLY_DISTRACTED" })
     expect(snap(a).context.distractedTimer).toBe(1)
 
@@ -544,7 +559,7 @@ describe("hold/interrupt", () => {
   it("go on hold from own turn", () => {
     const a = createWC()
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
-    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "acting" } })).toBe(true)
 
     a.send({ type: "GO_ON_HOLD" })
     expect(isOnHold(snap(a))).toBe(true)
@@ -559,18 +574,18 @@ describe("hold/interrupt", () => {
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     // Still shaken (spirit fail)
     expect(isShaken(snap(a))).toBe(true)
-    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "acting" } })).toBe(true)
 
     a.send({ type: "GO_ON_HOLD" })
     expect(isOnHold(snap(a))).toBe(false) // Blocked
-    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "acting" } })).toBe(true)
   })
 
   it("cannot go on hold when stunned", () => {
     const a = createWC()
     a.send({ type: "APPLY_STUNNED" })
     a.send({ type: "START_OF_TURN", vigorRoll: vr(1), spiritRoll: sr(0) }) // recover stunned
-    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "acting" } })).toBe(true)
     // Now vulnerable but not stunned — should be able to hold
     a.send({ type: "GO_ON_HOLD" })
     expect(isOnHold(snap(a))).toBe(true)
@@ -583,7 +598,7 @@ describe("hold/interrupt", () => {
     expect(isOnHold(snap(a))).toBe(true)
 
     a.send({ type: "INTERRUPT", athleticsRoll: ar(1) })
-    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "acting" } })).toBe(true)
     expect(snap(a).context.ownTurn).toBe(true)
     expect(snap(a).context.interruptedSuccessfully).toBe(true)
   })
@@ -594,7 +609,7 @@ describe("hold/interrupt", () => {
     a.send({ type: "GO_ON_HOLD" })
 
     a.send({ type: "INTERRUPT", athleticsRoll: ar(0) })
-    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "acting" } })).toBe(true)
     expect(snap(a).context.ownTurn).toBe(true)
     expect(snap(a).context.interruptedSuccessfully).toBe(false)
   })
@@ -606,7 +621,7 @@ describe("hold/interrupt", () => {
     expect(isOnHold(snap(a))).toBe(true)
 
     a.send({ type: "ACT_FROM_HOLD" })
-    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "acting" } })).toBe(true)
     expect(snap(a).context.ownTurn).toBe(true)
     expect(snap(a).context.onHold).toBe(false)
   })
@@ -614,11 +629,11 @@ describe("hold/interrupt", () => {
   it("act from hold blocked when not on hold", () => {
     const a = createWC()
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
-    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "acting" } })).toBe(true)
 
     a.send({ type: "ACT_FROM_HOLD" })
     // Should still be in ownTurn, event ignored
-    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "acting" } })).toBe(true)
   })
 
   it("cannot go on hold again after acting from hold (same round)", () => {
@@ -628,11 +643,11 @@ describe("hold/interrupt", () => {
     expect(isOnHold(snap(a))).toBe(true)
 
     a.send({ type: "ACT_FROM_HOLD" })
-    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "acting" } })).toBe(true)
 
     // Try to go on hold again — blocked by holdUsed
     a.send({ type: "GO_ON_HOLD" })
-    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "acting" } })).toBe(true)
     expect(isOnHold(snap(a))).toBe(false)
   })
 
@@ -643,10 +658,10 @@ describe("hold/interrupt", () => {
     expect(isOnHold(snap(a))).toBe(true)
 
     a.send({ type: "INTERRUPT", athleticsRoll: ar(1) })
-    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "acting" } })).toBe(true)
 
     a.send({ type: "GO_ON_HOLD" })
-    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "acting" } })).toBe(true)
     expect(isOnHold(snap(a))).toBe(false)
   })
 
@@ -675,7 +690,7 @@ describe("hold/interrupt", () => {
     a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(isShaken(snap(a))).toBe(true)
     expect(isOnHold(snap(a))).toBe(false)
-    expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "idle" } })).toBe(true)
   })
 
   it("hold lost when stunned applied", () => {
@@ -686,17 +701,18 @@ describe("hold/interrupt", () => {
 
     a.send({ type: "APPLY_STUNNED" })
     expect(isOnHold(snap(a))).toBe(false)
-    expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "idle" } })).toBe(true)
   })
 
-  it("end of turn from hold → othersTurn, hold persists in context", () => {
+  it("end of turn from hold → idle, hold persists in context", () => {
     const a = createWC()
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     a.send({ type: "GO_ON_HOLD" })
 
     a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
-    expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "idle" } })).toBe(true)
     expect(snap(a).context.onHold).toBe(true)
+    expect(snap(a).context.ownTurn).toBe(false)
   })
 
   it("hold persists across multiple rounds via START_OF_TURN", () => {
@@ -706,13 +722,13 @@ describe("hold/interrupt", () => {
     expect(isOnHold(snap(a))).toBe(true)
 
     a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
-    expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "idle" } })).toBe(true)
     expect(snap(a).context.onHold).toBe(true)
 
-    // New round → back to onHold state
+    // New round → back to holdingAction
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(isOnHold(snap(a))).toBe(true)
-    expect(snap(a).matches({ alive: { turnPhase: "onHold" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "holdingAction" } })).toBe(true)
   })
 
   it("end of turn from hold does NOT tick distracted timer", () => {
@@ -730,18 +746,18 @@ describe("hold/interrupt", () => {
     expect(snap(a).context.distractedTimer).toBe(0) // NOT ticked
   })
 
-  it("startOfTurn while on hold → back to onHold state", () => {
+  it("startOfTurn while on hold → back to holdingAction", () => {
     const a = createWC()
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     a.send({ type: "GO_ON_HOLD" })
     expect(isOnHold(snap(a))).toBe(true)
 
     a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
-    expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "idle" } })).toBe(true)
 
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(isOnHold(snap(a))).toBe(true)
-    expect(snap(a).matches({ alive: { turnPhase: "onHold" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "holdingAction" } })).toBe(true)
   })
 
   it("hold lost on fatigue incapacitation", () => {
@@ -756,6 +772,19 @@ describe("hold/interrupt", () => {
     a.send({ type: "APPLY_FATIGUE" })
     expect(snap(a).matches({ alive: { fatigueTrack: "incapByFatigue" } })).toBe(true)
     expect(isOnHold(snap(a))).toBe(false)
+  })
+
+  it("hold lost on wound incapacitation", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "GO_ON_HOLD" })
+    expect(isOnHold(snap(a))).toBe(true)
+
+    // Deal enough damage to incapacitate (4+ wounds on WC with 3 max)
+    a.send({ type: "TAKE_DAMAGE", margin: dm(16), soakSuccesses: sk(0), incapRoll: ir(1) })
+    expect(snap(a).matches({ alive: { damageTrack: "incapacitated" } })).toBe(true)
+    expect(isOnHold(snap(a))).toBe(false)
+    expect(snap(a).matches({ alive: { turnPhase: "idle" } })).toBe(true)
   })
 
   it("distracted timer preserved across multiple rounds while on hold", () => {
@@ -955,7 +984,7 @@ describe("restraint", () => {
 describe("grapple", () => {
   it("grapple attempt success → grabbed + vulnerable only (not distracted)", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    a.send({ type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(1) })
     expect(isGrabbed(snap(a))).toBe(true)
     expect(isGrappled(snap(a))).toBe(true)
     expect(isDistracted(snap(a))).toBe(false)
@@ -964,7 +993,7 @@ describe("grapple", () => {
 
   it("grapple attempt raise → pinned + distracted + vulnerable", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(2) })
+    a.send({ type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(2) })
     expect(isPinned(snap(a))).toBe(true)
     expect(isGrappled(snap(a))).toBe(true)
     expect(isDistracted(snap(a))).toBe(true)
@@ -973,13 +1002,13 @@ describe("grapple", () => {
 
   it("grapple attempt fail → still free", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(0) })
+    a.send({ type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(0) })
     expect(isGrappled(snap(a))).toBe(false)
   })
 
   it("grapple escape from grabbed → free", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    a.send({ type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(1) })
     expect(isGrabbed(snap(a))).toBe(true)
     a.send({ type: "GRAPPLE_ESCAPE", rollResult: ger(1) })
     expect(isGrappled(snap(a))).toBe(false)
@@ -987,14 +1016,14 @@ describe("grapple", () => {
 
   it("grapple escape fail → still grabbed", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    a.send({ type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(1) })
     a.send({ type: "GRAPPLE_ESCAPE", rollResult: ger(0) })
     expect(isGrabbed(snap(a))).toBe(true)
   })
 
   it("pin attempt success → pinned", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    a.send({ type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(1) })
     expect(isGrabbed(snap(a))).toBe(true)
     a.send({ type: "PIN_ATTEMPT", rollResult: pr(1) })
     expect(isPinned(snap(a))).toBe(true)
@@ -1002,7 +1031,7 @@ describe("grapple", () => {
 
   it("grapple escape from pinned: raise → free", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(2) })
+    a.send({ type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(2) })
     expect(isPinned(snap(a))).toBe(true)
     a.send({ type: "GRAPPLE_ESCAPE", rollResult: ger(2) })
     expect(isGrappled(snap(a))).toBe(false)
@@ -1011,7 +1040,7 @@ describe("grapple", () => {
 
   it("grapple escape from pinned: success → step down to grabbed", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(2) })
+    a.send({ type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(2) })
     expect(isPinned(snap(a))).toBe(true)
     a.send({ type: "GRAPPLE_ESCAPE", rollResult: ger(1) })
     expect(isGrabbed(snap(a))).toBe(true)
@@ -1024,14 +1053,14 @@ describe("grapple", () => {
     a.send({ type: "APPLY_ENTANGLED" })
     expect(isEntangled(snap(a))).toBe(true)
     // Grapple from entangled state — replaces restraint
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    a.send({ type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(1) })
     expect(isGrabbed(snap(a))).toBe(true)
     expect(isEntangled(snap(a))).toBe(false)
   })
 
   it("grapple clears on incapacitation", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    a.send({ type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(1) })
     expect(isGrabbed(snap(a))).toBe(true)
     a.send({ type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) })
     a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(1) })
@@ -1040,7 +1069,7 @@ describe("grapple", () => {
 
   it("APPLY_BOUND from grabbed → transitions to bound", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    a.send({ type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(1) })
     expect(isGrabbed(snap(a))).toBe(true)
     a.send({ type: "APPLY_BOUND" })
     expect(isBound(snap(a))).toBe(true)
@@ -1049,7 +1078,7 @@ describe("grapple", () => {
 
   it("APPLY_BOUND from pinned → transitions to bound", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(2) })
+    a.send({ type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(2) })
     expect(isPinned(snap(a))).toBe(true)
     a.send({ type: "APPLY_BOUND" })
     expect(isBound(snap(a))).toBe(true)
@@ -1058,17 +1087,17 @@ describe("grapple", () => {
 
   it("grapple blocked when already grappled", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    a.send({ type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(1) })
     expect(isGrabbed(snap(a))).toBe(true)
     // Another grapple attempt while already grabbed — no handler on grabbed state
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    a.send({ type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(1) })
     expect(isGrabbed(snap(a))).toBe(true)
     expect(isPinned(snap(a))).toBe(false)
   })
 
   it("grapple conditions persist across turn boundaries", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    a.send({ type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(1) })
     expect(isGrabbed(snap(a))).toBe(true)
     expect(isVulnerable(snap(a))).toBe(true)
 
@@ -1084,7 +1113,7 @@ describe("grapple", () => {
 
   it("grapple clears on death", () => {
     const b = createExtra()
-    b.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    b.send({ type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(1) })
     expect(isGrabbed(snap(b))).toBe(true)
     expect(isGrappled(snap(b))).toBe(true)
     b.send({ type: "TAKE_DAMAGE", margin: dm(4), soakSuccesses: sk(0), incapRoll: ir(0) })
@@ -1094,7 +1123,7 @@ describe("grapple", () => {
 
   it("pin fail → still grabbed", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    a.send({ type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(1) })
     expect(isGrabbed(snap(a))).toBe(true)
     a.send({ type: "PIN_ATTEMPT", rollResult: pr(0) })
     expect(isGrabbed(snap(a))).toBe(true)
@@ -1110,7 +1139,7 @@ describe("grapple", () => {
     expect(snap(a).context.vulnerableTimer).toBe(99)
 
     // Grapple replaces entangled → grabbed
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    a.send({ type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(1) })
     expect(isGrabbed(snap(a))).toBe(true)
     expect(isEntangled(snap(a))).toBe(false)
     // Vulnerable persists: grabbed state also blocks vulnerable clear
@@ -1234,12 +1263,12 @@ describe("blinded", () => {
     a.send({ type: "GO_ON_HOLD" })
     expect(isOnHold(snap(a))).toBe(true)
 
-    // END_OF_TURN while on hold → othersTurn, no recovery
+    // END_OF_TURN while on hold → idle, no recovery
     a.send({ type: "END_OF_TURN", vigorRoll: vr(2) })
     expect(isFullyBlinded(snap(a))).toBe(true)
     expect(snap(a).context.onHold).toBe(true)
 
-    // New round → back to onHold, still blinded
+    // New round → back to holdingAction, still blinded
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(isFullyBlinded(snap(a))).toBe(true)
     expect(isOnHold(snap(a))).toBe(true)
@@ -1649,7 +1678,7 @@ describe("Defending (Full Defense)", () => {
   it("defend during own turn sets defending", () => {
     const a = createWC()
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
-    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "acting" } })).toBe(true)
     a.send({ type: "DEFEND" })
     expect(isDefending(snap(a))).toBe(true)
   })
@@ -1687,7 +1716,7 @@ describe("Defending (Full Defense)", () => {
 
   it("cannot defend during others' turn", () => {
     const a = createWC()
-    expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
+    expect(snap(a).matches({ alive: { turnPhase: "idle" } })).toBe(true)
     a.send({ type: "DEFEND" })
     expect(isDefending(snap(a))).toBe(false)
   })

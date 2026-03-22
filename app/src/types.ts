@@ -10,18 +10,17 @@ export function wounds(n: number): Wounds {
   return Wounds.make(Math.max(0, Math.min(3, Math.floor(n))) as 0 | 1 | 2 | 3)
 }
 
-// 99 = persistent sentinel ("until freed", e.g., entangled → vulnerable)
-const ConditionTimer = Schema.Literal(-1, 0, 1, 99).pipe(Schema.brand("ConditionTimer"))
+// -1 = expired/inactive, 0+ = turns until expiry, 99 = persistent ("until freed")
+const ConditionTimer = Schema.Number.pipe(Schema.int(), Schema.greaterThanOrEqualTo(-1), Schema.brand("ConditionTimer"))
 type ConditionTimer = typeof ConditionTimer.Type
 export function conditionTimer(n: number): ConditionTimer {
-  if (n >= 99) return ConditionTimer.make(99)
-  return ConditionTimer.make(Math.max(-1, Math.min(1, Math.floor(n))) as -1 | 0 | 1)
+  return ConditionTimer.make(Math.max(-1, Math.floor(n)))
 }
 
 const MaxWounds = Schema.Literal(1, 3).pipe(Schema.brand("MaxWounds"))
 type MaxWounds = typeof MaxWounds.Type
 export function maxWounds(n: number): MaxWounds {
-  return MaxWounds.make((n >= 3 ? 3 : 1) as 1 | 3)
+  return MaxWounds.make(n >= 3 ? 3 : 1)
 }
 
 // ============================================================
@@ -105,7 +104,7 @@ export function pinRollResult(n: number): PinRollResult {
 const BlindedSeverity = Schema.Literal(2, 4).pipe(Schema.brand("BlindedSeverity"))
 type BlindedSeverity = typeof BlindedSeverity.Type
 export function blindedSeverity(n: number): BlindedSeverity {
-  return BlindedSeverity.make((n >= 4 ? 4 : 2) as 2 | 4)
+  return BlindedSeverity.make(n >= 4 ? 4 : 2)
 }
 
 const AfflictionDuration = Schema.Number.pipe(Schema.brand("AfflictionDuration"))
