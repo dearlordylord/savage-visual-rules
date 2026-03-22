@@ -695,6 +695,41 @@ describe("restraint", () => {
     expect(isDead(snap(b))).toBe(true)
     expect(isRestrained(snap(b))).toBe(false)
   })
+
+  it("entangled sets vulnerable (SWADE: vulnerable until freed)", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_ENTANGLED" })
+    expect(isEntangled(snap(a))).toBe(true)
+    expect(isVulnerable(snap(a))).toBe(true)
+    expect(snap(a).context.vulnerableTimer).toBe(99)
+  })
+
+  it("escape from entangled clears vulnerable", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_ENTANGLED" })
+    expect(isVulnerable(snap(a))).toBe(true)
+    a.send({ type: "ESCAPE_ATTEMPT", rollResult: er(1) })
+    expect(isRestrained(snap(a))).toBe(false)
+    expect(isVulnerable(snap(a))).toBe(false)
+    expect(snap(a).context.vulnerableTimer).toBe(-1)
+  })
+
+  it("entangled + endOfTurn: vulnerable persists (does not expire)", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_ENTANGLED" })
+    expect(isVulnerable(snap(a))).toBe(true)
+    expect(snap(a).context.vulnerableTimer).toBe(99)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "END_OF_TURN" })
+    expect(isVulnerable(snap(a))).toBe(true)
+    expect(snap(a).context.vulnerableTimer).toBe(99)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "END_OF_TURN" })
+    expect(isVulnerable(snap(a))).toBe(true)
+    expect(snap(a).context.vulnerableTimer).toBe(99)
+  })
 })
 
 // ============================================================

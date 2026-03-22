@@ -162,6 +162,7 @@ const SHAKEN_STATE = { alive: { damageTrack: { active: "shaken" as const } } }
 const OTHERS_TURN = { alive: { turnPhase: "othersTurn" as const } }
 const DAMAGE_ACTIVE = { alive: { damageTrack: "active" as const } }
 const FATIGUE_INCAP = { alive: { fatigueTrack: "incapByFatigue" as const } }
+const ENTANGLED_STATE = { alive: { restraintTrack: "entangled" as const } }
 const BOUND_STATE = { alive: { restraintTrack: "bound" as const } }
 const GRABBED_STATE = { alive: { restraintTrack: "grabbed" as const } }
 const PINNED_STATE = { alive: { restraintTrack: "pinned" as const } }
@@ -293,6 +294,12 @@ export const savageMachine = setup({
     setVulnerableTimer: assign(({ context }) => ({
       vulnerableTimer: conditionTimer(Math.max(context.vulnerableTimer, context.ownTurn ? 1 : 0))
     })),
+    setVulnerableTimerPersistent: assign({
+      vulnerableTimer: conditionTimer(99)
+    }),
+    clearVulnerableTimer: assign({
+      vulnerableTimer: conditionTimer(-1)
+    }),
     setVulnerableTimerRecoverySuccess: assign(({ context }) => ({
       vulnerableTimer: conditionTimer(Math.max(context.vulnerableTimer, 1))
     })),
@@ -301,7 +308,8 @@ export const savageMachine = setup({
     })),
     tickTimers: assign(({ context }) => ({
       distractedTimer: tickTimer(context.distractedTimer),
-      vulnerableTimer: tickTimer(context.vulnerableTimer)
+      // Persistent vulnerable (sentinel 99, e.g., entangled) is not ticked
+      vulnerableTimer: context.vulnerableTimer >= 99 ? context.vulnerableTimer : tickTimer(context.vulnerableTimer)
     })),
     setOwnTurnTrue: assign({ ownTurn: true }),
     setOwnTurnFalse: assign({ ownTurn: false }),
@@ -648,6 +656,11 @@ export const savageMachine = setup({
                       target: "vulnerable",
                       actions: ["setVulnerableTimer"]
                     },
+                    APPLY_ENTANGLED: {
+                      guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
+                      target: "vulnerable",
+                      actions: ["setVulnerableTimerPersistent"]
+                    },
                     APPLY_BOUND: {
                       guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
                       target: "vulnerable",
@@ -681,6 +694,10 @@ export const savageMachine = setup({
                       guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
                       actions: ["setVulnerableTimer"]
                     },
+                    APPLY_ENTANGLED: {
+                      guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
+                      actions: ["setVulnerableTimerPersistent"]
+                    },
                     APPLY_BOUND: {
                       guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
                       actions: ["setVulnerableTimer"]
@@ -693,6 +710,7 @@ export const savageMachine = setup({
                   always: {
                     guard: and([
                       "vulnerableTimerExpired",
+                      not(stateIn(ENTANGLED_STATE)),
                       not(stateIn(BOUND_STATE)),
                       not(stateIn(GRABBED_STATE)),
                       not(stateIn(PINNED_STATE))
@@ -884,7 +902,8 @@ export const savageMachine = setup({
               on: {
                 APPLY_ENTANGLED: {
                   guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
-                  target: "entangled"
+                  target: "entangled",
+                  actions: ["setVulnerableTimerPersistent"]
                 },
                 APPLY_BOUND: {
                   guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
@@ -910,7 +929,8 @@ export const savageMachine = setup({
                 },
                 ESCAPE_ATTEMPT: {
                   guard: "escapeSuccess",
-                  target: "free"
+                  target: "free",
+                  actions: ["clearVulnerableTimer"]
                 },
                 GRAPPLE_ATTEMPT: [
                   {
