@@ -1101,4 +1101,98 @@ module savageTest {
     .then(doDismissEffect("armor"))
     .fail()
   }
+
+  // ============================================================
+  // Defending (Full Defense) tests
+  // ============================================================
+
+  /// Defend during own turn sets defending = true
+  run defendDuringOwnTurnTest = {
+    initWildCard
+    .then(doStartOfTurn(0, 0))
+    .expect(state.ownTurn)
+    .then(doDefend)
+    .expect(state.defending)
+  }
+
+  /// Defending clears at start of next turn
+  run defendClearsAtNextStartOfTurnTest = {
+    initWildCard
+    .then(doStartOfTurn(0, 0))
+    .then(doDefend)
+    .expect(state.defending)
+    .then(doEndOfTurn)
+    .expect(state.defending)
+    .then(doStartOfTurn(0, 0))
+    .expect(not(state.defending))
+  }
+
+  /// Cannot defend when shaken
+  run defendBlockedWhenShakenTest = {
+    all { state' = {...FRESH_WILD_CARD, shaken: true, ownTurn: true} }
+    .then(doDefend)
+    .fail()
+  }
+
+  /// Cannot defend when stunned
+  run defendBlockedWhenStunnedTest = {
+    all { state' = {...FRESH_WILD_CARD, stunned: true, ownTurn: true, distracted: 0} }
+    .then(doDefend)
+    .fail()
+  }
+
+  /// Cannot defend during others' turn
+  run defendBlockedDuringOthersTurnTest = {
+    initWildCard
+    .expect(not(state.ownTurn))
+    .then(doDefend)
+    .fail()
+  }
+
+  /// Stunned while defending clears defending
+  run stunnedClearsDefendingTest = {
+    initWildCard
+    .then(doStartOfTurn(0, 0))
+    .then(doDefend)
+    .expect(state.defending)
+    .then(doApplyStunned)
+    .expect(state.stunned and not(state.defending))
+  }
+
+  /// Cannot go on hold while defending
+  run holdBlockedWhenDefendingTest = {
+    initWildCard
+    .then(doStartOfTurn(0, 0))
+    .then(doDefend)
+    .expect(state.defending)
+    .then(doGoOnHold)
+    .fail()
+  }
+
+  /// Cannot defend twice (idempotent guard)
+  run defendBlockedWhenAlreadyDefendingTest = {
+    initWildCard
+    .then(doStartOfTurn(0, 0))
+    .then(doDefend)
+    .expect(state.defending)
+    .then(doDefend)
+    .fail()
+  }
+
+  /// Death clears defending
+  run defendClearsOnDeathTest = {
+    initWildCard
+    .then(doStartOfTurn(0, 0))
+    .then(doDefend)
+    .expect(state.defending)
+    .then(doTakeDamage(16, 0, -1, 0))
+    .expect(state.dead and not(state.defending))
+  }
+
+  /// Incapacitation clears defending
+  run defendClearsOnIncapTest = {
+    all { state' = {...FRESH_WILD_CARD, wounds: 2, ownTurn: true, defending: true} }
+    .then(doTakeDamage(8, 0, 1, 51))
+    .expect(state.incapacitated and not(state.defending))
+  }
 }

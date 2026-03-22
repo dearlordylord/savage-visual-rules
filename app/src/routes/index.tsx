@@ -10,6 +10,7 @@ import {
   isConscious,
   isAfflicted,
   isDead,
+  isDefending,
   isDistracted,
   isBlinded,
   blindedPenalty,
@@ -299,6 +300,14 @@ const STATUS_DATA: Array<{
     effects: "–1 за каждое ранение (макс. –3) к проверкам и Шагу.",
     removal: "Лечение (в течение часа) или естественное исцеление (5 дней).",
     isActive: (snap) => snap.context.wounds > 0
+  },
+  {
+    name: "Оборона",
+    nameEn: "Defending",
+    cause: "Добровольно: персонаж тратит весь ход на защиту.",
+    effects: "+4 к Защите (Parry). Можно перемещаться (шаг), но нельзя бежать.",
+    removal: "Автоматически — в начале следующего хода.",
+    isActive: isDefending
   }
 ]
 
@@ -410,6 +419,10 @@ function StateTree({ snapshot }: { snapshot: SavageSnapshot }) {
                 label={`blinded (-4)`}
                 active={isBlinded(snapshot)}
               />
+              <StateLeaf
+                label="defending (+4 Parry)"
+                active={isDefending(snapshot)}
+              />
             </div>
           </StateRegion>
 
@@ -501,6 +514,7 @@ function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
     { label: "Distracted", value: isDistracted(snapshot) },
     { label: "Vulnerable", value: isVulnerable(snapshot) },
     { label: "Prone", value: isProne(snapshot) },
+    { label: "Defending", value: isDefending(snapshot), title: "Full Defense: +4 Parry, uses whole turn, lasts until next turn" },
     { label: "On Hold", value: isOnHold(snapshot) },
     { label: "Restrained", value: isRestrained(snapshot) },
     { label: "Grappled", value: isGrappled(snapshot) },
@@ -743,6 +757,13 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
           </EventBtn>
           <EventBtn disabled={dead} onClick={() => send({ type: "GO_ON_HOLD" })}>
             Go On Hold
+          </EventBtn>
+          <EventBtn
+            disabled={dead}
+            onClick={() => send({ type: "DEFEND" })}
+            title="Full Defense (Оборона): +4 Parry. Uses whole turn — no multi-actions. Can move at Pace, no running. Lasts until start of next turn."
+          >
+            Defend
           </EventBtn>
           <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_ENTANGLED" })}>
             Apply Entangled

@@ -8,6 +8,7 @@ import {
   isBlinded,
   isBound,
   isDead,
+  isDefending,
   isDistracted,
   isEntangled,
   isFullyBlinded,
@@ -25,7 +26,7 @@ import {
   resolveFear,
   savageMachine
 } from "./machine"
-import { margin as dm, soak as sk, incap as ir, vigor as vr, spirit as sr, heal as ha, athletics as ar, escape as er, grapple as gr, grappleEsc as ger, pin as pr, severity as bs, affDur as ad } from "./test/helpers/brands"
+import { margin as dm, soak as sk, incap as ir, injury as ij, vigor as vr, spirit as sr, heal as ha, athletics as ar, escape as er, grapple as gr, grappleEsc as ger, pin as pr, severity as bs, affDur as ad } from "./test/helpers/brands"
 
 // ============================================================
 // Helpers
@@ -1134,5 +1135,97 @@ describe("power effects", () => {
     a.send({ type: "APPLY_POWER_EFFECT", etype: "armor", duration: 0 })
     expect(activeEffectsList(snap(a))).toHaveLength(0)
     expect(hasEffect(snap(a), "armor")).toBe(false)
+  })
+})
+
+// ============================================================
+// Defending (Full Defense) tests
+// ============================================================
+
+describe("Defending (Full Defense)", () => {
+  it("defend during own turn sets defending", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
+    a.send({ type: "DEFEND" })
+    expect(isDefending(snap(a))).toBe(true)
+  })
+
+  it("defending clears at start of next turn", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "DEFEND" })
+    expect(isDefending(snap(a))).toBe(true)
+    a.send({ type: "END_OF_TURN" })
+    expect(isDefending(snap(a))).toBe(true) // persists through end of turn
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    expect(isDefending(snap(a))).toBe(false) // cleared at start of next turn
+  })
+
+  it("cannot defend when shaken", () => {
+    const a = createWC()
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) })
+    expect(isShaken(snap(a))).toBe(true)
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) }) // fail recovery
+    expect(isShaken(snap(a))).toBe(true)
+    a.send({ type: "DEFEND" })
+    expect(isDefending(snap(a))).toBe(false) // guard rejected
+  })
+
+  it("cannot defend when stunned", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_STUNNED" })
+    expect(isStunned(snap(a))).toBe(true)
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) }) // fail recovery
+    expect(isStunned(snap(a))).toBe(true)
+    a.send({ type: "DEFEND" })
+    expect(isDefending(snap(a))).toBe(false)
+  })
+
+  it("cannot defend during others' turn", () => {
+    const a = createWC()
+    expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
+    a.send({ type: "DEFEND" })
+    expect(isDefending(snap(a))).toBe(false)
+  })
+
+  it("stunned while defending clears defending", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "DEFEND" })
+    expect(isDefending(snap(a))).toBe(true)
+    a.send({ type: "APPLY_STUNNED" })
+    expect(isStunned(snap(a))).toBe(true)
+    expect(isDefending(snap(a))).toBe(false)
+  })
+
+  it("cannot go on hold while defending", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "DEFEND" })
+    expect(isDefending(snap(a))).toBe(true)
+    a.send({ type: "GO_ON_HOLD" })
+    expect(isOnHold(snap(a))).toBe(false) // guard rejected
+    expect(isDefending(snap(a))).toBe(true) // still defending
+  })
+
+  it("death clears defending", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "DEFEND" })
+    expect(isDefending(snap(a))).toBe(true)
+    a.send({ type: "TAKE_DAMAGE", margin: dm(16), soakSuccesses: sk(0), incapRoll: ir(-1) })
+    expect(isDead(snap(a))).toBe(true)
+    expect(isDefending(snap(a))).toBe(false)
+  })
+
+  it("incapacitation clears defending", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "DEFEND" })
+    expect(isDefending(snap(a))).toBe(true)
+    a.send({ type: "TAKE_DAMAGE", margin: dm(16), soakSuccesses: sk(0), incapRoll: ir(1), injuryRoll: ij(51) })
+    expect(snap(a).matches({ alive: { damageTrack: "incapacitated" } })).toBe(true)
+    expect(isDefending(snap(a))).toBe(false)
   })
 })
