@@ -12,6 +12,7 @@ import {
   isDead,
   isDistracted,
   isBlinded,
+  isFullyBlinded,
   blindedPenalty,
   isBound,
   isEntangled,
@@ -408,7 +409,7 @@ function StateTree({ snapshot }: { snapshot: SavageSnapshot }) {
               />
               <StateLeaf
                 label={`blinded (-4)`}
-                active={isBlinded(snapshot)}
+                active={isFullyBlinded(snapshot)}
               />
             </div>
           </StateRegion>
@@ -710,7 +711,7 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
 
         {/* Simple events */}
         <div className="flex flex-wrap gap-2">
-          <EventBtn disabled={dead} onClick={() => send({ type: "END_OF_TURN" })}>
+          <EventBtn disabled={dead} onClick={() => send({ type: "END_OF_TURN", vigorRoll: vigorRollResult(vigorRoll) })}>
             End of Turn
           </EventBtn>
           <EventBtn

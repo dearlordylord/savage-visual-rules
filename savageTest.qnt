@@ -141,10 +141,10 @@ module savageTest {
     .expect(state.stunned and state.distracted == 0)
     .then(doStartOfTurn(1, 0))
     .expect(not(state.stunned) and state.vulnerable == 1 and state.ownTurn)
-    .then(doEndOfTurn)
+    .then(doEndOfTurn(0))
     .expect(state.vulnerable == 0 and state.distracted == -1)
     .then(doStartOfTurn(0, 0))
-    .then(doEndOfTurn)
+    .then(doEndOfTurn(0))
     .expect(state.vulnerable == -1)
   }
 
@@ -154,7 +154,7 @@ module savageTest {
     .then(doApplyStunned)
     .then(doStartOfTurn(2, 0))
     .expect(not(state.stunned) and state.vulnerable == 0)
-    .then(doEndOfTurn)
+    .then(doEndOfTurn(0))
     .expect(state.vulnerable == -1)
   }
 
@@ -230,7 +230,7 @@ module savageTest {
     .then(doApplyDistracted)
     .expect(state.distracted == 0)
     .then(doStartOfTurn(0, 0))
-    .then(doEndOfTurn)
+    .then(doEndOfTurn(0))
     .expect(state.distracted == -1)
   }
 
@@ -241,10 +241,10 @@ module savageTest {
     .expect(state.ownTurn)
     .then(doApplyDistracted)
     .expect(state.distracted == 1)
-    .then(doEndOfTurn)
+    .then(doEndOfTurn(0))
     .expect(state.distracted == 0)
     .then(doStartOfTurn(0, 0))
-    .then(doEndOfTurn)
+    .then(doEndOfTurn(0))
     .expect(state.distracted == -1)
   }
 
@@ -350,7 +350,7 @@ module savageTest {
     .expect(state.prone)
     .then(doStartOfTurn(0, 0))
     .expect(state.prone)
-    .then(doEndOfTurn)
+    .then(doEndOfTurn(0))
     .expect(state.prone)
     .then(doStartOfTurn(0, 0))
     .expect(state.prone)
@@ -433,7 +433,7 @@ module savageTest {
     .then(doStartOfTurn(0, 0))
     .then(doGoOnHold)
     .expect(state.onHold)
-    .then(doEndOfTurn)
+    .then(doEndOfTurn(0))
     .expect(not(state.onHold) and not(state.ownTurn))
   }
 
@@ -672,10 +672,10 @@ module savageTest {
     .then(doGrappleAttempt(1, "opp1"))
     .expect(state.distracted >= 0 and state.vulnerable >= 0)
     .then(doStartOfTurn(0, 0))
-    .then(doEndOfTurn)
+    .then(doEndOfTurn(0))
     .expect(state.distracted >= 0 and state.vulnerable >= 0 and state.restrained == 2)
     .then(doStartOfTurn(0, 0))
-    .then(doEndOfTurn)
+    .then(doEndOfTurn(0))
     .expect(state.distracted >= 0 and state.vulnerable >= 0)
   }
 
@@ -730,31 +730,34 @@ module savageTest {
     .expect(state.blinded == 4)
   }
 
-  /// Blinded recovery: success steps down by 2 (4→2, 2→0)
+  /// Blinded recovery: success steps down by 2 (4→2, 2→0) at end of turn
   run blindedRecoverySuccessTest = {
     initWildCard
     .then(doApplyBlinded(4))
     .expect(state.blinded == 4)
-    .then(doStartOfTurn(1, 0))
+    .then(doStartOfTurn(0, 0))
+    .then(doEndOfTurn(1))
     .expect(state.blinded == 2)
-    .then(doEndOfTurn)
-    .then(doStartOfTurn(1, 0))
+    .then(doStartOfTurn(0, 0))
+    .then(doEndOfTurn(1))
     .expect(state.blinded == 0)
   }
 
-  /// Blinded recovery: raise clears entirely
+  /// Blinded recovery: raise clears entirely at end of turn
   run blindedRecoveryRaiseClearsTest = {
     initWildCard
     .then(doApplyBlinded(4))
-    .then(doStartOfTurn(2, 0))
+    .then(doStartOfTurn(0, 0))
+    .then(doEndOfTurn(2))
     .expect(state.blinded == 0)
   }
 
-  /// Blinded recovery: fail, no change
+  /// Blinded recovery: fail at end of turn, no change
   run blindedRecoveryFailTest = {
     initWildCard
     .then(doApplyBlinded(4))
     .then(doStartOfTurn(0, 0))
+    .then(doEndOfTurn(0))
     .expect(state.blinded == 4)
   }
 
@@ -913,10 +916,10 @@ module savageTest {
     .then(doApplyAffliction("paralytic", 1))
     .expect(state.afflictionType == "paralytic" and state.afflictionTimer == 1)
     .then(doStartOfTurn(0, 0))
-    .then(doEndOfTurn)
+    .then(doEndOfTurn(0))
     .expect(state.afflictionType == "paralytic" and state.afflictionTimer == 0)
     .then(doStartOfTurn(0, 0))
-    .then(doEndOfTurn)
+    .then(doEndOfTurn(0))
     .expect(state.afflictionType == "none" and state.afflictionTimer == -1)
   }
 
@@ -956,7 +959,7 @@ module savageTest {
     .expect(state.fatigue == 0)
     .then(doStartOfTurn(0, 0))
     .expect(state.fatigue == 1)
-    .then(doEndOfTurn)
+    .then(doEndOfTurn(0))
     .then(doStartOfTurn(0, 0))
     .expect(state.fatigue == 2)
   }
@@ -1020,7 +1023,7 @@ module savageTest {
     .then(doApplyEffect("shield", 1))
     .expect(state.activeEffects.length() == 1)
     .then(doStartOfTurn(0, 0))
-    .then(doEndOfTurn)
+    .then(doEndOfTurn(0))
     .expect(state.activeEffects.length() == 0)
   }
 
@@ -1031,10 +1034,10 @@ module savageTest {
     .then(doApplyEffect("smite", 2))
     .expect(state.activeEffects.length() == 2)
     .then(doStartOfTurn(0, 0))
-    .then(doEndOfTurn)
+    .then(doEndOfTurn(0))
     .expect(state.activeEffects.length() == 2 and state.activeEffects[0].timer == 2 and state.activeEffects[1].timer == 1)
     .then(doStartOfTurn(0, 0))
-    .then(doEndOfTurn)
+    .then(doEndOfTurn(0))
     .expect(state.activeEffects.length() == 1 and state.activeEffects[0].etype == "armor")
   }
 

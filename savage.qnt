@@ -275,27 +275,14 @@ module savage {
         s2
       }
 
-      // Blinded recovery (reuses vigorRoll): raise → clear, success → step down by 2
-      val s4 = if (s3.blinded > 0) {
-        if (vigorRoll >= 2) {
-          {...s3, blinded: 0}
-        } else if (vigorRoll >= 1) {
-          {...s3, blinded: max(0, s3.blinded - 2)}
-        } else {
-          s3
-        }
-      } else {
-        s3
-      }
-
       // Affliction per-turn effects
-      val s5 = if (s4.afflictionType == "weak") {
+      val s4 = if (s3.afflictionType == "weak") {
         // Weak: +1 fatigue
-        val r = pApplyFatigue(s4)
+        val r = pApplyFatigue(s3)
         r.newState
-      } else if (s4.afflictionType == "lethal") {
+      } else if (s3.afflictionType == "lethal") {
         // Lethal: +1 fatigue + shaken + 1 wound (can cascade to incap/death)
-        val sf = pApplyFatigue(s4)
+        val sf = pApplyFatigue(s3)
         val sw = {...sf.newState, shaken: true, wounds: sf.newState.wounds + 1}
         if (not(sw.isWildCard) and sw.wounds > 0) {
           // Extra: any wound = eliminated
@@ -308,16 +295,17 @@ module savage {
           sw
         }
       } else {
-        s4
+        s3
       }
 
-      {success: true, newState: s5}
+      {success: true, newState: s4}
     }
   }
 
-  /// End of turn: expire timed conditions, transition to others' turns.
+  /// End of turn: expire timed conditions, blinded recovery, transition to others' turns.
   /// Also handles round-end for held characters (hold expires).
-  pure def pEndOfTurn(s: State): {success: bool, newState: State} = {
+  /// vigorRoll: used for blinded recovery Vigor check.
+  pure def pEndOfTurn(s: State, vigorRoll: int): {success: bool, newState: State} = {
     if (s.onHold) {
       // Round ends, hold expires
       {success: true, newState: {...s, onHold: false}}
@@ -343,9 +331,17 @@ module savage {
         if (e.timer - 1 > 0) acc.append({etype: e.etype, timer: e.timer - 1})
         else acc
       )
+      // Blinded recovery (Vigor check at end of turn): raise → clear, success → step down by 2
+      val newBlinded = if (s.blinded > 0) {
+        if (vigorRoll >= 2) 0
+        else if (vigorRoll >= 1) max(0, s.blinded - 2)
+        else s.blinded
+      } else {
+        s.blinded
+      }
       {success: true, newState: {...s, ownTurn: false, distracted: nd, vulnerable: nv,
         afflictionTimer: newAffTimer, afflictionType: newAffType,
-        activeEffects: tickedEffects}}
+        activeEffects: tickedEffects, blinded: newBlinded}}
     }
   }
 
@@ -438,7 +434,7 @@ module savage {
 
   /// Drop prone voluntarily. Guard: must be active.
   pure def pDropProne(s: State): {success: bool, newState: State} = {
-    if (not(s.isActive())) {
+    if (not(s.isConscious())) {
       {success: false, newState: s}
     } else {
       {success: true, newState: {...s, prone: true}}
@@ -447,7 +443,7 @@ module savage {
 
   /// Stand up from prone. Guard: must be active.
   pure def pStandUp(s: State): {success: bool, newState: State} = {
-    if (not(s.isActive())) {
+    if (not(s.isConscious())) {
       {success: false, newState: s}
     } else {
       {success: true, newState: {...s, prone: false}}
@@ -457,7 +453,7 @@ module savage {
   /// Go on hold: yield current turn, wait for opportunity.
   /// Guard: must be on own turn, not shaken, not stunned, active.
   pure def pGoOnHold(s: State): {success: bool, newState: State} = {
-    if (not(s.ownTurn) or s.shaken or s.stunned or not(s.isActive())) {
+    if (not(s.ownTurn) or s.shaken or s.stunned or not(s.isConscious())) {
       {success: false, newState: s}
     } else {
       {success: true, newState: {...s, ownTurn: false, onHold: true}}
@@ -476,19 +472,19 @@ module savage {
     }
   }
 
-  /// Apply entangled. Guard: isActive. Sets restrained = max(restrained, 0).
+  /// Apply entangled. Guard: isConscious. Sets restrained = max(restrained, 0).
   pure def pApplyEntangled(s: State): {success: bool, newState: State} = {
-    if (not(s.isActive())) {
+    if (not(s.isConscious())) {
       {success: false, newState: s}
     } else {
       {success: true, newState: {...s, restrained: max(s.restrained, 0)}}
     }
   }
 
-  /// Apply bound. Guard: isActive. Sets restrained = 1.
+  /// Apply bound. Guard: isConscious. Sets restrained = 1.
   /// Also cascades: sets distracted + vulnerable timers. Clears grapple if any.
   pure def pApplyBound(s: State): {success: bool, newState: State} = {
-    if (not(s.isActive())) {
+    if (not(s.isConscious())) {
       {success: false, newState: s}
     } else {
       val timer = if (s.ownTurn) 1 else 0
@@ -527,12 +523,12 @@ module savage {
     }
   }
 
-  /// Grapple attempt by opponent. Guard: isActive, not already grappled.
+  /// Grapple attempt by opponent. Guard: isConscious, not already grappled.
   /// Mutual exclusion: grapple replaces any existing restraint (entangled/bound).
   /// success (>= 1) → grabbed, raise (>= 2) → pinned.
   /// Sets distracted + vulnerable (like bound).
   pure def pGrappleAttempt(s: State, rollResult: int, opponent: str): {success: bool, newState: State} = {
-    if (not(s.isActive()) or s.restrained >= 2 or rollResult < 1) {
+    if (not(s.isConscious()) or s.restrained >= 2 or rollResult < 1) {
       {success: false, newState: s}
     } else {
       val timer = if (s.ownTurn) 1 else 0
@@ -594,9 +590,9 @@ module savage {
   }
 
   /// Apply blinded condition. severity: 2 = impaired, 4 = blinded.
-  /// Guard: isActive. Severity only increases (max).
+  /// Guard: isConscious. Severity only increases (max).
   pure def pApplyBlinded(s: State, severity: int): {success: bool, newState: State} = {
-    if (not(s.isActive())) {
+    if (not(s.isConscious())) {
       {success: false, newState: s}
     } else {
       {success: true, newState: {...s, blinded: max(s.blinded, severity)}}
@@ -688,16 +684,16 @@ module savage {
   val timersValid = state.distracted >= -1 and state.vulnerable >= -1
 
   /// Prone only when active (not dead, not incapacitated)
-  val proneImpliesActive = state.prone implies state.isActive()
+  val proneImpliesActive = state.prone implies state.isConscious()
 
   /// Hold only when active, not shaken, not stunned
-  val holdImpliesActive = state.onHold implies (state.isActive() and not(state.shaken) and not(state.stunned))
+  val holdImpliesActive = state.onHold implies (state.isConscious() and not(state.shaken) and not(state.stunned))
 
   /// Bound/grabbed/pinned implies distracted and vulnerable
   val boundImpliesConditions = (state.restrained >= 1) implies (state.isDistracted() and state.isVulnerable())
 
   /// Restrained implies active
-  val restrainedImpliesActive = (state.restrained >= 0) implies state.isActive()
+  val restrainedImpliesActive = (state.restrained >= 0) implies state.isConscious()
 
   /// Restrained range valid (-1 to 3: free, entangled, bound, grabbed, pinned)
   val restrainedValid = state.restrained >= -1 and state.restrained <= 3
@@ -712,7 +708,7 @@ module savage {
   val blindedValid = state.blinded >= 0 and state.blinded <= 4
 
   /// Blinded implies active
-  val blindedImpliesActive = (state.blinded > 0) implies state.isActive()
+  val blindedImpliesActive = (state.blinded > 0) implies state.isConscious()
 
   /// Injuries are valid strings (all entries are recognized injury types)
   val VALID_INJURIES = Set("unmentionables", "arm", "guts_broken", "guts_battered", "guts_busted", "leg", "head_scar", "head_blinded", "head_brain_damage")
@@ -788,8 +784,8 @@ module savage {
     all { r.success, state' = r.newState }
   }
 
-  action doEndOfTurn: bool = {
-    val r = pEndOfTurn(state)
+  action doEndOfTurn(vigorRoll: int): bool = {
+    val r = pEndOfTurn(state, vigorRoll)
     all { r.success, state' = r.newState }
   }
 
@@ -943,8 +939,9 @@ module savage {
         nondet spiritRoll = 0.to(3).oneOf()
         doStartOfTurn(vigorRoll, spiritRoll),
 
-        // End of turn (expire conditions)
-        doEndOfTurn,
+        // End of turn (expire conditions + blinded recovery)
+        nondet endVigorRoll = 0.to(3).oneOf()
+        doEndOfTurn(endVigorRoll),
 
         // Spend benny to clear Shaken
         doUnshake,
