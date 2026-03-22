@@ -25,6 +25,8 @@ import {
   type InjuryType,
   injuryPenalty,
   type SavageEvent,
+  type FearResult,
+  resolveFear,
   savageMachine,
   type SavageSnapshot,
   totalPenalty
@@ -800,8 +802,85 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
             Fire
           </EventBtn>
         </div>
+
+        {/* FEAR CHECK */}
+        <FearPanel send={send} dead={dead} />
       </div>
     </section>
+  )
+}
+
+const FEAR_RESULT_LABELS: Record<FearResult, string> = {
+  ADRENALINE: "Adrenaline Rush (Joker-like bonus)",
+  APPLY_DISTRACTED: "Distracted",
+  APPLY_VULNERABLE: "Vulnerable",
+  APPLY_STUNNED: "Stunned",
+  HINDRANCE_SCAR: "Mark of Fear (scar injury)",
+  HINDRANCE_SLOWNESS: "Hindrance: Slowness",
+  PANIC_FLEE: "Panic (flee 1d6 rounds)",
+  HINDRANCE_MINOR_PHOBIA: "Hindrance: Minor Phobia",
+  HINDRANCE_MAJOR_PHOBIA: "Hindrance: Major Phobia",
+  HEART_ATTACK: "Heart Attack"
+}
+
+const FEAR_MACHINE_EVENTS: Partial<Record<FearResult, SavageEvent>> = {
+  APPLY_DISTRACTED: { type: "APPLY_DISTRACTED" },
+  APPLY_VULNERABLE: { type: "APPLY_VULNERABLE" },
+  APPLY_STUNNED: { type: "APPLY_STUNNED" }
+}
+
+function FearPanel({ send, dead }: { send: (e: SavageEvent) => void; dead: boolean }) {
+  const [fearRoll, setFearRoll] = useState(10)
+  const [fearMod, setFearMod] = useState(0)
+  const [lastResults, setLastResults] = useState<FearResult[] | null>(null)
+
+  const handleFear = () => {
+    const results = resolveFear(fearRoll, fearMod)
+    setLastResults(results)
+    for (const r of results) {
+      const ev = FEAR_MACHINE_EVENTS[r]
+      if (ev) send(ev)
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-[var(--line)] p-3">
+      <p className="mb-2 font-semibold">Fear Check</p>
+      <div className="mb-2 flex gap-3">
+        <NumInput
+          label="d20 roll"
+          value={fearRoll}
+          onChange={setFearRoll}
+          min={1}
+          max={20}
+          title="Fear Table d20 roll (1-20)."
+        />
+        <NumInput
+          label="modifier"
+          value={fearMod}
+          onChange={setFearMod}
+          min={-10}
+          max={10}
+          title="Modifier to Fear Table roll (e.g. +2 for Terror)."
+        />
+      </div>
+      <EventBtn disabled={dead} onClick={handleFear}>
+        Resolve Fear
+      </EventBtn>
+      {lastResults && (
+        <div className="mt-2 rounded border border-[var(--line)] bg-[var(--sand-soft)] p-2 text-xs">
+          <p className="mb-1 font-semibold">Result (total {fearRoll + fearMod}):</p>
+          <ul className="list-inside list-disc">
+            {lastResults.map((r, i) => (
+              <li key={i} className={FEAR_MACHINE_EVENTS[r] ? "text-[var(--lagoon-deep)]" : "text-[var(--sea-ink-soft)]"}>
+                {FEAR_RESULT_LABELS[r]}
+                {FEAR_MACHINE_EVENTS[r] ? " (applied)" : " (manual)"}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   )
 }
 
