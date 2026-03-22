@@ -18,6 +18,33 @@
 
 ---
 
+## Phase 0: Type Narrowing
+
+> Narrow broad `number` and `string` types in `machine.ts` using Effect Schema branded types.
+
+### Slice 0.1: Apply branded types from TYPING_FIX.md
+
+- Read `TYPING_FIX.md` for the full plan and implementation order
+- Define all branded types + clamping constructors in `app/src/types.ts`
+- Update `SavageContext` to use branded context fields (Wounds, ConditionTimer, MaxWounds, CharacterId)
+- Update `SavageEvent` to use branded event payload fields (VigorRollResult, SpiritRollResult, DamageMargin, etc.)
+- Update `FearResult` to literal union (not `string`)
+- Fix all `assign()` actions to use clamping constructors
+- Fix guards if needed (branded types are phantom — direct comparison should work)
+- Create test helpers in `app/src/test/helpers/brands.ts` using direct casts
+- Update all tests to use test brand factories
+- Run tests: `cd app && npx vitest run src/machine.test.ts`
+- **Do NOT modify Quint files** — this is TypeScript-only
+
+**Acceptance criteria:**
+- [ ] All existing tests pass
+- [ ] No `number` types remain for wounds, timers, maxWounds, or roll results in context/events
+- [ ] `FearResult` is a string literal union, not `string`
+- [ ] All branded constructors clamp/saturate (never throw)
+- [ ] `npm run build` succeeds (no type errors)
+
+---
+
 ## Phase 1: Prone [DONE]
 
 ### Slice 1.1: Quint spec for prone [DONE]
