@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { createActor } from "xstate"
 
 import {
+  activeEffectsList,
   afflictionType,
   canAct,
   canMove,
@@ -554,6 +555,21 @@ function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
           </div>
         </div>
       )}
+      {ctx.activeEffects.length > 0 && (
+        <div className="mt-3 border-t border-[var(--line)] pt-2">
+          <p className="mb-1 text-xs font-semibold text-[var(--sea-ink-soft)]">Active Effects</p>
+          <div className="flex flex-wrap gap-1">
+            {ctx.activeEffects.map((eff, i) => (
+              <span
+                key={`${eff.etype}-${i}`}
+                className="rounded-md bg-blue-500/15 px-2 py-0.5 text-xs font-medium text-blue-700"
+              >
+                {eff.etype} ({eff.timer})
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       {ctx.injuries.length > 0 && (
         <div className="mt-3 border-t border-[var(--line)] pt-2">
           <p className="mb-1 text-xs font-semibold text-[var(--sea-ink-soft)]">Injuries</p>
@@ -833,6 +849,9 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
 
         {/* AFFLICTION */}
         <AfflictionPanel send={send} dead={dead} afflicted={!dead && isAfflicted(snapshot)} />
+
+        {/* POWER EFFECTS */}
+        <PowerEffectPanel send={send} dead={dead} effects={snapshot.context.activeEffects} />
       </div>
     </section>
   )
@@ -952,6 +971,62 @@ function AfflictionPanel({ send, dead, afflicted }: { send: (e: SavageEvent) => 
           </EventBtn>
         )}
       </div>
+    </div>
+  )
+}
+
+const EFFECT_TYPES = ["armor", "shield", "smite", "boost", "lower_attribute", "speed", "fly"] as const
+
+function PowerEffectPanel({ send, dead, effects }: { send: (e: SavageEvent) => void; dead: boolean; effects: Array<{ etype: string; timer: number }> }) {
+  const [effectType, setEffectType] = useState("armor")
+  const [effectDur, setEffectDur] = useState(3)
+
+  return (
+    <div className="rounded-lg border border-[var(--line)] p-3">
+      <p className="mb-2 font-semibold">Power Effects</p>
+      <div className="mb-2 flex gap-3">
+        <label className="flex flex-col text-xs text-[var(--sea-ink-soft)]">
+          type
+          <select
+            className="mt-0.5 rounded border border-[var(--line)] bg-white px-2 py-1 text-sm"
+            value={effectType}
+            onChange={(e) => setEffectType(e.target.value)}
+          >
+            {EFFECT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </label>
+        <NumInput
+          label="duration"
+          value={effectDur}
+          onChange={setEffectDur}
+          min={1}
+          max={10}
+          title="Number of rounds the effect lasts."
+        />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_POWER_EFFECT", etype: effectType, duration: effectDur })}>
+          Apply
+        </EventBtn>
+        <EventBtn disabled={dead || effects.length === 0} onClick={() => send({ type: "BACKLASH" })}>
+          Backlash
+        </EventBtn>
+      </div>
+      {effects.length > 0 && (
+        <div className="mt-2 space-y-1">
+          {effects.map((eff, i) => (
+            <div key={`${eff.etype}-${i}`} className="flex items-center justify-between rounded border border-[var(--line)] px-2 py-1 text-xs">
+              <span>{eff.etype} <span className="text-[var(--sea-ink-soft)]">({eff.timer} rnd)</span></span>
+              <button
+                className="text-red-500 hover:text-red-700"
+                onClick={() => send({ type: "DISMISS_EFFECT", etype: eff.etype })}
+              >
+                dismiss
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
