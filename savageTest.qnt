@@ -189,6 +189,14 @@ module savageTest {
     .expect(not(state.stunned) and state.shaken and state.vulnerable == 1)
   }
 
+  /// Stunned causes prone (SWADE: stunned character falls prone)
+  run stunnedCausesProneTest = {
+    initWildCard
+    .expect(not(state.prone))
+    .then(doApplyStunned)
+    .expect(state.stunned and state.prone)
+  }
+
   // ============================================================
   // Shaken recovery tests
   // ============================================================

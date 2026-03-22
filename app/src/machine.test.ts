@@ -200,6 +200,15 @@ describe("incapacitation", () => {
 // ============================================================
 
 describe("stunned recovery", () => {
+  // stunnedCausesProneTest: stunned character falls prone (SWADE rule)
+  it("stunned causes prone", () => {
+    const a = createWC()
+    expect(isProne(snap(a))).toBe(false)
+    a.send({ type: "APPLY_STUNNED" })
+    expect(isStunned(snap(a))).toBe(true)
+    expect(isProne(snap(a))).toBe(true)
+  })
+
   // stunnedRecoverySuccessTest
   it("stunned recovery success → vulnerable until end of next turn", () => {
     const a = createWC()

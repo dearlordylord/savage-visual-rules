@@ -151,6 +151,9 @@ module savage {
   pure def isConscious(s: State): bool =
     not(s.dead) and not(s.incapacitated) and not(s.incapByFatigue)
 
+  /// Active: conscious and capable of being in the scene (alias for isConscious).
+  pure def isActive(s: State): bool = s.isConscious()
+
   /// Can take standard actions (not Shaken, not Stunned, and active)
   pure def canAct(s: State): bool =
     s.isConscious() and not(s.shaken) and not(s.stunned)
@@ -366,7 +369,7 @@ module savage {
     } else {
       // Timer: 1 if during own turn (survives current + next endOfTurn), 0 if others' turn
       val timer = if (s.ownTurn) 1 else 0
-      {success: true, newState: {...s, stunned: true, distracted: max(s.distracted, timer), onHold: false}}
+      {success: true, newState: {...s, stunned: true, distracted: max(s.distracted, timer), onHold: false, prone: true}}
     }
   }
 
