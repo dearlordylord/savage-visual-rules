@@ -6,7 +6,7 @@ import { createActor } from "xstate"
 import {
   canAct,
   canMove,
-  isActive,
+  isConscious,
   isDead,
   isDistracted,
   isShaken,
@@ -443,7 +443,7 @@ function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
     { label: "Vulnerable", value: isVulnerable(snapshot) },
     { label: "Can Act", value: canAct(snapshot) },
     { label: "Can Move", value: canMove(snapshot) },
-    { label: "Active", value: isActive(snapshot) },
+    { label: "Conscious", value: isConscious(snapshot) },
     { label: "Wild Card", value: ctx.isWildCard }
   ]
 

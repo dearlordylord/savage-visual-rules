@@ -534,18 +534,19 @@ export function isVulnerable(snap: SavageSnapshot): boolean {
   return snap.matches({ alive: { conditionTrack: { vulnerability: "vulnerable" } } }) || isStunned(snap)
 }
 
-export function isActive(snap: SavageSnapshot): boolean {
+/** Conscious and in the fight: not dead, not incapacitated. Does NOT imply ability to act or move. */
+export function isConscious(snap: SavageSnapshot): boolean {
   return (
     snap.matches({ alive: { damageTrack: "active" } }) && !snap.matches({ alive: { fatigueTrack: "incapByFatigue" } })
   )
 }
 
 export function canAct(snap: SavageSnapshot): boolean {
-  return isActive(snap) && !isShaken(snap) && !isStunned(snap)
+  return isConscious(snap) && !isShaken(snap) && !isStunned(snap)
 }
 
 export function canMove(snap: SavageSnapshot): boolean {
-  return isActive(snap) && !isStunned(snap)
+  return isConscious(snap) && !isStunned(snap)
 }
 
 export function totalPenalty(snap: SavageSnapshot): number {

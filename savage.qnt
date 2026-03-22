@@ -83,17 +83,18 @@ module savage {
   /// Vulnerable: from timer OR implied by Stunned
   pure def isVulnerable(s: State): bool = s.stunned or s.vulnerable >= 0
 
-  /// Not dead, not incapacitated by wounds or fatigue
-  pure def isActive(s: State): bool =
+  /// Conscious and in the fight: not dead, not incapacitated by wounds or fatigue.
+  /// Does NOT imply ability to act (Shaken) or move (Stunned) — see canAct / canMove.
+  pure def isConscious(s: State): bool =
     not(s.dead) and not(s.incapacitated) and not(s.incapByFatigue)
 
   /// Can take standard actions (not Shaken, not Stunned, and active)
   pure def canAct(s: State): bool =
-    s.isActive() and not(s.shaken) and not(s.stunned)
+    s.isConscious() and not(s.shaken) and not(s.stunned)
 
   /// Can move (Shaken allows movement, Stunned does not)
   pure def canMove(s: State): bool =
-    s.isActive() and not(s.stunned)
+    s.isConscious() and not(s.stunned)
 
   /// Total penalty to all trait rolls from wounds + fatigue
   pure def totalPenalty(s: State): int = {
@@ -236,7 +237,7 @@ module savage {
   /// Apply Stunned from external source (stun power, electroshock, creature ability).
   /// Also sets Distracted timer (Stunned implies both Distracted and Vulnerable).
   pure def pApplyStunned(s: State): {success: bool, newState: State} = {
-    if (not(s.isActive())) {
+    if (not(s.isConscious())) {
       {success: false, newState: s}
     } else {
       // Timer: 1 if during own turn (survives current + next endOfTurn), 0 if others' turn
@@ -247,7 +248,7 @@ module savage {
 
   /// Apply Distracted from external source (trick, power, special ability).
   pure def pApplyDistracted(s: State): {success: bool, newState: State} = {
-    if (not(s.isActive())) {
+    if (not(s.isConscious())) {
       {success: false, newState: s}
     } else {
       val timer = if (s.ownTurn) 1 else 0
@@ -257,7 +258,7 @@ module savage {
 
   /// Apply Vulnerable from external source (trick, power, special ability).
   pure def pApplyVulnerable(s: State): {success: bool, newState: State} = {
-    if (not(s.isActive())) {
+    if (not(s.isConscious())) {
       {success: false, newState: s}
     } else {
       val timer = if (s.ownTurn) 1 else 0
