@@ -925,6 +925,11 @@ export const savageMachine = setup({
               },
               always: [
                 {
+                  guard: not(stateIn(DAMAGE_ACTIVE)),
+                  target: "othersTurn",
+                  actions: ["clearOnHold", "setOwnTurnFalse"]
+                },
+                {
                   guard: stateIn(STUNNED_STATE),
                   target: "othersTurn",
                   actions: ["clearOnHold", "setOwnTurnFalse"]

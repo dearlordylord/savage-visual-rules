@@ -758,6 +758,19 @@ describe("hold/interrupt", () => {
     expect(isOnHold(snap(a))).toBe(false)
   })
 
+  it("hold lost on wound incapacitation", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "GO_ON_HOLD" })
+    expect(isOnHold(snap(a))).toBe(true)
+
+    // Deal enough damage to incapacitate (4+ wounds on WC with 3 max)
+    a.send({ type: "TAKE_DAMAGE", margin: dm(16), soakSuccesses: sk(0), incapRoll: ir(1) })
+    expect(snap(a).matches({ alive: { damageTrack: "incapacitated" } })).toBe(true)
+    expect(isOnHold(snap(a))).toBe(false)
+    expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
+  })
+
   it("distracted timer preserved across multiple rounds while on hold", () => {
     const a = createWC()
     // Apply distracted outside own turn → timer=0
