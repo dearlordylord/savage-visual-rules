@@ -965,6 +965,57 @@ describe("blinded", () => {
     a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(1) })
     expect(isBlinded(snap(a))).toBe(false)
   })
+
+  it("impaired cannot be downgraded by re-applying severity 2", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_BLINDED", severity: bs(2) })
+    expect(isBlinded(snap(a))).toBe(true)
+    expect(isFullyBlinded(snap(a))).toBe(false)
+    expect(blindedPenalty(snap(a))).toBe(-2)
+
+    // Re-apply severity 2 → still impaired, no downgrade
+    a.send({ type: "APPLY_BLINDED", severity: bs(2) })
+    expect(isBlinded(snap(a))).toBe(true)
+    expect(isFullyBlinded(snap(a))).toBe(false)
+    expect(blindedPenalty(snap(a))).toBe(-2)
+  })
+
+  it("blinded blocked when fatigue-incapacitated", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_FATIGUE" })
+    a.send({ type: "APPLY_FATIGUE" })
+    a.send({ type: "APPLY_FATIGUE" })
+    expect(snap(a).matches({ alive: { fatigueTrack: "incapByFatigue" } })).toBe(true)
+
+    a.send({ type: "APPLY_BLINDED", severity: bs(4) })
+    expect(isBlinded(snap(a))).toBe(false)
+    expect(blindedPenalty(snap(a))).toBe(0)
+  })
+
+  it("blinded recovery blocked on hold (end of turn doesn't tick)", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_BLINDED", severity: bs(4) })
+    expect(isFullyBlinded(snap(a))).toBe(true)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "GO_ON_HOLD" })
+    expect(isOnHold(snap(a))).toBe(true)
+
+    // END_OF_TURN while on hold → self-transition, no recovery
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(2) })
+    expect(isFullyBlinded(snap(a))).toBe(true)
+    expect(isOnHold(snap(a))).toBe(true)
+  })
+
+  it("blinded persists across turns without recovery", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_BLINDED", severity: bs(4) })
+    expect(isFullyBlinded(snap(a))).toBe(true)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) })
+    expect(isFullyBlinded(snap(a))).toBe(true)
+  })
 })
 
 // ============================================================
@@ -1190,6 +1241,53 @@ describe("afflictions", () => {
     expect(afflictionType(snap(a))).toBe("lethal")
     expect(snap(a).context.afflictionTimer).toBe(5)
   })
+
+  it("applying affliction to dead character is rejected", () => {
+    const b = createExtra()
+    b.send({ type: "TAKE_DAMAGE", margin: dm(4), soakSuccesses: sk(0), incapRoll: ir(0) })
+    expect(isDead(snap(b))).toBe(true)
+
+    b.send({ type: "APPLY_AFFLICTION", afflictionType: "paralytic", duration: ad(3) })
+    expect(isAfflicted(snap(b))).toBe(false)
+    expect(snap(b).context.afflictionTimer).toBe(-1)
+  })
+
+  it("cure affliction when healthy is rejected", () => {
+    const a = createWC()
+    expect(isAfflicted(snap(a))).toBe(false)
+    expect(snap(a).context.afflictionTimer).toBe(-1)
+
+    a.send({ type: "CURE_AFFLICTION" })
+    expect(isAfflicted(snap(a))).toBe(false)
+    expect(snap(a).context.afflictionTimer).toBe(-1)
+  })
+
+  it("sleep affliction blocks blinded recovery at end of turn", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_AFFLICTION", afflictionType: "sleep", duration: ad(5) })
+    a.send({ type: "APPLY_BLINDED", severity: bs(4) })
+    expect(isFullyBlinded(snap(a))).toBe(true)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(2) })
+    // Recovery blocked by sleep
+    expect(isFullyBlinded(snap(a))).toBe(true)
+  })
+
+  it("weak affliction: recovering fatigue does not remove the affliction", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_AFFLICTION", afflictionType: "weak", duration: ad(5) })
+    expect(isAfflicted(snap(a))).toBe(true)
+    expect(afflictionType(snap(a))).toBe("weak")
+    expect(snap(a).matches({ alive: { fatigueTrack: "fatigued" } })).toBe(true)
+
+    // Recover fatigue → fresh, but affliction persists
+    a.send({ type: "RECOVER_FATIGUE" })
+    expect(snap(a).matches({ alive: { fatigueTrack: "fresh" } })).toBe(true)
+    expect(isAfflicted(snap(a))).toBe(true)
+    expect(afflictionType(snap(a))).toBe("weak")
+    expect(snap(a).context.afflictionTimer).toBe(5)
+  })
 })
 
 // ============================================================
@@ -1284,6 +1382,24 @@ describe("power effects", () => {
     a.send({ type: "APPLY_POWER_EFFECT", etype: "armor", duration: 0 })
     expect(activeEffectsList(snap(a))).toHaveLength(0)
     expect(hasEffect(snap(a), "armor")).toBe(false)
+  })
+
+  it("applying effect to dead character is rejected", () => {
+    const b = createExtra()
+    b.send({ type: "TAKE_DAMAGE", margin: dm(4), soakSuccesses: sk(0), incapRoll: ir(0) })
+    expect(isDead(snap(b))).toBe(true)
+
+    b.send({ type: "APPLY_POWER_EFFECT", etype: "armor", duration: 3 })
+    expect(activeEffectsList(snap(b))).toHaveLength(0)
+    expect(hasEffect(snap(b), "armor")).toBe(false)
+  })
+
+  it("dismiss non-existent effect is a no-op", () => {
+    const a = createWC()
+    expect(activeEffectsList(snap(a))).toHaveLength(0)
+
+    a.send({ type: "DISMISS_EFFECT", etype: "armor" })
+    expect(activeEffectsList(snap(a))).toHaveLength(0)
   })
 })
 
