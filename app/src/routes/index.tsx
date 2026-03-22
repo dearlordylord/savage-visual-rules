@@ -727,7 +727,7 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
       <div className="space-y-3 text-sm">
         {/* TAKE_DAMAGE */}
         <div className="rounded-lg border border-[var(--line)] p-3">
-          <p className="mb-2 font-semibold">Take Damage</p>
+          <p className="mb-2 font-semibold cursor-help" title="Внешнее воздействие (в любой момент). Урон минус Стойкость = margin.">Take Damage</p>
           <div className="mb-2 flex gap-3">
             <NumInput
               label="margin"
@@ -772,7 +772,7 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
 
         {/* START_OF_TURN */}
         <div className="rounded-lg border border-[var(--line)] p-3">
-          <p className="mb-2 font-semibold">Start of Turn</p>
+          <p className="mb-2 font-semibold cursor-help" title="Начало хода персонажа. Автоматические свободные проверки: Выносливость (оглушение, истекая кровью), Характер (шок).">Start of Turn</p>
           <div className="mb-2 flex gap-3">
             <NumInput
               label="vigorRoll"
@@ -850,7 +850,7 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
         {/* INTERRUPT (visible when on hold) */}
         {onHold && (
           <div className="rounded-lg border border-[var(--line)] p-3">
-            <p className="mb-2 font-semibold">Interrupt</p>
+            <p className="mb-2 font-semibold cursor-help" title="Реакция (наготове). Встречная проверка Атлетики для прерывания чужого действия.">Interrupt</p>
             <div className="mb-2 flex gap-3">
               <NumInput
                 label="athleticsRoll"
@@ -868,7 +868,7 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
         {/* ESCAPE ATTEMPT (visible when restrained) */}
         {restrained && (
           <div className="rounded-lg border border-[var(--line)] p-3">
-            <p className="mb-2 font-semibold">Escape Attempt</p>
+            <p className="mb-2 font-semibold cursor-help" title="Действие (в свой ход). Проверка Силы (–2) или Атлетики.">Escape Attempt</p>
             <div className="mb-2 flex gap-3">
               <NumInput
                 label="rollResult"
@@ -885,7 +885,7 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
 
         {/* GRAPPLE */}
         <div className="rounded-lg border border-[var(--line)] p-3">
-          <p className="mb-2 font-semibold">Grapple</p>
+          <p className="mb-2 font-semibold cursor-help" title="Действие (в свой ход). Встречная проверка Атлетики. Высвобождение — тоже действие.">Grapple</p>
           <div className="mb-2 flex gap-3">
             <NumInput
               label="rollResult"
@@ -915,7 +915,7 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
 
         {/* HEAL */}
         <div className="rounded-lg border border-[var(--line)] p-3">
-          <p className="mb-2 font-semibold">Heal</p>
+          <p className="mb-2 font-semibold cursor-help" title="Действие (в свой ход). Проверка Лечения (в течение Золотого часа) или естественное исцеление.">Heal</p>
           <div className="mb-2">
             <NumInput
               label="amount"
@@ -980,7 +980,7 @@ function FearPanel({ send, dead }: { send: (e: SavageEvent) => void; dead: boole
 
   return (
     <div className="rounded-lg border border-[var(--line)] p-3">
-      <p className="mb-2 font-semibold">Fear Check</p>
+      <p className="mb-2 font-semibold cursor-help" title="Свободное действие (в любой момент). Проверка Характера при встрече с источником страха.">Fear Check</p>
       <div className="mb-2 flex gap-3">
         <NumInput
           label="d20 roll"
@@ -1025,7 +1025,7 @@ function AfflictionPanel({ send, snapshot, afflicted }: { send: (e: SavageEvent)
 
   return (
     <div className="rounded-lg border border-[var(--line)] p-3">
-      <p className="mb-2 font-semibold">Affliction</p>
+      <p className="mb-2 font-semibold cursor-help" title="Внешнее воздействие (яды, болезни, силы). Эффекты применяются в начале хода персонажа.">Affliction</p>
       <div className="mb-2 flex gap-3">
         <label className="flex flex-col text-xs text-[var(--sea-ink-soft)]">
           type
@@ -1074,7 +1074,7 @@ function PowerEffectPanel({ send, snapshot, effects }: { send: (e: SavageEvent) 
 
   return (
     <div className="rounded-lg border border-[var(--line)] p-3">
-      <p className="mb-2 font-semibold">Power Effects</p>
+      <p className="mb-2 font-semibold cursor-help" title="Действие (в свой ход). Активация силы; длительность в раундах. Откат (Backlash) снимает все эффекты + усталость.">Power Effects</p>
       <div className="mb-2 flex gap-3">
         <label className="flex flex-col text-xs text-[var(--sea-ink-soft)]">
           type
