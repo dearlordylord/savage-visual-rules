@@ -259,7 +259,6 @@ module savage {
       {success: true, newState: {...s, ownTurn: true, defending: false}}
     } else {
       // Active: attempt Stunned and Shaken recovery independently
-      // Defending from previous turn expires at start of new turn
       val s1 = {...s, ownTurn: true, defending: false}
 
       // Stunned recovery (Vigor check) — blocked by paralytic affliction
@@ -478,9 +477,9 @@ module savage {
   }
 
   /// Defend (Full Defense): +4 Parry, uses whole turn, lasts until start of next turn.
-  /// Guard: must be on own turn, able to act (not shaken/stunned), conscious, not already defending.
+  /// Guard: must be on own turn, able to act (not shaken/stunned), active, not sleeping, not already defending.
   pure def pDefend(s: State): {success: bool, newState: State} = {
-    if (not(s.ownTurn) or s.shaken or s.stunned or not(s.isConscious()) or s.defending) {
+    if (not(s.ownTurn) or s.shaken or s.stunned or not(s.isActive()) or s.defending or s.afflictionType == "sleep") {
       {success: false, newState: s}
     } else {
       {success: true, newState: {...s, defending: true}}

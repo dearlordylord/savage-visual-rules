@@ -1228,4 +1228,16 @@ describe("Defending (Full Defense)", () => {
     expect(snap(a).matches({ alive: { damageTrack: "incapacitated" } })).toBe(true)
     expect(isDefending(snap(a))).toBe(false)
   })
+
+  it("fatigue-incapacitation clears defending", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "APPLY_FATIGUE" })
+    a.send({ type: "APPLY_FATIGUE" })
+    a.send({ type: "DEFEND" })
+    expect(isDefending(snap(a))).toBe(true)
+    a.send({ type: "APPLY_FATIGUE" }) // exhausted → incapByFatigue
+    expect(snap(a).matches({ alive: { fatigueTrack: "incapByFatigue" } })).toBe(true)
+    expect(isDefending(snap(a))).toBe(false)
+  })
 })

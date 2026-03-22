@@ -1195,4 +1195,18 @@ module savageTest {
     .then(doTakeDamage(8, 0, 1, 51))
     .expect(state.incapacitated and not(state.defending))
   }
+
+  /// Fatigue-incapacitation clears defending
+  run defendClearsOnFatigueIncapTest = {
+    all { state' = {...FRESH_WILD_CARD, fatigue: 2, ownTurn: true, defending: true} }
+    .then(doApplyFatigue)
+    .expect(state.incapByFatigue and not(state.defending))
+  }
+
+  /// Cannot defend when sleeping
+  run defendBlockedWhenSleepingTest = {
+    all { state' = {...FRESH_WILD_CARD, ownTurn: true, afflictionType: "sleep", afflictionTimer: 3} }
+    .then(doDefend)
+    .fail()
+  }
 }

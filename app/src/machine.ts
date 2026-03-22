@@ -168,7 +168,7 @@ const GRABBED_STATE = { alive: { restraintTrack: "grabbed" as const } }
 const PINNED_STATE = { alive: { restraintTrack: "pinned" as const } }
 const PARALYTIC_STATE = { alive: { afflictionTrack: { afflicted: "paralytic" as const } } }
 const SLEEP_STATE = { alive: { afflictionTrack: { afflicted: "sleep" as const } } }
-const OWN_TURN_STATE = { alive: { turnPhase: "ownTurn" as const } }
+const OWN_TURN = { alive: { turnPhase: "ownTurn" as const } }
 const DEFENDING_STATE = { alive: { conditionTrack: { defense: "defending" as const } } }
 
 // ============================================================
@@ -774,7 +774,7 @@ export const savageMachine = setup({
                         not(stateIn(STUNNED_STATE)),
                         not(stateIn(SHAKEN_STATE)),
                         not(stateIn(SLEEP_STATE)),
-                        stateIn(OWN_TURN_STATE)
+                        stateIn(OWN_TURN)
                       ]),
                       target: "defending"
                     }
@@ -789,7 +789,8 @@ export const savageMachine = setup({
                   },
                   always: [
                     { guard: not(stateIn(DAMAGE_ACTIVE)), target: "notDefending" },
-                    { guard: stateIn(STUNNED_STATE), target: "notDefending" }
+                    { guard: stateIn(STUNNED_STATE), target: "notDefending" },
+                    { guard: stateIn(FATIGUE_INCAP), target: "notDefending" }
                   ]
                 }
               }
