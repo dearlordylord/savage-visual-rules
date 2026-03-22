@@ -155,6 +155,15 @@ function asAffliction(event: SavageEvent) {
 function asEndOfTurn(event: SavageEvent) {
   return event as Extract<SavageEvent, { type: "END_OF_TURN" }>
 }
+function asBlinded(event: SavageEvent) {
+  return event as Extract<SavageEvent, { type: "APPLY_BLINDED" }>
+}
+function asPowerEffect(event: SavageEvent) {
+  return event as Extract<SavageEvent, { type: "APPLY_POWER_EFFECT" }>
+}
+function asDismissEffect(event: SavageEvent) {
+  return event as Extract<SavageEvent, { type: "DISMISS_EFFECT" }>
+}
 
 // ============================================================
 // State path constants
@@ -263,8 +272,7 @@ export const savageMachine = setup({
     pinSuccess: ({ event }) => asPin(event).rollResult >= 1,
 
     // --- Blinded guards ---
-    blindedSeverityFull: ({ event }) =>
-      (event as Extract<SavageEvent, { type: "APPLY_BLINDED" }>).severity === 4,
+    blindedSeverityFull: ({ event }) => asBlinded(event).severity === 4,
 
     // --- Affliction guards ---
     afflictionParalytic: ({ event }) => asAffliction(event).afflictionType === "paralytic",
@@ -282,8 +290,7 @@ export const savageMachine = setup({
 
     // --- Power effect guards ---
     hasActiveEffects: ({ context }) => context.activeEffects.length > 0,
-    durationPositive: ({ event }) =>
-      (event as Extract<SavageEvent, { type: "APPLY_POWER_EFFECT" }>).duration > 0
+    durationPositive: ({ event }) => asPowerEffect(event).duration > 0
   },
   actions: {
     addWounds: assign(({ context, event }) => {
@@ -345,11 +352,11 @@ export const savageMachine = setup({
       return {}
     }),
     applyPowerEffect: assign(({ context, event }) => {
-      const e = event as Extract<SavageEvent, { type: "APPLY_POWER_EFFECT" }>
+      const e = asPowerEffect(event)
       return { activeEffects: [...context.activeEffects, { etype: e.etype, timer: e.duration }] }
     }),
     dismissEffect: assign(({ context, event }) => {
-      const e = event as Extract<SavageEvent, { type: "DISMISS_EFFECT" }>
+      const e = asDismissEffect(event)
       let found = false
       return { activeEffects: context.activeEffects.filter(eff => {
         if (!found && eff.etype === e.etype) { found = true; return false }
@@ -357,13 +364,12 @@ export const savageMachine = setup({
       })}
     }),
     backlashClearEffects: assign({ activeEffects: [] }),
-    raiseBacklashFatigue: raise({ type: "APPLY_FATIGUE" }),
     tickEffectTimers: assign(({ context }) => ({
       activeEffects: context.activeEffects
         .map(e => ({ ...e, timer: e.timer - 1 }))
         .filter(e => e.timer > 0)
     })),
-    raiseApplyFatigue: raise({ type: "APPLY_FATIGUE" }),
+    raiseFatigue: raise({ type: "APPLY_FATIGUE" }),
     raiseLethalTick: raise({ type: "_LETHAL_TICK" }),
     raiseDropProne: raise({ type: "DROP_PRONE" }),
     lethalAddWound: assign(({ context }) => ({
@@ -392,7 +398,7 @@ export const savageMachine = setup({
       on: {
         APPLY_POWER_EFFECT: { guard: "durationPositive", actions: ["applyPowerEffect"] },
         DISMISS_EFFECT: { actions: ["dismissEffect"] },
-        BACKLASH: { guard: "hasActiveEffects", actions: ["backlashClearEffects", "raiseBacklashFatigue"] }
+        BACKLASH: { guard: "hasActiveEffects", actions: ["backlashClearEffects", "raiseFatigue"] }
       },
       states: {
         // ========================================
@@ -1070,7 +1076,7 @@ export const savageMachine = setup({
               on: {
                 APPLY_AFFLICTION: [
                   { guard: "afflictionParalytic", target: "afflicted.paralytic", actions: ["setAfflictionTimer"] },
-                  { guard: "afflictionWeak", target: "afflicted.weak", actions: ["setAfflictionTimer", "raiseApplyFatigue"] },
+                  { guard: "afflictionWeak", target: "afflicted.weak", actions: ["setAfflictionTimer", "raiseFatigue"] },
                   { guard: "afflictionLethal", target: "afflicted.lethal", actions: ["setAfflictionTimer", "raiseLethalTick"] },
                   { guard: "afflictionSleep", target: "afflicted.sleep", actions: ["setAfflictionTimer"] }
                 ]
@@ -1082,7 +1088,7 @@ export const savageMachine = setup({
                 CURE_AFFLICTION: { target: "healthy", actions: ["clearAfflictionTimer"] },
                 APPLY_AFFLICTION: [
                   { guard: "afflictionParalytic", target: ".paralytic", actions: ["setAfflictionTimer"] },
-                  { guard: "afflictionWeak", target: ".weak", actions: ["setAfflictionTimer", "raiseApplyFatigue"] },
+                  { guard: "afflictionWeak", target: ".weak", actions: ["setAfflictionTimer", "raiseFatigue"] },
                   { guard: "afflictionLethal", target: ".lethal", actions: ["setAfflictionTimer", "raiseLethalTick"] },
                   { guard: "afflictionSleep", target: ".sleep", actions: ["setAfflictionTimer"] }
                 ]
