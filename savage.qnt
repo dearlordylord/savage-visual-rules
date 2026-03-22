@@ -288,30 +288,8 @@ module savage {
         s3
       }
 
-      // Affliction per-turn effects
-      val s5 = if (s4.afflictionType == "weak") {
-        // Weak: +1 fatigue
-        val r = pApplyFatigue(s4)
-        r.newState
-      } else if (s4.afflictionType == "lethal") {
-        // Lethal: +1 fatigue + shaken + 1 wound (can cascade to incap/death)
-        val sf = pApplyFatigue(s4)
-        val sw = {...sf.newState, shaken: true, wounds: sf.newState.wounds + 1}
-        if (not(sw.isWildCard) and sw.wounds > 0) {
-          // Extra: any wound = eliminated
-          die(sw)
-        } else if (sw.wounds > sw.maxWounds) {
-          // Wild Card: exceeds max — incapacitate (no incapRoll for affliction damage)
-          {...sw, wounds: sw.maxWounds, incapacitated: true, bleedingOut: true,
-           stunned: false, prone: false, onHold: false, restrained: -1, grappledBy: "", blinded: 0}
-        } else {
-          sw
-        }
-      } else {
-        s4
-      }
-
-      {success: true, newState: s5}
+      // No per-turn affliction damage — effects are one-time at application (SWADE)
+      {success: true, newState: s4}
     }
   }
 
@@ -333,19 +311,27 @@ module savage {
                else if (s.vulnerable > 0) s.vulnerable - 1
                else if (s.vulnerable == 0) -1
                else -1
-      // Tick affliction timer
+      // Tick affliction timer; lethal expiry → death
       val newAffTimer = if (s.afflictionTimer > 0) s.afflictionTimer - 1
                         else if (s.afflictionTimer == 0) -1
                         else -1
-      val newAffType = if (newAffTimer == -1 and s.afflictionTimer >= 0) "none" else s.afflictionType
+      val afflictionExpiring = newAffTimer == -1 and s.afflictionTimer >= 0
+      val newAffType = if (afflictionExpiring) "none" else s.afflictionType
       // Tick power effect timers and remove expired
       val tickedEffects = s.activeEffects.foldl(List(), (acc, e) =>
         if (e.timer - 1 > 0) acc.append({etype: e.etype, timer: e.timer - 1})
         else acc
       )
-      {success: true, newState: {...s, ownTurn: false, distracted: nd, vulnerable: nv,
-        afflictionTimer: newAffTimer, afflictionType: newAffType,
-        activeEffects: tickedEffects}}
+      // Lethal timer expiry → death (SWADE: dies in 2d6 rounds if untreated)
+      if (afflictionExpiring and s.afflictionType == "lethal") {
+        {success: true, newState: die({...s, ownTurn: false, distracted: nd, vulnerable: nv,
+          afflictionTimer: newAffTimer, afflictionType: newAffType,
+          activeEffects: tickedEffects})}
+      } else {
+        {success: true, newState: {...s, ownTurn: false, distracted: nd, vulnerable: nv,
+          afflictionTimer: newAffTimer, afflictionType: newAffType,
+          activeEffects: tickedEffects}}
+      }
     }
   }
 
@@ -438,7 +424,7 @@ module savage {
 
   /// Drop prone voluntarily. Guard: must be active.
   pure def pDropProne(s: State): {success: bool, newState: State} = {
-    if (not(s.isActive())) {
+    if (not(s.isConscious())) {
       {success: false, newState: s}
     } else {
       {success: true, newState: {...s, prone: true}}
@@ -447,7 +433,7 @@ module savage {
 
   /// Stand up from prone. Guard: must be active.
   pure def pStandUp(s: State): {success: bool, newState: State} = {
-    if (not(s.isActive())) {
+    if (not(s.isConscious())) {
       {success: false, newState: s}
     } else {
       {success: true, newState: {...s, prone: false}}
@@ -457,7 +443,7 @@ module savage {
   /// Go on hold: yield current turn, wait for opportunity.
   /// Guard: must be on own turn, not shaken, not stunned, active.
   pure def pGoOnHold(s: State): {success: bool, newState: State} = {
-    if (not(s.ownTurn) or s.shaken or s.stunned or not(s.isActive())) {
+    if (not(s.ownTurn) or s.shaken or s.stunned or not(s.isConscious())) {
       {success: false, newState: s}
     } else {
       {success: true, newState: {...s, ownTurn: false, onHold: true}}
@@ -478,7 +464,7 @@ module savage {
 
   /// Apply entangled. Guard: isActive. Sets restrained = max(restrained, 0).
   pure def pApplyEntangled(s: State): {success: bool, newState: State} = {
-    if (not(s.isActive())) {
+    if (not(s.isConscious())) {
       {success: false, newState: s}
     } else {
       {success: true, newState: {...s, restrained: max(s.restrained, 0)}}
@@ -488,7 +474,7 @@ module savage {
   /// Apply bound. Guard: isActive. Sets restrained = 1.
   /// Also cascades: sets distracted + vulnerable timers. Clears grapple if any.
   pure def pApplyBound(s: State): {success: bool, newState: State} = {
-    if (not(s.isActive())) {
+    if (not(s.isConscious())) {
       {success: false, newState: s}
     } else {
       val timer = if (s.ownTurn) 1 else 0
@@ -532,7 +518,7 @@ module savage {
   /// success (>= 1) → grabbed, raise (>= 2) → pinned.
   /// Sets distracted + vulnerable (like bound).
   pure def pGrappleAttempt(s: State, rollResult: int, opponent: str): {success: bool, newState: State} = {
-    if (not(s.isActive()) or s.restrained >= 2 or rollResult < 1) {
+    if (not(s.isConscious()) or s.restrained >= 2 or rollResult < 1) {
       {success: false, newState: s}
     } else {
       val timer = if (s.ownTurn) 1 else 0
@@ -596,7 +582,7 @@ module savage {
   /// Apply blinded condition. severity: 2 = impaired, 4 = blinded.
   /// Guard: isActive. Severity only increases (max).
   pure def pApplyBlinded(s: State, severity: int): {success: bool, newState: State} = {
-    if (not(s.isActive())) {
+    if (not(s.isConscious())) {
       {success: false, newState: s}
     } else {
       {success: true, newState: {...s, blinded: max(s.blinded, severity)}}
@@ -606,11 +592,36 @@ module savage {
   /// Apply affliction (poison/disease). Guard: not dead.
   /// type: "paralytic", "weak", "lethal", "sleep"
   /// duration: number of turns (>= 0)
+  /// One-time effects per SWADE:
+  ///   weak: +1 fatigue immediately
+  ///   lethal: +1 wound + shaken immediately (can cascade to incap/death)
+  ///   paralytic / sleep: no immediate damage
   pure def pApplyAffliction(s: State, aType: str, duration: int): {success: bool, newState: State} = {
     if (s.dead) {
       {success: false, newState: s}
     } else {
-      {success: true, newState: {...s, afflictionType: aType, afflictionTimer: duration}}
+      val s1 = {...s, afflictionType: aType, afflictionTimer: duration}
+      if (aType == "weak") {
+        // Weak: one-time +1 fatigue
+        val r = pApplyFatigue(s1)
+        {success: true, newState: r.newState}
+      } else if (aType == "lethal") {
+        // Lethal: one-time +1 wound + shaken
+        val sw = {...s1, shaken: true, wounds: s1.wounds + 1}
+        if (not(sw.isWildCard) and sw.wounds > 0) {
+          // Extra: any wound = eliminated
+          {success: true, newState: die(sw)}
+        } else if (sw.wounds > sw.maxWounds) {
+          // Wild Card: exceeds max — incapacitate
+          {success: true, newState: {...sw, wounds: sw.maxWounds, incapacitated: true, bleedingOut: true,
+           stunned: false, prone: false, onHold: false, restrained: -1, grappledBy: "", blinded: 0}}
+        } else {
+          {success: true, newState: sw}
+        }
+      } else {
+        // paralytic, sleep: no immediate damage
+        {success: true, newState: s1}
+      }
     }
   }
 
@@ -688,16 +699,16 @@ module savage {
   val timersValid = state.distracted >= -1 and state.vulnerable >= -1
 
   /// Prone only when active (not dead, not incapacitated)
-  val proneImpliesActive = state.prone implies state.isActive()
+  val proneImpliesActive = state.prone implies state.isConscious()
 
   /// Hold only when active, not shaken, not stunned
-  val holdImpliesActive = state.onHold implies (state.isActive() and not(state.shaken) and not(state.stunned))
+  val holdImpliesActive = state.onHold implies (state.isConscious() and not(state.shaken) and not(state.stunned))
 
   /// Bound/grabbed/pinned implies distracted and vulnerable
   val boundImpliesConditions = (state.restrained >= 1) implies (state.isDistracted() and state.isVulnerable())
 
   /// Restrained implies active
-  val restrainedImpliesActive = (state.restrained >= 0) implies state.isActive()
+  val restrainedImpliesActive = (state.restrained >= 0) implies state.isConscious()
 
   /// Restrained range valid (-1 to 3: free, entangled, bound, grabbed, pinned)
   val restrainedValid = state.restrained >= -1 and state.restrained <= 3
@@ -712,7 +723,7 @@ module savage {
   val blindedValid = state.blinded >= 0 and state.blinded <= 4
 
   /// Blinded implies active
-  val blindedImpliesActive = (state.blinded > 0) implies state.isActive()
+  val blindedImpliesActive = (state.blinded > 0) implies state.isConscious()
 
   /// Injuries are valid strings (all entries are recognized injury types)
   val VALID_INJURIES = Set("unmentionables", "arm", "guts_broken", "guts_battered", "guts_busted", "leg", "head_scar", "head_blinded", "head_brain_damage")

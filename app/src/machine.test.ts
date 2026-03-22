@@ -945,8 +945,9 @@ describe("afflictions", () => {
   })
 
   it("death clears affliction", () => {
+    // Use paralytic (no immediate damage) to test that death clears affliction
     const b = createExtra()
-    b.send({ type: "APPLY_AFFLICTION", afflictionType: "lethal", duration: ad(5) })
+    b.send({ type: "APPLY_AFFLICTION", afflictionType: "paralytic", duration: ad(5) })
     expect(isAfflicted(snap(b))).toBe(true)
     b.send({ type: "TAKE_DAMAGE", margin: dm(4), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(isDead(snap(b))).toBe(true)
@@ -973,30 +974,36 @@ describe("afflictions", () => {
     expect(isShaken(snap(a))).toBe(false)
   })
 
-  it("weak adds fatigue each turn", () => {
+  it("weak applies fatigue once at application (SWADE one-time effect)", () => {
     const a = createWC()
     a.send({ type: "APPLY_AFFLICTION", afflictionType: "weak", duration: ad(5) })
-    expect(snap(a).matches({ alive: { fatigueTrack: "fresh" } })).toBe(true)
+    // Fatigue applied immediately
+    expect(snap(a).matches({ alive: { fatigueTrack: "fatigued" } })).toBe(true)
+  })
+
+  it("weak does NOT add more fatigue on subsequent turns", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_AFFLICTION", afflictionType: "weak", duration: ad(5) })
+    expect(snap(a).matches({ alive: { fatigueTrack: "fatigued" } })).toBe(true)
 
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    // Still fatigued, NOT exhausted
     expect(snap(a).matches({ alive: { fatigueTrack: "fatigued" } })).toBe(true)
 
     a.send({ type: "END_OF_TURN" })
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
-    expect(snap(a).matches({ alive: { fatigueTrack: "exhausted" } })).toBe(true)
+    expect(snap(a).matches({ alive: { fatigueTrack: "fatigued" } })).toBe(true)
   })
 
-  it("lethal adds fatigue + shaken + wound per turn", () => {
+  it("lethal applies wound + shaken once at application (SWADE one-time effect)", () => {
     const a = createWC()
     a.send({ type: "APPLY_AFFLICTION", afflictionType: "lethal", duration: ad(5) })
-
-    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
-    expect(snap(a).matches({ alive: { fatigueTrack: "fatigued" } })).toBe(true)
+    // Immediate one-time damage
     expect(isShaken(snap(a))).toBe(true)
     expect(snap(a).context.wounds).toBe(1)
   })
 
-  it("lethal cascades to incapacitation", () => {
+  it("lethal cascades to incapacitation on application", () => {
     const a = createWC()
     // Start with 3 wounds (max for WC)
     a.send({ type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) })
@@ -1006,9 +1013,30 @@ describe("afflictions", () => {
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) })
     a.send({ type: "END_OF_TURN" })
 
+    // Applying lethal immediately adds wound → exceeds max → incap
     a.send({ type: "APPLY_AFFLICTION", afflictionType: "lethal", duration: ad(5) })
-    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(snap(a).matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } })).toBe(true)
+  })
+
+  it("lethal on extra dies immediately on application", () => {
+    const b = createExtra()
+    b.send({ type: "APPLY_AFFLICTION", afflictionType: "lethal", duration: ad(5) })
+    expect(isDead(snap(b))).toBe(true)
+  })
+
+  it("lethal timer expiry causes death (SWADE death countdown)", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_AFFLICTION", afflictionType: "lethal", duration: ad(1) })
+    expect(isShaken(snap(a))).toBe(true)
+    expect(snap(a).context.wounds).toBe(1)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "END_OF_TURN" })
+    expect(snap(a).context.afflictionTimer).toBe(0)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "END_OF_TURN" })
+    expect(isDead(snap(a))).toBe(true)
   })
 
   it("sleep blocks stunned recovery", () => {

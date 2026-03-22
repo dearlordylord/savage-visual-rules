@@ -949,30 +949,36 @@ module savageTest {
     .expect(not(state.shaken))
   }
 
-  /// Weak adds fatigue each turn
+  /// Weak applies fatigue once at application (SWADE one-time effect)
   run weakAddsFatigueTest = {
     initWildCard
     .then(doApplyAffliction("weak", 5))
-    .expect(state.fatigue == 0)
+    .expect(state.fatigue == 1)
+  }
+
+  /// Weak does NOT add more fatigue on subsequent turns
+  run weakNoPerTurnFatigueTest = {
+    initWildCard
+    .then(doApplyAffliction("weak", 5))
+    .expect(state.fatigue == 1)
     .then(doStartOfTurn(0, 0))
     .expect(state.fatigue == 1)
     .then(doEndOfTurn)
     .then(doStartOfTurn(0, 0))
-    .expect(state.fatigue == 2)
+    .expect(state.fatigue == 1)
   }
 
-  /// Lethal adds fatigue + shaken + wound
-  run lethalDamagePerTurnTest = {
+  /// Lethal applies wound + shaken once at application (SWADE one-time effect)
+  run lethalDamageOnApplyTest = {
     initWildCard
     .then(doApplyAffliction("lethal", 5))
-    .then(doStartOfTurn(0, 0))
-    .expect(state.fatigue == 1 and state.shaken and state.wounds == 1)
+    .expect(state.shaken and state.wounds == 1)
   }
 
-  /// Lethal can cascade to incap
+  /// Lethal can cascade to incap when applied to character at max wounds
   run lethalCascadesToIncapTest = {
-    all { state' = {...FRESH_WILD_CARD, wounds: 3, afflictionType: "lethal", afflictionTimer: 5} }
-    .then(doStartOfTurn(0, 0))
+    all { state' = {...FRESH_WILD_CARD, wounds: 3} }
+    .then(doApplyAffliction("lethal", 5))
     .expect(state.incapacitated and state.bleedingOut)
   }
 
@@ -983,12 +989,23 @@ module savageTest {
     .expect(state.stunned and state.shaken)
   }
 
-  /// Lethal affliction on Extra: start of turn → dead
-  run lethalExtraDiesOnStartOfTurnTest = {
+  /// Lethal affliction on Extra: dies immediately on application (one-time wound)
+  run lethalExtraDiesOnApplyTest = {
     initExtra
     .then(doApplyAffliction("lethal", 5))
-    .expect(state.afflictionType == "lethal" and not(state.dead))
+    .expect(state.dead)
+  }
+
+  /// Lethal timer expiry → death (SWADE: untreated lethal poison kills)
+  run lethalTimerExpiryDeathTest = {
+    initWildCard
+    .then(doApplyAffliction("lethal", 1))
+    .expect(state.shaken and state.wounds == 1 and state.afflictionType == "lethal")
     .then(doStartOfTurn(0, 0))
+    .then(doEndOfTurn)
+    .expect(state.afflictionType == "lethal" and state.afflictionTimer == 0)
+    .then(doStartOfTurn(0, 0))
+    .then(doEndOfTurn)
     .expect(state.dead)
   }
 

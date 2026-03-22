@@ -993,8 +993,8 @@ export const savageMachine = setup({
               on: {
                 APPLY_AFFLICTION: [
                   { guard: "afflictionParalytic", target: "afflicted.paralytic", actions: ["setAfflictionTimer"] },
-                  { guard: "afflictionWeak", target: "afflicted.weak", actions: ["setAfflictionTimer"] },
-                  { guard: "afflictionLethal", target: "afflicted.lethal", actions: ["setAfflictionTimer"] },
+                  { guard: "afflictionWeak", target: "afflicted.weak", actions: ["setAfflictionTimer", "raiseApplyFatigue"] },
+                  { guard: "afflictionLethal", target: "afflicted.lethal", actions: ["setAfflictionTimer", "raiseLethalTick"] },
                   { guard: "afflictionSleep", target: "afflicted.sleep", actions: ["setAfflictionTimer"] }
                 ]
               }
@@ -1005,8 +1005,8 @@ export const savageMachine = setup({
                 CURE_AFFLICTION: { target: "healthy", actions: ["clearAfflictionTimer"] },
                 APPLY_AFFLICTION: [
                   { guard: "afflictionParalytic", target: ".paralytic", actions: ["setAfflictionTimer"] },
-                  { guard: "afflictionWeak", target: ".weak", actions: ["setAfflictionTimer"] },
-                  { guard: "afflictionLethal", target: ".lethal", actions: ["setAfflictionTimer"] },
+                  { guard: "afflictionWeak", target: ".weak", actions: ["setAfflictionTimer", "raiseApplyFatigue"] },
+                  { guard: "afflictionLethal", target: ".lethal", actions: ["setAfflictionTimer", "raiseLethalTick"] },
                   { guard: "afflictionSleep", target: ".sleep", actions: ["setAfflictionTimer"] }
                 ]
               },
@@ -1017,20 +1017,12 @@ export const savageMachine = setup({
               },
               states: {
                 paralytic: {},
-                weak: {
-                  on: {
-                    START_OF_TURN: {
-                      guard: and([stateIn(OTHERS_TURN), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
-                      actions: ["raiseApplyFatigue"]
-                    }
-                  }
-                },
+                weak: {},
                 lethal: {
-                  on: {
-                    START_OF_TURN: {
-                      guard: and([stateIn(OTHERS_TURN), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
-                      actions: ["raiseApplyFatigue", "raiseLethalTick"]
-                    }
+                  always: {
+                    guard: "afflictionTimerExpired",
+                    target: "#savage.dead",
+                    actions: ["clearAfflictionTimer"]
                   }
                 },
                 sleep: {}
