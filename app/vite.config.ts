@@ -18,7 +18,7 @@ const config = defineConfig({
       outdir: "./src/paraglide",
       outputStructure: "message-modules",
       cookieName: "PARAGLIDE_LOCALE",
-      strategy: ["url", "cookie", "preferredLanguage", "baseLocale"],
+      strategy: ["url", "cookie", "localStorage", "preferredLanguage", "baseLocale"],
       urlPatterns: [
         {
           pattern: "/:path(.*)?",
