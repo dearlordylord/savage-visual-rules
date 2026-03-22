@@ -1,5 +1,26 @@
 /* eslint-disable max-lines -- xstate machine definition is inherently dense */
 import { and, assign, not, setup, type SnapshotFrom, stateIn } from "xstate"
+import type {
+  Wounds,
+  ConditionTimer,
+  MaxWounds,
+  CharacterId,
+  DamageMargin,
+  SoakSuccesses,
+  IncapRollResult,
+  InjuryRoll,
+  VigorRollResult,
+  SpiritRollResult,
+  HealAmount,
+  AthleticsRollResult,
+  EscapeRollResult,
+  GrappleRollResult,
+  GrappleEscapeRollResult,
+  PinRollResult,
+  BlindedSeverity,
+  FearResultType
+} from "./types"
+import { wounds, conditionTimer, maxWounds } from "./types"
 
 // ============================================================
 // Types
@@ -18,21 +39,21 @@ export type InjuryType =
   | "head_brain_damage" // 12, sub 6: Smarts reduced
 
 export interface SavageContext {
-  wounds: number
-  distractedTimer: number // -1 = inactive, >= 0 = turns until expiry
-  vulnerableTimer: number // -1 = inactive, >= 0 = turns until expiry
+  wounds: Wounds
+  distractedTimer: ConditionTimer
+  vulnerableTimer: ConditionTimer
   isWildCard: boolean
-  maxWounds: number // 3 for WC, 1 for Extra
-  ownTurn: boolean // mirrors turnPhase state for use in guards/actions
-  onHold: boolean // mirrors turnPhase onHold state for use in guards/actions
-  interruptedSuccessfully: boolean // true when last interrupt roll succeeded (acts before interruptee)
-  injuries: InjuryType[] // permanent injuries from Injury Table
-  grappledBy: string | null // opponent identifier when grabbed/pinned
+  maxWounds: MaxWounds
+  ownTurn: boolean
+  onHold: boolean
+  interruptedSuccessfully: boolean
+  injuries: InjuryType[]
+  grappledBy: CharacterId | null
 }
 
 export type SavageEvent =
-  | { type: "TAKE_DAMAGE"; margin: number; soakSuccesses: number; incapRoll: number; injuryRoll?: number }
-  | { type: "START_OF_TURN"; vigorRoll: number; spiritRoll: number }
+  | { type: "TAKE_DAMAGE"; margin: DamageMargin; soakSuccesses: SoakSuccesses; incapRoll: IncapRollResult; injuryRoll?: InjuryRoll }
+  | { type: "START_OF_TURN"; vigorRoll: VigorRollResult; spiritRoll: SpiritRollResult }
   | { type: "END_OF_TURN" }
   | { type: "SPEND_BENNY" }
   | { type: "APPLY_STUNNED" }
@@ -40,25 +61,25 @@ export type SavageEvent =
   | { type: "APPLY_VULNERABLE" }
   | { type: "APPLY_FATIGUE" }
   | { type: "RECOVER_FATIGUE" }
-  | { type: "HEAL"; amount: number }
+  | { type: "HEAL"; amount: HealAmount }
   | { type: "FINISHING_MOVE" }
   | { type: "DROP_PRONE" }
   | { type: "STAND_UP" }
   | { type: "GO_ON_HOLD" }
-  | { type: "INTERRUPT"; athleticsRoll: number }
+  | { type: "INTERRUPT"; athleticsRoll: AthleticsRollResult }
   | { type: "APPLY_ENTANGLED" }
   | { type: "APPLY_BOUND" }
-  | { type: "ESCAPE_ATTEMPT"; rollResult: number }
-  | { type: "GRAPPLE_ATTEMPT"; rollResult: number }
-  | { type: "GRAPPLE_ESCAPE"; rollResult: number }
-  | { type: "PIN_ATTEMPT"; rollResult: number }
-  | { type: "APPLY_BLINDED"; severity: 2 | 4 }
+  | { type: "ESCAPE_ATTEMPT"; rollResult: EscapeRollResult }
+  | { type: "GRAPPLE_ATTEMPT"; rollResult: GrappleRollResult }
+  | { type: "GRAPPLE_ESCAPE"; rollResult: GrappleEscapeRollResult }
+  | { type: "PIN_ATTEMPT"; rollResult: PinRollResult }
+  | { type: "APPLY_BLINDED"; severity: BlindedSeverity }
 
 // ============================================================
 // Helpers (mirror Quint spec pure functions)
 // ============================================================
 
-function computeDamage(margin: number, soakSuccesses: number, isShaken: boolean) {
+function computeDamage(margin: DamageMargin, soakSuccesses: SoakSuccesses, isShaken: boolean) {
   const raises = Math.floor(margin / 4)
   const rawWounds = isShaken ? Math.max(raises, 1) : raises
   const effectiveSoak = rawWounds > 0 ? soakSuccesses : 0
@@ -67,10 +88,9 @@ function computeDamage(margin: number, soakSuccesses: number, isShaken: boolean)
   return { raises, rawWounds, effectiveSoak, actualWounds, allSoaked }
 }
 
-function tickTimer(timer: number): number {
-  if (timer > 0) return timer - 1
-  if (timer === 0) return -1
-  return -1
+function tickTimer(timer: ConditionTimer): ConditionTimer {
+  if (timer > 0) return conditionTimer(timer - 1)
+  return conditionTimer(-1)
 }
 
 // Type-safe event extractors
@@ -90,7 +110,7 @@ function asInterrupt(event: SavageEvent) {
 // Resolve 2d6 Injury Table roll to InjuryType
 // injuryRoll encodes both 2d6 and sub-roll: tableRoll * 10 + subRoll
 // e.g., 52 = table roll 5, sub roll 2 → guts_broken
-export function resolveInjury(injuryRoll: number): InjuryType {
+export function resolveInjury(injuryRoll: InjuryRoll): InjuryType {
   const tableRoll = Math.floor(injuryRoll / 10)
   const subRoll = injuryRoll % 10
   if (tableRoll <= 2) return "unmentionables"
@@ -224,29 +244,29 @@ export const savageMachine = setup({
   actions: {
     addWounds: assign(({ context, event }) => {
       const { actualWounds } = computeDamage(asDamage(event).margin, asDamage(event).soakSuccesses, false)
-      return { wounds: context.wounds + actualWounds }
+      return { wounds: wounds(context.wounds + actualWounds) }
     }),
     addWoundsShaken: assign(({ context, event }) => {
       const { actualWounds } = computeDamage(asDamage(event).margin, asDamage(event).soakSuccesses, true)
-      return { wounds: context.wounds + actualWounds }
+      return { wounds: wounds(context.wounds + actualWounds) }
     }),
     setWoundsToMax: assign(({ context }) => ({
-      wounds: context.maxWounds
+      wounds: wounds(context.maxWounds)
     })),
     healWounds: assign(({ context, event }) => ({
-      wounds: Math.max(0, context.wounds - asHeal(event).amount)
+      wounds: wounds(context.wounds - asHeal(event).amount)
     })),
     setDistractedTimer: assign(({ context }) => ({
-      distractedTimer: Math.max(context.distractedTimer, context.ownTurn ? 1 : 0)
+      distractedTimer: conditionTimer(Math.max(context.distractedTimer, context.ownTurn ? 1 : 0))
     })),
     setVulnerableTimer: assign(({ context }) => ({
-      vulnerableTimer: Math.max(context.vulnerableTimer, context.ownTurn ? 1 : 0)
+      vulnerableTimer: conditionTimer(Math.max(context.vulnerableTimer, context.ownTurn ? 1 : 0))
     })),
     setVulnerableTimerRecoverySuccess: assign(({ context }) => ({
-      vulnerableTimer: Math.max(context.vulnerableTimer, 1)
+      vulnerableTimer: conditionTimer(Math.max(context.vulnerableTimer, 1))
     })),
     setVulnerableTimerRecoveryRaise: assign(({ context }) => ({
-      vulnerableTimer: Math.max(context.vulnerableTimer, 0)
+      vulnerableTimer: conditionTimer(Math.max(context.vulnerableTimer, 0))
     })),
     tickTimers: assign(({ context }) => ({
       distractedTimer: tickTimer(context.distractedTimer),
@@ -259,8 +279,8 @@ export const savageMachine = setup({
     setInterruptSuccess: assign({ interruptedSuccessfully: true }),
     setInterruptFail: assign({ interruptedSuccessfully: false }),
     appendInjury: assign(({ context, event }) => {
-      const roll = asDamage(event).injuryRoll ?? 0
-      if (roll === 0) return {}
+      const roll = asDamage(event).injuryRoll
+      if (roll === undefined) return {}
       return { injuries: [...context.injuries, resolveInjury(roll)] }
     }),
     clearGrappledBy: assign({ grappledBy: null })
@@ -269,11 +289,11 @@ export const savageMachine = setup({
   id: "savage",
   initial: "alive",
   context: ({ input }) => ({
-    wounds: 0,
-    distractedTimer: -1,
-    vulnerableTimer: -1,
+    wounds: wounds(0),
+    distractedTimer: conditionTimer(-1),
+    vulnerableTimer: conditionTimer(-1),
     isWildCard: input.isWildCard ?? true,
-    maxWounds: (input.isWildCard ?? true) ? 3 : 1,
+    maxWounds: maxWounds((input.isWildCard ?? true) ? 3 : 1),
     ownTurn: false,
     onHold: false,
     interruptedSuccessfully: false,
@@ -876,8 +896,8 @@ export const savageMachine = setup({
     dead: {
       type: "final",
       entry: assign({
-        distractedTimer: -1,
-        vulnerableTimer: -1,
+        distractedTimer: conditionTimer(-1),
+        vulnerableTimer: conditionTimer(-1),
         onHold: false,
         interruptedSuccessfully: false,
         grappledBy: null
@@ -955,7 +975,7 @@ export function isFullyBlinded(snap: SavageSnapshot): boolean {
   return snap.matches({ alive: { conditionTrack: { vision: "blinded" } } })
 }
 
-export function blindedPenalty(snap: SavageSnapshot): number {
+export function blindedPenalty(snap: SavageSnapshot): 0 | -2 | -4 {
   if (snap.matches({ alive: { conditionTrack: { vision: "blinded" } } })) return -4
   if (snap.matches({ alive: { conditionTrack: { vision: "impaired" } } })) return -2
   return 0
@@ -1004,10 +1024,8 @@ export function totalPenalty(snap: SavageSnapshot): number {
   return -(wp + fatigue)
 }
 
-// Fear table result types
-export type FearResult = string
+export type FearResult = FearResultType
 
-// Resolve fear table: d20 roll + modifier → list of event/effect strings
 export function resolveFear(tableRoll: number, modifier: number): FearResult[] {
   const total = tableRoll + modifier
   if (total <= 3) return ["ADRENALINE"]

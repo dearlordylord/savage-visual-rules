@@ -20,6 +20,7 @@ import {
   resolveFear,
   savageMachine
 } from "./machine"
+import { margin as dm, soak as sk, incap as ir, vigor as vr, spirit as sr, heal as ha, athletics as ar, escape as er, grapple as gr, grappleEsc as ger, pin as pr, severity as bs } from "./test/helpers/brands"
 
 // ============================================================
 // Helpers
@@ -49,7 +50,7 @@ describe("damage", () => {
   // shakenFromDamageTest: margin 2, no raises → just Shaken
   it("shaken from damage (margin < 4)", () => {
     const a = createWC()
-    a.send({ type: "TAKE_DAMAGE", margin: 2, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(2), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(isShaken(snap(a))).toBe(true)
     expect(snap(a).context.wounds).toBe(0)
   })
@@ -57,7 +58,7 @@ describe("damage", () => {
   // woundFromRaiseTest: margin 5, 1 raise → Shaken + 1 wound
   it("wound from raise (margin 5)", () => {
     const a = createWC()
-    a.send({ type: "TAKE_DAMAGE", margin: 5, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(5), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(isShaken(snap(a))).toBe(true)
     expect(snap(a).context.wounds).toBe(1)
   })
@@ -65,10 +66,10 @@ describe("damage", () => {
   // shakenOnShakenTest: Shaken-on-Shaken = 1 wound
   it("shaken-on-shaken gives wound", () => {
     const a = createWC()
-    a.send({ type: "TAKE_DAMAGE", margin: 2, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(2), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(isShaken(snap(a))).toBe(true)
     expect(snap(a).context.wounds).toBe(0)
-    a.send({ type: "TAKE_DAMAGE", margin: 1, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(1), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(isShaken(snap(a))).toBe(true)
     expect(snap(a).context.wounds).toBe(1)
   })
@@ -76,9 +77,9 @@ describe("damage", () => {
   // shakenWithRaiseTest: Shaken + 1 raise = still just 1 wound
   it("shaken with raise gives 1 wound (not 2)", () => {
     const a = createWC()
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(isShaken(snap(a))).toBe(true)
-    a.send({ type: "TAKE_DAMAGE", margin: 4, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(4), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(snap(a).context.wounds).toBe(1)
   })
 
@@ -86,10 +87,10 @@ describe("damage", () => {
   it("soak clears shaken", () => {
     const a = createWC()
     // Get to shaken state
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(isShaken(snap(a))).toBe(true)
     // Now take damage with soak
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 1, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(1), incapRoll: ir(0) })
     expect(isShaken(snap(a))).toBe(false)
     expect(snap(a).context.wounds).toBe(0)
   })
@@ -97,7 +98,7 @@ describe("damage", () => {
   // partialSoakTest: reduce wounds but stay Shaken
   it("partial soak", () => {
     const a = createWC()
-    a.send({ type: "TAKE_DAMAGE", margin: 8, soakSuccesses: 1, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(8), soakSuccesses: sk(1), incapRoll: ir(0) })
     expect(isShaken(snap(a))).toBe(true)
     expect(snap(a).context.wounds).toBe(1)
   })
@@ -105,7 +106,7 @@ describe("damage", () => {
   // noDamageOnMissTest: margin 0 causes Shaken (it's a hit that meets toughness)
   it("margin 0 causes shaken", () => {
     const a = createWC()
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(isShaken(snap(a))).toBe(true)
   })
 })
@@ -118,7 +119,7 @@ describe("extras", () => {
   // extraDiesFromWoundTest
   it("extra dies from wound", () => {
     const a = createExtra()
-    a.send({ type: "TAKE_DAMAGE", margin: 4, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(4), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(isDead(snap(a))).toBe(true)
     expect(snap(a).context.wounds).toBe(1)
   })
@@ -126,7 +127,7 @@ describe("extras", () => {
   // extraShakenSurvivesTest
   it("extra shaken survives", () => {
     const a = createExtra()
-    a.send({ type: "TAKE_DAMAGE", margin: 2, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(2), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(isShaken(snap(a))).toBe(true)
     expect(isDead(snap(a))).toBe(false)
     expect(snap(a).context.wounds).toBe(0)
@@ -142,7 +143,7 @@ describe("incapacitation", () => {
   function shakenWith3Wounds() {
     const a = createWC()
     // Single hit: margin 12 → 3 raises → 3 wounds from unshaken
-    a.send({ type: "TAKE_DAMAGE", margin: 12, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(isShaken(snap(a))).toBe(true)
     expect(snap(a).context.wounds).toBe(3)
     return a
@@ -151,7 +152,7 @@ describe("incapacitation", () => {
   // incapBleedingOutTest: shaken + 3 wounds, hit again → incap, incapRoll fail → bleeding out
   it("incap bleeding out", () => {
     const a = shakenWith3Wounds()
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(snap(a).matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } })).toBe(true)
     expect(snap(a).context.wounds).toBe(3)
   })
@@ -159,14 +160,14 @@ describe("incapacitation", () => {
   // incapCritFailDeadTest
   it("incap crit fail → dead", () => {
     const a = shakenWith3Wounds()
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: -1 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(-1) })
     expect(isDead(snap(a))).toBe(true)
   })
 
   // incapSuccessTest
   it("incap success → stable", () => {
     const a = shakenWith3Wounds()
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 1 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(1) })
     expect(snap(a).matches({ alive: { damageTrack: { incapacitated: "stable" } } })).toBe(true)
     expect(isDead(snap(a))).toBe(false)
   })
@@ -174,16 +175,16 @@ describe("incapacitation", () => {
   // bleedingOutDeathTest
   it("bleeding out fail → dead", () => {
     const a = shakenWith3Wounds()
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 0 }) // → bleedingOut
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) }) // → bleedingOut
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(isDead(snap(a))).toBe(true)
   })
 
   // bleedingOutStabilizedTest
   it("bleeding out raise → stabilized", () => {
     const a = shakenWith3Wounds()
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 0 }) // → bleedingOut
-    a.send({ type: "START_OF_TURN", vigorRoll: 2, spiritRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) }) // → bleedingOut
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(2), spiritRoll: sr(0) })
     expect(snap(a).matches({ alive: { damageTrack: { incapacitated: "stable" } } })).toBe(true)
     expect(isDead(snap(a))).toBe(false)
   })
@@ -202,7 +203,7 @@ describe("stunned recovery", () => {
     expect(snap(a).matches({ alive: { conditionTrack: { distraction: "distracted" } } })).toBe(true)
     expect(snap(a).context.distractedTimer).toBe(0)
 
-    a.send({ type: "START_OF_TURN", vigorRoll: 1, spiritRoll: 0 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(1), spiritRoll: sr(0) })
     expect(snap(a).matches({ alive: { conditionTrack: { stun: "normal" } } })).toBe(true)
     expect(snap(a).matches({ alive: { conditionTrack: { vulnerability: "vulnerable" } } })).toBe(true)
     expect(snap(a).context.vulnerableTimer).toBe(1)
@@ -212,7 +213,7 @@ describe("stunned recovery", () => {
     expect(snap(a).context.vulnerableTimer).toBe(0)
     expect(snap(a).context.distractedTimer).toBe(-1)
 
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     a.send({ type: "END_OF_TURN" })
     expect(snap(a).context.vulnerableTimer).toBe(-1)
     expect(snap(a).matches({ alive: { conditionTrack: { vulnerability: "clear" } } })).toBe(true)
@@ -222,7 +223,7 @@ describe("stunned recovery", () => {
   it("stunned recovery raise → vulnerable clears at end of current turn", () => {
     const a = createWC()
     a.send({ type: "APPLY_STUNNED" })
-    a.send({ type: "START_OF_TURN", vigorRoll: 2, spiritRoll: 0 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(2), spiritRoll: sr(0) })
     expect(snap(a).matches({ alive: { conditionTrack: { stun: "normal" } } })).toBe(true)
     expect(snap(a).context.vulnerableTimer).toBe(0)
 
@@ -235,34 +236,34 @@ describe("stunned recovery", () => {
   it("stunned recovery fail → still stunned", () => {
     const a = createWC()
     a.send({ type: "APPLY_STUNNED" })
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(snap(a).matches({ alive: { conditionTrack: { stun: "stunned" } } })).toBe(true)
   })
 
   function shakenAndStunned() {
     const a = createWC()
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) })
     a.send({ type: "APPLY_STUNNED" })
     return a
   }
 
   it("stunned + shaken: both recover on same turn", () => {
     const a = shakenAndStunned()
-    a.send({ type: "START_OF_TURN", vigorRoll: 1, spiritRoll: 1 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(1), spiritRoll: sr(1) })
     expect(snap(a).matches({ alive: { conditionTrack: { stun: "normal" } } })).toBe(true)
     expect(isShaken(snap(a))).toBe(false)
   })
 
   it("stunned + shaken: vigor fails, spirit succeeds", () => {
     const a = shakenAndStunned()
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 1 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) })
     expect(snap(a).matches({ alive: { conditionTrack: { stun: "stunned" } } })).toBe(true)
     expect(isShaken(snap(a))).toBe(false)
   })
 
   it("stunned + shaken: vigor succeeds, spirit fails", () => {
     const a = shakenAndStunned()
-    a.send({ type: "START_OF_TURN", vigorRoll: 1, spiritRoll: 0 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(1), spiritRoll: sr(0) })
     expect(snap(a).matches({ alive: { conditionTrack: { stun: "normal" } } })).toBe(true)
     expect(isShaken(snap(a))).toBe(true)
   })
@@ -276,9 +277,9 @@ describe("shaken recovery", () => {
   // shakenRecoveryTest
   it("shaken recovery success", () => {
     const a = createWC()
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(isShaken(snap(a))).toBe(true)
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 1 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) })
     expect(isShaken(snap(a))).toBe(false)
     expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
   })
@@ -286,8 +287,8 @@ describe("shaken recovery", () => {
   // shakenRecoveryFailTest
   it("shaken recovery fail", () => {
     const a = createWC()
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 0 })
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(isShaken(snap(a))).toBe(true)
     expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
   })
@@ -295,7 +296,7 @@ describe("shaken recovery", () => {
   // bennyUnshakeTest
   it("benny unshake", () => {
     const a = createWC()
-    a.send({ type: "TAKE_DAMAGE", margin: 2, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(2), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(isShaken(snap(a))).toBe(true)
     a.send({ type: "SPEND_BENNY" })
     expect(isShaken(snap(a))).toBe(false)
@@ -314,7 +315,7 @@ describe("condition timers", () => {
     a.send({ type: "APPLY_DISTRACTED" })
     expect(snap(a).context.distractedTimer).toBe(0)
 
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     a.send({ type: "END_OF_TURN" })
     expect(snap(a).context.distractedTimer).toBe(-1)
     expect(snap(a).matches({ alive: { conditionTrack: { distraction: "clear" } } })).toBe(true)
@@ -323,7 +324,7 @@ describe("condition timers", () => {
   // distractedDuringOwnTurnTest
   it("distracted during own turn → lasts through current + next turn", () => {
     const a = createWC()
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
     a.send({ type: "APPLY_DISTRACTED" })
     expect(snap(a).context.distractedTimer).toBe(1)
@@ -331,7 +332,7 @@ describe("condition timers", () => {
     a.send({ type: "END_OF_TURN" })
     expect(snap(a).context.distractedTimer).toBe(0)
 
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     a.send({ type: "END_OF_TURN" })
     expect(snap(a).context.distractedTimer).toBe(-1)
     expect(snap(a).matches({ alive: { conditionTrack: { distraction: "clear" } } })).toBe(true)
@@ -380,12 +381,12 @@ describe("healing", () => {
   it("heal reduces wounds", () => {
     const a = createWC()
     // Get to wounded state: take damage, recover from shaken
-    a.send({ type: "TAKE_DAMAGE", margin: 8, soakSuccesses: 0, incapRoll: 0 }) // 2 wounds, shaken
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 1 }) // recover shaken → wounded
+    a.send({ type: "TAKE_DAMAGE", margin: dm(8), soakSuccesses: sk(0), incapRoll: ir(0) }) // 2 wounds, shaken
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) }) // recover shaken → wounded
     expect(snap(a).context.wounds).toBe(2)
     expect(isShaken(snap(a))).toBe(false)
 
-    a.send({ type: "HEAL", amount: 1 })
+    a.send({ type: "HEAL", amount: ha(1) })
     expect(snap(a).context.wounds).toBe(1)
   })
 
@@ -393,11 +394,11 @@ describe("healing", () => {
   it("heal removes incapacitation", () => {
     const a = createWC()
     // Get to incapacitated + bleedingOut
-    a.send({ type: "TAKE_DAMAGE", margin: 12, soakSuccesses: 0, incapRoll: 0 }) // 3 wounds, shaken
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 0 }) // shaken-on-shaken → incap, bleedingOut
+    a.send({ type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) }) // 3 wounds, shaken
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) }) // shaken-on-shaken → incap, bleedingOut
     expect(snap(a).matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } })).toBe(true)
 
-    a.send({ type: "HEAL", amount: 1 })
+    a.send({ type: "HEAL", amount: ha(1) })
     expect(snap(a).context.wounds).toBe(2)
     expect(snap(a).matches({ alive: { damageTrack: "active" } })).toBe(true)
   })
@@ -413,7 +414,7 @@ describe("invariants", () => {
       for (const soak of [0, 1, 2, 3, 4]) {
         for (const incapRoll of [-1, 0, 1, 2, 3]) {
           const a = createWC()
-          a.send({ type: "TAKE_DAMAGE", margin, soakSuccesses: soak, incapRoll })
+          a.send({ type: "TAKE_DAMAGE", margin: dm(margin), soakSuccesses: sk(soak), incapRoll: ir(incapRoll) })
           const s = snap(a)
           expect(s.context.wounds).toBeGreaterThanOrEqual(0)
           expect(s.context.wounds).toBeLessThanOrEqual(s.context.maxWounds)
@@ -442,8 +443,8 @@ describe("prone", () => {
   it("prone blocked when incapacitated", () => {
     const a = createWC()
     // Incapacitate: 3 wounds + shaken, then shaken-on-shaken → incap
-    a.send({ type: "TAKE_DAMAGE", margin: 12, soakSuccesses: 0, incapRoll: 0 })
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 1 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(1) })
     expect(snap(a).matches({ alive: { damageTrack: "incapacitated" } })).toBe(true)
 
     a.send({ type: "DROP_PRONE" })
@@ -470,7 +471,7 @@ describe("prone", () => {
     const b = createExtra()
     b.send({ type: "DROP_PRONE" })
     expect(isProne(snap(b))).toBe(true)
-    b.send({ type: "TAKE_DAMAGE", margin: 4, soakSuccesses: 0, incapRoll: 0 })
+    b.send({ type: "TAKE_DAMAGE", margin: dm(4), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(isDead(snap(b))).toBe(true)
     expect(isProne(snap(b))).toBe(false)
   })
@@ -480,13 +481,13 @@ describe("prone", () => {
     a.send({ type: "DROP_PRONE" })
     expect(isProne(snap(a))).toBe(true)
 
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(isProne(snap(a))).toBe(true)
 
     a.send({ type: "END_OF_TURN" })
     expect(isProne(snap(a))).toBe(true)
 
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(isProne(snap(a))).toBe(true)
   })
 
@@ -496,8 +497,8 @@ describe("prone", () => {
     expect(isProne(snap(a))).toBe(true)
 
     // Incapacitate via damage
-    a.send({ type: "TAKE_DAMAGE", margin: 12, soakSuccesses: 0, incapRoll: 0 })
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 1 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(1) })
     expect(snap(a).matches({ alive: { damageTrack: "incapacitated" } })).toBe(true)
     expect(isProne(snap(a))).toBe(false)
   })
@@ -510,7 +511,7 @@ describe("prone", () => {
 describe("hold/interrupt", () => {
   it("go on hold from own turn", () => {
     const a = createWC()
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
 
     a.send({ type: "GO_ON_HOLD" })
@@ -520,10 +521,10 @@ describe("hold/interrupt", () => {
 
   it("cannot go on hold when shaken", () => {
     const a = createWC()
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(isShaken(snap(a))).toBe(true)
     // Recover shaken on start of turn
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     // Still shaken (spirit fail)
     expect(isShaken(snap(a))).toBe(true)
     expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
@@ -536,7 +537,7 @@ describe("hold/interrupt", () => {
   it("cannot go on hold when stunned", () => {
     const a = createWC()
     a.send({ type: "APPLY_STUNNED" })
-    a.send({ type: "START_OF_TURN", vigorRoll: 1, spiritRoll: 0 }) // recover stunned
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(1), spiritRoll: sr(0) }) // recover stunned
     expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
     // Now vulnerable but not stunned — should be able to hold
     a.send({ type: "GO_ON_HOLD" })
@@ -545,11 +546,11 @@ describe("hold/interrupt", () => {
 
   it("interrupt success → acts before interruptee", () => {
     const a = createWC()
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     a.send({ type: "GO_ON_HOLD" })
     expect(isOnHold(snap(a))).toBe(true)
 
-    a.send({ type: "INTERRUPT", athleticsRoll: 1 })
+    a.send({ type: "INTERRUPT", athleticsRoll: ar(1) })
     expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
     expect(snap(a).context.ownTurn).toBe(true)
     expect(snap(a).context.interruptedSuccessfully).toBe(true)
@@ -557,10 +558,10 @@ describe("hold/interrupt", () => {
 
   it("interrupt fail → still gets turn (acts after interruptee)", () => {
     const a = createWC()
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     a.send({ type: "GO_ON_HOLD" })
 
-    a.send({ type: "INTERRUPT", athleticsRoll: 0 })
+    a.send({ type: "INTERRUPT", athleticsRoll: ar(0) })
     expect(snap(a).matches({ alive: { turnPhase: "ownTurn" } })).toBe(true)
     expect(snap(a).context.ownTurn).toBe(true)
     expect(snap(a).context.interruptedSuccessfully).toBe(false)
@@ -568,12 +569,12 @@ describe("hold/interrupt", () => {
 
   it("hold lost when shaken applied", () => {
     const a = createWC()
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     a.send({ type: "GO_ON_HOLD" })
     expect(isOnHold(snap(a))).toBe(true)
 
     // Take damage → shaken
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 0 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(isShaken(snap(a))).toBe(true)
     expect(isOnHold(snap(a))).toBe(false)
     expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
@@ -581,7 +582,7 @@ describe("hold/interrupt", () => {
 
   it("hold lost when stunned applied", () => {
     const a = createWC()
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     a.send({ type: "GO_ON_HOLD" })
     expect(isOnHold(snap(a))).toBe(true)
 
@@ -592,7 +593,7 @@ describe("hold/interrupt", () => {
 
   it("end of turn from hold → othersTurn", () => {
     const a = createWC()
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     a.send({ type: "GO_ON_HOLD" })
 
     a.send({ type: "END_OF_TURN" })
@@ -635,21 +636,21 @@ describe("restraint", () => {
   it("escape from entangled: success → free", () => {
     const a = createWC()
     a.send({ type: "APPLY_ENTANGLED" })
-    a.send({ type: "ESCAPE_ATTEMPT", rollResult: 1 })
+    a.send({ type: "ESCAPE_ATTEMPT", rollResult: er(1) })
     expect(isRestrained(snap(a))).toBe(false)
   })
 
   it("escape from entangled: fail → still entangled", () => {
     const a = createWC()
     a.send({ type: "APPLY_ENTANGLED" })
-    a.send({ type: "ESCAPE_ATTEMPT", rollResult: 0 })
+    a.send({ type: "ESCAPE_ATTEMPT", rollResult: er(0) })
     expect(isEntangled(snap(a))).toBe(true)
   })
 
   it("escape from bound: success → entangled", () => {
     const a = createWC()
     a.send({ type: "APPLY_BOUND" })
-    a.send({ type: "ESCAPE_ATTEMPT", rollResult: 1 })
+    a.send({ type: "ESCAPE_ATTEMPT", rollResult: er(1) })
     expect(isEntangled(snap(a))).toBe(true)
     expect(isBound(snap(a))).toBe(false)
   })
@@ -657,14 +658,14 @@ describe("restraint", () => {
   it("escape from bound: raise → free", () => {
     const a = createWC()
     a.send({ type: "APPLY_BOUND" })
-    a.send({ type: "ESCAPE_ATTEMPT", rollResult: 2 })
+    a.send({ type: "ESCAPE_ATTEMPT", rollResult: er(2) })
     expect(isRestrained(snap(a))).toBe(false)
   })
 
   it("restraint blocked when incapacitated", () => {
     const a = createWC()
-    a.send({ type: "TAKE_DAMAGE", margin: 12, soakSuccesses: 0, incapRoll: 0 })
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 1 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(1) })
     expect(snap(a).matches({ alive: { damageTrack: "incapacitated" } })).toBe(true)
     a.send({ type: "APPLY_ENTANGLED" })
     expect(isRestrained(snap(a))).toBe(false)
@@ -675,8 +676,8 @@ describe("restraint", () => {
     a.send({ type: "APPLY_BOUND" })
     expect(isBound(snap(a))).toBe(true)
     // Incapacitate
-    a.send({ type: "TAKE_DAMAGE", margin: 12, soakSuccesses: 0, incapRoll: 0 })
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 1 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(1) })
     expect(snap(a).matches({ alive: { damageTrack: "incapacitated" } })).toBe(true)
     expect(isRestrained(snap(a))).toBe(false)
   })
@@ -685,7 +686,7 @@ describe("restraint", () => {
     const b = createExtra()
     b.send({ type: "APPLY_ENTANGLED" })
     expect(isEntangled(snap(b))).toBe(true)
-    b.send({ type: "TAKE_DAMAGE", margin: 4, soakSuccesses: 0, incapRoll: 0 })
+    b.send({ type: "TAKE_DAMAGE", margin: dm(4), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(isDead(snap(b))).toBe(true)
     expect(isRestrained(snap(b))).toBe(false)
   })
@@ -698,7 +699,7 @@ describe("restraint", () => {
 describe("grapple", () => {
   it("grapple attempt success → grabbed + distracted + vulnerable", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: 1 })
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
     expect(isGrabbed(snap(a))).toBe(true)
     expect(isGrappled(snap(a))).toBe(true)
     expect(isDistracted(snap(a))).toBe(true)
@@ -707,45 +708,45 @@ describe("grapple", () => {
 
   it("grapple attempt raise → pinned", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: 2 })
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(2) })
     expect(isPinned(snap(a))).toBe(true)
     expect(isGrappled(snap(a))).toBe(true)
   })
 
   it("grapple attempt fail → still free", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: 0 })
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(0) })
     expect(isGrappled(snap(a))).toBe(false)
   })
 
   it("grapple escape from grabbed → free", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: 1 })
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
     expect(isGrabbed(snap(a))).toBe(true)
-    a.send({ type: "GRAPPLE_ESCAPE", rollResult: 1 })
+    a.send({ type: "GRAPPLE_ESCAPE", rollResult: ger(1) })
     expect(isGrappled(snap(a))).toBe(false)
   })
 
   it("grapple escape fail → still grabbed", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: 1 })
-    a.send({ type: "GRAPPLE_ESCAPE", rollResult: 0 })
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    a.send({ type: "GRAPPLE_ESCAPE", rollResult: ger(0) })
     expect(isGrabbed(snap(a))).toBe(true)
   })
 
   it("pin attempt success → pinned", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: 1 })
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
     expect(isGrabbed(snap(a))).toBe(true)
-    a.send({ type: "PIN_ATTEMPT", rollResult: 1 })
+    a.send({ type: "PIN_ATTEMPT", rollResult: pr(1) })
     expect(isPinned(snap(a))).toBe(true)
   })
 
   it("grapple escape from pinned → free", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: 2 })
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(2) })
     expect(isPinned(snap(a))).toBe(true)
-    a.send({ type: "GRAPPLE_ESCAPE", rollResult: 1 })
+    a.send({ type: "GRAPPLE_ESCAPE", rollResult: ger(1) })
     expect(isGrappled(snap(a))).toBe(false)
   })
 
@@ -754,17 +755,17 @@ describe("grapple", () => {
     a.send({ type: "APPLY_ENTANGLED" })
     expect(isEntangled(snap(a))).toBe(true)
     // Grapple from entangled state — replaces restraint
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: 1 })
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
     expect(isGrabbed(snap(a))).toBe(true)
     expect(isEntangled(snap(a))).toBe(false)
   })
 
   it("grapple clears on incapacitation", () => {
     const a = createWC()
-    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: 1 })
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
     expect(isGrabbed(snap(a))).toBe(true)
-    a.send({ type: "TAKE_DAMAGE", margin: 12, soakSuccesses: 0, incapRoll: 0 })
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 1 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(1) })
     expect(isGrappled(snap(a))).toBe(false)
   })
 })
@@ -776,7 +777,7 @@ describe("grapple", () => {
 describe("blinded", () => {
   it("apply blinded severity 2 → impaired", () => {
     const a = createWC()
-    a.send({ type: "APPLY_BLINDED", severity: 2 })
+    a.send({ type: "APPLY_BLINDED", severity: bs(2) })
     expect(isBlinded(snap(a))).toBe(true)
     expect(isFullyBlinded(snap(a))).toBe(false)
     expect(blindedPenalty(snap(a))).toBe(-2)
@@ -784,32 +785,32 @@ describe("blinded", () => {
 
   it("apply blinded severity 4 → fully blinded", () => {
     const a = createWC()
-    a.send({ type: "APPLY_BLINDED", severity: 4 })
+    a.send({ type: "APPLY_BLINDED", severity: bs(4) })
     expect(isFullyBlinded(snap(a))).toBe(true)
     expect(blindedPenalty(snap(a))).toBe(-4)
   })
 
   it("impaired upgraded to blinded", () => {
     const a = createWC()
-    a.send({ type: "APPLY_BLINDED", severity: 2 })
+    a.send({ type: "APPLY_BLINDED", severity: bs(2) })
     expect(isFullyBlinded(snap(a))).toBe(false)
-    a.send({ type: "APPLY_BLINDED", severity: 4 })
+    a.send({ type: "APPLY_BLINDED", severity: bs(4) })
     expect(isFullyBlinded(snap(a))).toBe(true)
   })
 
   it("blinded recovery: vigor raise → clear", () => {
     const a = createWC()
-    a.send({ type: "APPLY_BLINDED", severity: 4 })
+    a.send({ type: "APPLY_BLINDED", severity: bs(4) })
     expect(isFullyBlinded(snap(a))).toBe(true)
-    a.send({ type: "START_OF_TURN", vigorRoll: 2, spiritRoll: 0 })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(2), spiritRoll: sr(0) })
     expect(isBlinded(snap(a))).toBe(false)
     expect(blindedPenalty(snap(a))).toBe(0)
   })
 
   it("blinded recovery: vigor success → step down to impaired", () => {
     const a = createWC()
-    a.send({ type: "APPLY_BLINDED", severity: 4 })
-    a.send({ type: "START_OF_TURN", vigorRoll: 1, spiritRoll: 0 })
+    a.send({ type: "APPLY_BLINDED", severity: bs(4) })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(1), spiritRoll: sr(0) })
     expect(isFullyBlinded(snap(a))).toBe(false)
     expect(isBlinded(snap(a))).toBe(true)
     expect(blindedPenalty(snap(a))).toBe(-2)
@@ -817,24 +818,24 @@ describe("blinded", () => {
 
   it("impaired recovery: vigor success → clear", () => {
     const a = createWC()
-    a.send({ type: "APPLY_BLINDED", severity: 2 })
-    a.send({ type: "START_OF_TURN", vigorRoll: 1, spiritRoll: 0 })
+    a.send({ type: "APPLY_BLINDED", severity: bs(2) })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(1), spiritRoll: sr(0) })
     expect(isBlinded(snap(a))).toBe(false)
   })
 
   it("blinded recovery: vigor fail → no change", () => {
     const a = createWC()
-    a.send({ type: "APPLY_BLINDED", severity: 4 })
-    a.send({ type: "START_OF_TURN", vigorRoll: 0, spiritRoll: 0 })
+    a.send({ type: "APPLY_BLINDED", severity: bs(4) })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     expect(isFullyBlinded(snap(a))).toBe(true)
   })
 
   it("blinded clears on incapacitation", () => {
     const a = createWC()
-    a.send({ type: "APPLY_BLINDED", severity: 4 })
+    a.send({ type: "APPLY_BLINDED", severity: bs(4) })
     expect(isFullyBlinded(snap(a))).toBe(true)
-    a.send({ type: "TAKE_DAMAGE", margin: 12, soakSuccesses: 0, incapRoll: 0 })
-    a.send({ type: "TAKE_DAMAGE", margin: 0, soakSuccesses: 0, incapRoll: 1 })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(1) })
     expect(isBlinded(snap(a))).toBe(false)
   })
 })

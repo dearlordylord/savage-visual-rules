@@ -7,6 +7,7 @@ import { createActor } from "xstate"
 import { z } from "zod"
 
 import { isDead, isShaken, isStunned, savageMachine, type SavageSnapshot } from "./machine"
+import { damageMargin, healAmount, incapRollResult, soakSuccesses, spiritRollResult, vigorRollResult } from "./types"
 
 // ============================================================
 // Quint state schema (all ints are bigint from ITF)
@@ -99,16 +100,16 @@ const savageDriver = defineDriver(
       doTakeDamage: ({ incapRoll, margin, soak }) => {
         ensureActor().send({
           type: "TAKE_DAMAGE",
-          margin: Number(margin),
-          soakSuccesses: Number(soak),
-          incapRoll: Number(incapRoll)
+          margin: damageMargin(Number(margin)),
+          soakSuccesses: soakSuccesses(Number(soak)),
+          incapRoll: incapRollResult(Number(incapRoll))
         })
       },
-      doStartOfTurn: ({ spiritRoll, vigorRoll }) => {
+      doStartOfTurn: ({ spiritRoll: sr, vigorRoll: vr }) => {
         ensureActor().send({
           type: "START_OF_TURN",
-          vigorRoll: Number(vigorRoll),
-          spiritRoll: Number(spiritRoll)
+          vigorRoll: vigorRollResult(Number(vr)),
+          spiritRoll: spiritRollResult(Number(sr))
         })
       },
       doEndOfTurn: () => {
@@ -133,7 +134,7 @@ const savageDriver = defineDriver(
         ensureActor().send({ type: "RECOVER_FATIGUE" })
       },
       doHeal: ({ amount }) => {
-        ensureActor().send({ type: "HEAL", amount: Number(amount) })
+        ensureActor().send({ type: "HEAL", amount: healAmount(Number(amount)) })
       },
       doFinishingMove: () => {
         ensureActor().send({ type: "FINISHING_MOVE" })

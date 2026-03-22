@@ -29,6 +29,21 @@ import {
   type SavageSnapshot,
   totalPenalty
 } from "../machine"
+import {
+  damageMargin,
+  soakSuccesses,
+  incapRollResult,
+  injuryRoll as mkInjuryRoll,
+  vigorRollResult,
+  spiritRollResult,
+  healAmount as mkHealAmount,
+  athleticsRollResult,
+  escapeRollResult,
+  grappleRollResult,
+  grappleEscapeRollResult,
+  pinRollResult,
+  blindedSeverity
+} from "../types"
 
 export const Route = createFileRoute("/")({ component: App })
 
@@ -619,7 +634,7 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
           </div>
           <EventBtn
             disabled={dead}
-            onClick={() => send({ type: "TAKE_DAMAGE", margin, soakSuccesses: soak, incapRoll, injuryRoll })}
+            onClick={() => send({ type: "TAKE_DAMAGE", margin: damageMargin(margin), soakSuccesses: soakSuccesses(soak), incapRoll: incapRollResult(incapRoll), injuryRoll: mkInjuryRoll(injuryRoll) })}
           >
             Fire
           </EventBtn>
@@ -646,7 +661,7 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
               title="Spirit check result. Used for Shaken recovery. 0 = fail. 1 = success. 2+ = raise."
             />
           </div>
-          <EventBtn disabled={dead} onClick={() => send({ type: "START_OF_TURN", vigorRoll, spiritRoll })}>
+          <EventBtn disabled={dead} onClick={() => send({ type: "START_OF_TURN", vigorRoll: vigorRollResult(vigorRoll), spiritRoll: spiritRollResult(spiritRoll) })}>
             Fire
           </EventBtn>
         </div>
@@ -693,10 +708,10 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
           <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_BOUND" })}>
             Apply Bound
           </EventBtn>
-          <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_BLINDED", severity: 2 })}>
+          <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_BLINDED", severity: blindedSeverity(2) })}>
             Impair Vision
           </EventBtn>
-          <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_BLINDED", severity: 4 })}>
+          <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_BLINDED", severity: blindedSeverity(4) })}>
             Blind
           </EventBtn>
           {incapacitated && <EventBtn onClick={() => send({ type: "FINISHING_MOVE" })}>Finishing Move</EventBtn>}
@@ -716,7 +731,7 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
                 title="Athletics roll to interrupt. 0 = fail (act after interruptee). 1+ = success (act before interruptee)."
               />
             </div>
-            <EventBtn onClick={() => send({ type: "INTERRUPT", athleticsRoll })}>Fire</EventBtn>
+            <EventBtn onClick={() => send({ type: "INTERRUPT", athleticsRoll: athleticsRollResult(athleticsRoll) })}>Fire</EventBtn>
           </div>
         )}
 
@@ -734,7 +749,7 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
                 title="Escape roll. From entangled: 1+ = free. From bound: 1 = entangled, 2+ = free."
               />
             </div>
-            <EventBtn onClick={() => send({ type: "ESCAPE_ATTEMPT", rollResult: escapeRoll })}>Fire</EventBtn>
+            <EventBtn onClick={() => send({ type: "ESCAPE_ATTEMPT", rollResult: escapeRollResult(escapeRoll) })}>Fire</EventBtn>
           </div>
         )}
 
@@ -752,15 +767,15 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
             />
           </div>
           <div className="flex flex-wrap gap-2">
-            <EventBtn disabled={dead} onClick={() => send({ type: "GRAPPLE_ATTEMPT", rollResult: grappleRoll })}>
+            <EventBtn disabled={dead} onClick={() => send({ type: "GRAPPLE_ATTEMPT", rollResult: grappleRollResult(grappleRoll) })}>
               Grapple
             </EventBtn>
             {grappled && (
               <>
-                <EventBtn onClick={() => send({ type: "GRAPPLE_ESCAPE", rollResult: grappleRoll })}>
+                <EventBtn onClick={() => send({ type: "GRAPPLE_ESCAPE", rollResult: grappleEscapeRollResult(grappleRoll) })}>
                   Escape Grapple
                 </EventBtn>
-                <EventBtn onClick={() => send({ type: "PIN_ATTEMPT", rollResult: grappleRoll })}>
+                <EventBtn onClick={() => send({ type: "PIN_ATTEMPT", rollResult: pinRollResult(grappleRoll) })}>
                   Pin
                 </EventBtn>
               </>
@@ -781,7 +796,7 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
               title="Number of wounds healed (1-3). Healing while incapacitated also removes incapacitation."
             />
           </div>
-          <EventBtn disabled={dead} onClick={() => send({ type: "HEAL", amount: healAmount })}>
+          <EventBtn disabled={dead} onClick={() => send({ type: "HEAL", amount: mkHealAmount(healAmount) })}>
             Fire
           </EventBtn>
         </div>
