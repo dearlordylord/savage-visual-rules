@@ -94,6 +94,9 @@ module savage {
   // Injury Table roll range: tableRoll * 10 + subRoll (e.g., 52 = table 5, sub 2)
   pure val INJURY_ROLL_RANGE = Set(20, 30, 40, 51, 52, 53, 54, 55, 56, 100, 110, 121, 122, 123, 124, 125, 126)
 
+  /// Valid power effect types
+  pure val VALID_EFFECT_TYPES = Set("armor", "shield", "smite", "boost", "lower_attribute", "speed", "fly")
+
   // ============================================================
   // 3. PURE FUNCTIONS
   // ============================================================
@@ -293,8 +296,11 @@ module savage {
         // Lethal: +1 fatigue + shaken + 1 wound (can cascade to incap/death)
         val sf = pApplyFatigue(s4)
         val sw = {...sf.newState, shaken: true, wounds: sf.newState.wounds + 1}
-        if (sw.wounds > sw.maxWounds) {
-          // Exceeds max — incapacitate (no incapRoll for affliction damage)
+        if (not(sw.isWildCard) and sw.wounds > 0) {
+          // Extra: any wound = eliminated
+          die(sw)
+        } else if (sw.wounds > sw.maxWounds) {
+          // Wild Card: exceeds max — incapacitate (no incapRoll for affliction damage)
           {...sw, wounds: sw.maxWounds, incapacitated: true, bleedingOut: true,
            stunned: false, prone: false, onHold: false, restrained: -1, grappledBy: "", blinded: 0}
         } else {
@@ -617,9 +623,9 @@ module savage {
   }
 
   /// Apply a power effect (buff/debuff with duration).
-  /// Appends to activeEffects list.
+  /// Appends to activeEffects list. Rejects invalid effect types.
   pure def pApplyEffect(s: State, etype: str, duration: int): {success: bool, newState: State} = {
-    if (s.dead or duration <= 0) {
+    if (s.dead or duration <= 0 or not(VALID_EFFECT_TYPES.contains(etype))) {
       {success: false, newState: s}
     } else {
       {success: true, newState: {...s, activeEffects: s.activeEffects.append({etype: etype, timer: duration})}}
@@ -728,7 +734,6 @@ module savage {
   val activeEffectsValid = state.activeEffects.foldl(true, (acc, e) => acc and e.timer > 0)
 
   /// Active effect types are valid
-  val VALID_EFFECT_TYPES = Set("armor", "shield", "smite", "boost", "lower_attribute", "speed", "fly")
   val activeEffectTypesValid = state.activeEffects.foldl(true, (acc, e) => acc and VALID_EFFECT_TYPES.contains(e.etype))
 
   /// Dead characters have no active effects

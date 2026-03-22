@@ -983,6 +983,15 @@ module savageTest {
     .expect(state.stunned and state.shaken)
   }
 
+  /// Lethal affliction on Extra: start of turn → dead
+  run lethalExtraDiesOnStartOfTurnTest = {
+    initExtra
+    .then(doApplyAffliction("lethal", 5))
+    .expect(state.afflictionType == "lethal" and not(state.dead))
+    .then(doStartOfTurn(0, 0))
+    .expect(state.dead)
+  }
+
   /// Affliction replaces previous affliction
   run afflictionReplacesExistingTest = {
     initWildCard
@@ -1076,6 +1085,13 @@ module savageTest {
   run zeroDurationEffectRejectedTest = {
     initWildCard
     .then(doApplyEffect("armor", 0))
+    .fail()
+  }
+
+  /// Invalid effect type rejected
+  run invalidEffectTypeRejectedTest = {
+    initWildCard
+    .then(doApplyEffect("fireball", 3))
     .fail()
   }
 
