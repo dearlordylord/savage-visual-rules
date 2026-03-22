@@ -121,7 +121,6 @@ function App() {
   const [isWildCard, setIsWildCard] = useState(true)
   const logIdRef = useRef(0)
   const cursorRef = useRef(-1)
-
   // Keep ref in sync with state
   const updateCursor = useCallback((val: number) => {
     cursorRef.current = val

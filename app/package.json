@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@firfi/quint-connect": "^0.7.1",
+    "@inlang/paraglide-js": "^2.15.1",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-devtools": "latest",
     "@tanstack/react-router": "latest",
@@ -41,7 +42,6 @@
     "react-dom": "^19.2.0",
     "tailwindcss": "^4.1.18",
     "xstate": "^5.28.0",
-    "@inlang/paraglide-js": "^2.15.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
