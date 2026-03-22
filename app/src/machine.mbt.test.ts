@@ -11,7 +11,15 @@ import { createActor } from "xstate"
 import { z } from "zod"
 
 import { isDead, isShaken, isStunned, type SavageEvent, savageMachine, type SavageSnapshot } from "./machine"
-import { damageMargin, healAmount, incapRollResult, soakSuccesses, spiritRollResult, vigorRollResult } from "./types"
+import {
+  damageMargin,
+  healAmount,
+  incapRollResult,
+  injuryRoll,
+  soakSuccesses,
+  spiritRollResult,
+  vigorRollResult
+} from "./types"
 
 // ============================================================
 // Quint state schema (all ints are bigint from ITF)
@@ -120,9 +128,9 @@ void (true as AssertAllEventsMapped)
 
 const driverSchema = {
   init: { wc: z.boolean() },
-  doTakeDamage: { margin: ITFBigInt, soak: ITFBigInt, incapRoll: ITFBigInt },
+  doTakeDamage: { margin: ITFBigInt, soak: ITFBigInt, incapRoll: ITFBigInt, injuryRoll: ITFBigInt },
   doStartOfTurn: { vigorRoll: ITFBigInt, spiritRoll: ITFBigInt },
-  doEndOfTurn: {},
+  doEndOfTurn: { vigorRoll: ITFBigInt },
   doUnshake: {},
   doApplyStunned: {},
   doApplyDistracted: {},
@@ -148,12 +156,13 @@ const savageDriver = defineDriver(driverSchema, () => {
       actor = createActor(savageMachine, { input: { isWildCard: wc } })
       actor.start()
     },
-    doTakeDamage: ({ incapRoll, margin, soak }) => {
+    doTakeDamage: ({ incapRoll, injuryRoll: ir, margin, soak }) => {
       ensureActor().send({
         type: "TAKE_DAMAGE",
         margin: damageMargin(Number(margin)),
         soakSuccesses: soakSuccesses(Number(soak)),
-        incapRoll: incapRollResult(Number(incapRoll))
+        incapRoll: incapRollResult(Number(incapRoll)),
+        injuryRoll: injuryRoll(Number(ir))
       })
     },
     doStartOfTurn: ({ spiritRoll: sr, vigorRoll: vr }) => {
@@ -163,8 +172,8 @@ const savageDriver = defineDriver(driverSchema, () => {
         spiritRoll: spiritRollResult(Number(sr))
       })
     },
-    doEndOfTurn: () => {
-      ensureActor().send({ type: "END_OF_TURN", vigorRoll: vigorRollResult(0) })
+    doEndOfTurn: ({ vigorRoll: vr }) => {
+      ensureActor().send({ type: "END_OF_TURN", vigorRoll: vigorRollResult(Number(vr)) })
     },
     doUnshake: () => {
       ensureActor().send({ type: "SPEND_BENNY" })

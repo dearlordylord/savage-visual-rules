@@ -20,8 +20,8 @@ Prevent future drift. Must be done FIRST so all subsequent work is covered.
 
 ## Fix existing driver bugs
 
-- [ ] `doTakeDamage`: add `injuryRoll` parameter (Quint sends it, driver ignores it)
-- [ ] `doEndOfTurn`: accept `vigorRoll` from Quint instead of hardcoding `vigorRollResult(0)` (blinded recovery never fires in MBT)
+- [x] `doTakeDamage`: add `injuryRoll` parameter (Quint sends it, driver ignores it)
+- [x] `doEndOfTurn`: accept `vigorRoll` from Quint instead of hardcoding `vigorRollResult(0)` (blinded recovery never fires in MBT)
 
 ## Add missing state fields to QuintState schema + snapshotToQuintState
 
