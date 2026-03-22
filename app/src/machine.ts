@@ -54,7 +54,7 @@ export interface SavageContext {
   injuries: InjuryType[]
   grappledBy: CharacterId | null
   afflictionTimer: number
-  activeEffects: Array<{ etype: string; timer: number }> // -1 = none, >= 0 = turns remaining
+  activeEffects: Array<{ etype: string; timer: number }> // empty = none; each entry has timer > 0
 }
 
 export type SavageEvent =
@@ -265,7 +265,12 @@ export const savageMachine = setup({
     afflictionSleep: ({ event }) => asAffliction(event).afflictionType === "sleep",
     afflictionTimerExpired: ({ context }) => context.afflictionTimer === -1,
     lethalExtraDies: ({ context }) => !context.isWildCard,
-    lethalExceedsMax: ({ context }) => context.isWildCard && context.wounds + 1 > context.maxWounds
+    lethalExceedsMax: ({ context }) => context.isWildCard && context.wounds + 1 > context.maxWounds,
+
+    // --- Power effect guards ---
+    hasActiveEffects: ({ context }) => context.activeEffects.length > 0,
+    durationPositive: ({ event }) =>
+      (event as Extract<SavageEvent, { type: "APPLY_POWER_EFFECT" }>).duration > 0
   },
   actions: {
     addWounds: assign(({ context, event }) => {
@@ -365,9 +370,9 @@ export const savageMachine = setup({
     alive: {
       type: "parallel",
       on: {
-        APPLY_POWER_EFFECT: { actions: ["applyPowerEffect"] },
+        APPLY_POWER_EFFECT: { guard: "durationPositive", actions: ["applyPowerEffect"] },
         DISMISS_EFFECT: { actions: ["dismissEffect"] },
-        BACKLASH: { actions: ["backlashClearEffects", "raiseBacklashFatigue"] }
+        BACKLASH: { guard: "hasActiveEffects", actions: ["backlashClearEffects", "raiseBacklashFatigue"] }
       },
       states: {
         // ========================================
