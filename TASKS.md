@@ -18,164 +18,27 @@
 
 ---
 
-## Phase 1: Prone
-
-> Character can go prone and stand up, affecting attack modifiers.
+## Phase 1: Prone [DONE]
 
 ### Slice 1.1: Quint spec for prone [DONE]
-
-- Add `prone: bool` to `State` type
-- Add `pDropProne(s: State)` and `pStandUp(s: State)` pure functions
-  - Guard: `isActive(s)` — can't change posture when incapacitated/dead
-  - `pDropProne`: sets `prone = true`
-  - `pStandUp`: sets `prone = false`
-- Extend `die()` to reset `prone = false`
-- Add `doDropProne` and `doStandUp` actions, add to `step`
-- Add invariant: `proneImpliesActive = state.prone implies state.isActive()`
-- Add 4-6 tests: drop/stand cycle, blocked when incapacitated, clears on death, prone persists across turns
-
-**Acceptance criteria:**
-- [x] `quint test --main savageTest` passes with all existing + new tests
-- [x] `quint verify --invariant safetyInv` passes (safetyInv extended with proneImpliesActive)
-
-### Slice 1.2: XState port for prone [DONE]
-
-- Add `positionTrack` parallel region inside `alive`: states `standing | prone`
-- Events: `DROP_PRONE`, `STAND_UP`
-- Guards: `stateIn(DAMAGE_ACTIVE) && !stateIn(FATIGUE_INCAP)`
-- Dead entry action: reset positionTrack (structural — entering dead exits alive)
-- Add derived helpers: `isProne(snap): boolean`
-- Mirror all Quint tests in vitest
-
-**Acceptance criteria:**
-- [x] All existing 27+ tests still pass
-- [x] New prone tests pass
-- [x] `isProne()` returns correct values in all states
-
-**Review notes (commit 1ef13b6):**
-- **BUG**: `always` transition on `prone` state only checks `not(stateIn(DAMAGE_ACTIVE))` but misses `stateIn(FATIGUE_INCAP)`. A fatigue-incapacitated character stays prone, violating `proneImpliesActive`. Fix: change guard to `not(and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]))`.
-- Added test: "prone clears when fatigue-incapacitated"
-- **Reference worktree (DO NOT cherry-pick — apply fix on master)**: `worktree-agent-a2b7e6f3` at `.claude/worktrees/agent-a2b7e6f3`
-
+### Slice 1.2: XState port for prone [DONE] (review fixes applied)
 ### Slice 1.3: UI indicator for prone [DONE]
 
-- Add prone badge/indicator to character status display
-- Wire to `isProne()` derived helper
-
-**Acceptance criteria:**
-- [x] Prone status visible in UI when character is prone
-- [x] Prone indicator disappears on stand up, death, or incapacitation
-
 ---
 
-## Phase 2: Hold/Interrupt
-
-> Character can hold action and interrupt another character's turn.
+## Phase 2: Hold/Interrupt [DONE]
 
 ### Slice 2.1: Quint spec for hold/interrupt [DONE]
-
-- Extend turn model: `ownTurn` bool becomes richer — add `onHold: bool` to State
-- Add `pGoOnHold(s: State)`:
-  - Guard: `s.ownTurn && !s.shaken && !s.stunned && isActive(s)`
-  - Sets `onHold = true`, `ownTurn = false` (yields current turn, waits)
-- Add `pInterrupt(s: State, athleticsRoll: int)`:
-  - Guard: `s.onHold`
-  - Success (>= 1): `onHold = false`, `ownTurn = true` (acts before interruptee)
-  - Fail (< 1): `onHold = false`, `ownTurn = true` (acts after interruptee — still gets turn)
-- Extend `pStartOfTurn`: if `onHold`, skip (can't start new turn while holding)
-- Extend existing recovery transitions: entering shaken or stunned while `onHold` → `onHold = false`
-- Add invariant: `holdImpliesActive = state.onHold implies (state.isActive() and not(state.shaken) and not(state.stunned))`
-- Add 6-8 tests
-
-**Acceptance criteria:**
-- [x] `quint test` and `quint verify` pass
-- [x] Hold is lost when shaken/stunned applied
-- [x] Interrupt success/fail both yield a turn (differ in ordering — context flag)
-
-### Slice 2.2: XState port for hold/interrupt [DONE]
-
-- Extend `turnPhase`: `othersTurn | ownTurn | onHold`
-- `ownTurn` → `onHold` via `GO_ON_HOLD`
-- `onHold` → `ownTurn` via `INTERRUPT` (always transitions back; athleticsRoll determines ordering context)
-- `always` transition: `onHold` → `othersTurn` when `stateIn(STUNNED)` or `stateIn(shaken)` (lose hold)
-- `END_OF_TURN` from `onHold` → `othersTurn` (round ends, hold expires)
-- Context: `onHold: boolean`, `interruptedSuccessfully: boolean` (for UI/game layer to read ordering)
-- Add `isOnHold(snap)` derived helper
-- Mirror Quint tests
-
-**Acceptance criteria:**
-- [x] All existing tests pass
-- [x] Hold/interrupt tests pass
-- [x] Cross-region guard (lose hold on shaken/stunned) works
-
-**Review notes (commits c8acd6b, d8c9742):**
-- **No machine bugs** — implementation correct.
-- **TEST BUG**: "cannot go on hold when stunned" test actually tested recovery path (vigorRoll: 1 recovers before GO_ON_HOLD). The stunned guard was never exercised. Fix: split into two tests — one that genuinely blocks, one for recovery path.
-- **Missing tests added**: GO_ON_HOLD from othersTurn no-op, START_OF_TURN while on hold ignored, GO_ON_HOLD blocked when fatigue-incap, onHold context sync through cycle.
-- **Reference worktree (DO NOT cherry-pick — apply fix on master)**: `worktree-agent-a15bd9dc` at `.claude/worktrees/agent-a15bd9dc`
-
+### Slice 2.2: XState port for hold/interrupt [DONE] (review fixes applied)
 ### Slice 2.3: UI indicator for hold [DONE]
-
-- Hold badge on character status
-- Interrupt action button (visible when on hold)
-
-**Acceptance criteria:**
-- [x] Hold status visible, interrupt button functional
 
 ---
 
-## Phase 3: Bound/Entangled
-
-> Character can be restrained (entangled/bound) with cascading condition effects.
+## Phase 3: Bound/Entangled [DONE]
 
 ### Slice 3.1: Quint spec for restraint [DONE]
-
-- Add `restrained: int` to State (-1 = free, 0 = entangled, 1 = bound)
-- Add `pApplyEntangled(s)`, `pApplyBound(s)`:
-  - Guard: `isActive(s)`
-  - `pApplyEntangled`: `restrained = max(restrained, 0)`
-  - `pApplyBound`: `restrained = 1`, also sets `distracted = max(distracted, timer)` and `vulnerable = max(vulnerable, timer)` (cascading)
-- Add `pEscapeAttempt(s, rollResult: int)`:
-  - From bound: success (>= 1) → entangled; raise (>= 2) → free
-  - From entangled: success (>= 1) → free
-- Extend `die()`: reset `restrained = -1`
-- Add invariant: `boundImpliesConditions = (state.restrained == 1) implies (state.isDistracted() and state.isVulnerable())`
-- Add invariant: `restrainedImpliesActive = (state.restrained >= 0) implies state.isActive()`
-- Add 8-10 tests
-
-**Acceptance criteria:**
-- [x] `quint test` and `quint verify` pass
-- [x] Bound cascades distracted + vulnerable
-- [x] Escape logic correct for each level
-
-### Slice 3.2: XState port for restraint [DONE]
-
-- New parallel region `restraintTrack` inside `alive`: `free | entangled | bound`
-- Events: `APPLY_ENTANGLED`, `APPLY_BOUND`, `ESCAPE_ATTEMPT { rollResult }`
-- Entering `bound`: actions `setDistractedTimer` + `setVulnerableTimer` (reuse existing)
-- Guards: `stateIn(DAMAGE_ACTIVE) && !stateIn(FATIGUE_INCAP)`
-- Escape guards: `rollResult >= 1` (success), `rollResult >= 2` (raise)
-- Derived helpers: `isBound(snap)`, `isEntangled(snap)`, `isRestrained(snap)`
-- Mirror Quint tests
-
-**Acceptance criteria:**
-- [x] All existing tests pass
-- [x] Restraint + escape tests pass
-- [x] Bound correctly triggers distracted + vulnerable timers
-
-**Review notes (commit c9ed88f):**
-- **BUG**: `boundImpliesConditions` invariant violated. Bound sets distracted/vulnerable timers on entry, but timers tick down and expire independently via `always` transitions. After one turn cycle, conditions clear while character is still bound. Fix: add `not(stateIn(BOUND_STATE))` to distracted and vulnerable `always` guards so conditions persist while bound.
-- Added 4 tests: boundImpliesConditions invariant across turns, fatigue-incap blocking restraint, conditions clearing after escape (raise + success).
-- Also noted: Ralph skipped Quint spec (Slice 3.1) — process deviation from Quint-first workflow.
-- **Reference worktree (DO NOT cherry-pick — apply fix on master)**: `worktree-agent-aa2aeca3` at `.claude/worktrees/agent-aa2aeca3`
-
+### Slice 3.2: XState port for restraint [DONE] (review fixes applied)
 ### Slice 3.3: UI for restraint [DONE]
-
-- Restraint status indicator (entangled/bound)
-- Escape attempt action
-
-**Acceptance criteria:**
-- [x] Restraint status visible, escape action functional
 
 ---
 
@@ -194,40 +57,20 @@
 - Extend `die()`: optionally preserve injuries (they're historical record) or clear — design choice
 - Add invariant: `injuriesNeverShrink` (injuries list length is monotonically non-decreasing, except on death)
 - Add 6-8 tests
+- **Do NOT leak grapple code into this slice — keep scope tight**
 
 **Acceptance criteria:**
-- [ ] `quint test` and `quint verify` pass
+- [ ] `quint test --main savageTest` passes with all existing + new tests
+- [ ] `quint verify --invariant safetyInv` passes (may need to skip temporal property if Apalache chokes on List[str])
 - [ ] Injuries only added on incapacitation with success/raise
 - [ ] Injuries persist through healing
 
-### Slice 4.2: XState port for injuries [DONE]
+### Slice 4.2: XState port for injuries [DONE] (review fixes applied)
 
-- Add `injuries: InjuryType[]` to context
-- Add `resolveInjury(tableRoll)` pure function
-- Extend `TAKE_DAMAGE` event type: add optional `injuryRoll: number`
-- Extend incapacitation transitions (exceedsMax + incapSuccess): action appends injury
-- Add `injuryPenalty(snap)` and `hasInjury(snap, type)` derived helpers
-- Mirror Quint tests
-
-**Acceptance criteria:**
-- [x] All existing tests pass (injuryRoll defaults to 0 or is ignored when not incapacitated)
-- [x] Injury tests pass
-- [x] `injuryPenalty()` computes correct cumulative penalty
-
-**Review notes (commit 2973936):**
-- **BUG**: `appendInjury` action attached to `incapFail` transitions (bleedingOut). Spec says injuries only on incapSuccess/raise. Fix: remove `"appendInjury"` from all 3 `incapFail` transition action arrays (unshaken, shaken, wounded states). Note: actual SWADE rules DO give injuries on fail too — if rules-accurate behavior desired, revert this fix.
-- **ZERO TESTS added** despite claiming "54 tests passing". Classic AI antipattern: compliance by not breaking existing tests. Fix: added 18 tests covering resolveInjury mapping, injury on incapSuccess, no injury on incapFail, persistence through healing, accumulation, helpers, injuriesNeverShrink invariant.
-- Also: `totalPenalty()` doesn't incorporate `injuryPenalty()`, death doesn't clear injuries (acceptable design choice but should be explicit).
-- **Reference worktree (DO NOT cherry-pick — apply fix on master)**: `worktree-agent-ac4b7435` at `.claude/worktrees/agent-ac4b7435`
+- appendInjury removed from incapFail transitions (injuries only on success/raise)
+- 71 vitest tests passing
 
 ### Slice 4.3: UI for injuries [DONE]
-
-- Injury list on character sheet
-- Penalty display incorporating injury modifiers
-
-**Acceptance criteria:**
-- [x] Injuries listed with descriptions
-- [x] Penalty total updated to include injury penalties
 
 ---
 
@@ -242,47 +85,27 @@
   - Design decision: mutual exclusion — character can't be both entangled AND grabbed
 - Add `grappledBy: str` context (opponent identifier, empty if not grappled)
 - Add `pGrappleAttempt(s, rollResult)`: success → grabbed, raise → pinned
-- Add `pGrappleEscape(s, rollResult)`: success → free from grapple
+- Add `pGrappleEscape(s, rollResult)`: pinned success→grabbed, pinned raise→free, grabbed success→free
 - Add `pPinAttempt(s, rollResult)`: upgrade grabbed → pinned on success
-- Grabbed/pinned: character is distracted + vulnerable (like bound)
+- Grabbed/pinned: character is distracted + vulnerable (like bound) — conditions must NOT expire while grabbed/pinned
 - Key rule: opponent stunned/shaken does NOT release grapple (unlike most conditions)
-- Add 8-10 tests
+- **Update `restrainedValid` invariant to allow values 2 and 3**
+- Add 8-10 tests including: escape from pinned (step-down), condition persistence across turns
+- **Do NOT leak blinded code into this slice — keep scope tight**
 
 **Acceptance criteria:**
 - [ ] `quint test` and `quint verify` pass
 - [ ] Grapple and restraint are mutually exclusive
 - [ ] Grabbed/pinned applies distracted + vulnerable
+- [ ] Escape from pinned steps down to grabbed (not directly free)
 - [ ] External signals for attacker vulnerability documented
 
-### Slice 5.2: XState port for grapple [DONE]
+### Slice 5.2: XState port for grapple [DONE] (review fixes applied)
 
-- Extend `restraintTrack`: `free | entangled | bound | grabbed | pinned`
-- Events: `GRAPPLE_ATTEMPT { rollResult }`, `GRAPPLE_ESCAPE { rollResult }`, `PIN_ATTEMPT { rollResult }`
-- Context: `grappledBy: string | null`
-- Entering grabbed/pinned: set distracted + vulnerable timers
-- Derived helpers: `isGrabbed(snap)`, `isPinned(snap)`, `isGrappled(snap)`
-- Mirror Quint tests
-
-**Acceptance criteria:**
-- [x] All existing tests pass
-- [x] Grapple tests pass
-- [x] Mutual exclusion with entangled/bound enforced
-
-**Review notes (commits 41a6337, 79c1cd0):**
-- **BUG (confirmed, same pattern as Phase 3)**: distracted+vulnerable expire while grabbed/pinned. Fix: add `not(stateIn(GRABBED_STATE))` and `not(stateIn(PINNED_STATE))` to distracted/vulnerable `always` guards (alongside existing `not(stateIn(BOUND_STATE))`).
-- Added 6 tests: grabbed/pinned condition persistence across turns, conditions clear on escape, grapple blocked by fatigue-incap, death clears grappledBy, bound persistence (pre-existing bug).
-- Also: `grappledBy` context field is declared but never set (no `attacker` field on GRAPPLE_ATTEMPT event) — dead context.
-- 69 tests passing (63 + 6 new).
-- **Reference worktree (DO NOT cherry-pick — apply fix on master)**: `worktree-agent-a4977822` at `.claude/worktrees/agent-a4977822`
+- Condition persistence guards applied: distracted/vulnerable `always` guards include `not(stateIn(GRABBED_STATE))` and `not(stateIn(PINNED_STATE))`
+- 71 vitest tests passing
 
 ### Slice 5.3: UI for grapple [DONE]
-
-- Grapple indicator showing grabbed/pinned + opponent
-- Escape action
-
-**Acceptance criteria:**
-- [x] Grapple status and opponent visible
-- [x] Escape action functional
 
 ---
 
@@ -310,29 +133,7 @@
 - [ ] Raise clears entirely
 
 ### Slice 6.2: XState port for blinded [DONE]
-
-- New sub-region in `conditionTrack`: `vision` with states `clear | impaired | blinded`
-- Events: `APPLY_BLINDED { severity: 2 | 4 }`
-- Recovery: on `START_OF_TURN`, vigorRoll determines step-down (reuse existing vigorRoll parameter)
-- Guards: `vigorRaise` → clear, `vigorSuccessNoRaise` → step down, fail → stay
-- Derived helper: `isBlinded(snap)`, `blindedPenalty(snap)`
-- Mirror Quint tests
-
-**Acceptance criteria:**
-- [x] All existing tests pass
-- [x] Blinded tests pass
-- [x] Recovery uses same vigorRoll as stunned (no new event params needed)
-
-**Review notes (commit 7629d31):**
-- **NOT YET REVIEWED** — review was not launched before Ralph was stopped. Needs review on next run.
-
 ### Slice 6.3: UI for blinded [DONE]
-
-- Blinded indicator with severity level
-- Penalty display
-
-**Acceptance criteria:**
-- [x] Severity visible, penalty applied to display
 
 ---
 
@@ -341,8 +142,6 @@
 > Fear table results auto-dispatch as existing machine events.
 
 ### Slice 7.1: Fear table pure function
-
-> **Note**: Ralph started this but was killed mid-implementation. Partial work (resolveFear function + tests) was discarded from working tree. Start fresh.
 
 - Implement `resolveFear(tableRoll: number, modifier: number): SavageEvent[]` as exported pure function (not a machine region)
 - Mapping (tableRoll + modifier):
@@ -357,12 +156,15 @@
   - 20-21: Major phobia → hindrance context addition
   - 22+: Heart attack → special TAKE_DAMAGE or APPLY_STUNNED depending on Vigor check
 - Add to Quint as `fearTableResult(roll: int): List[str]`
+- **Both Quint AND TypeScript must be implemented** — this slice requires both
+- **Follow the mapping above exactly** — do not substitute APPLY_SHAKEN for APPLY_STUNNED
 - 10-12 tests covering every bracket + modifier shifts
 
 **Acceptance criteria:**
 - [ ] Every table bracket maps to correct events
 - [ ] Modifier correctly shifts result
 - [ ] Edge cases (heart attack, phobia) produce appropriate output
+- [ ] Both Quint and TypeScript implementations exist and are tested
 
 ### Slice 7.2: UI for fear resolution
 

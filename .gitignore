@@ -22,3 +22,4 @@ node_modules/
 .ralph/fix_plan.md
 .ralph/.loop_start_sha
 .ralph_backup_*
+_apalache-out/

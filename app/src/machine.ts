@@ -127,6 +127,9 @@ const SHAKEN_STATE = { alive: { damageTrack: { active: "shaken" as const } } }
 const OTHERS_TURN = { alive: { turnPhase: "othersTurn" as const } }
 const DAMAGE_ACTIVE = { alive: { damageTrack: "active" as const } }
 const FATIGUE_INCAP = { alive: { fatigueTrack: "incapByFatigue" as const } }
+const BOUND_STATE = { alive: { restraintTrack: "bound" as const } }
+const GRABBED_STATE = { alive: { restraintTrack: "grabbed" as const } }
+const PINNED_STATE = { alive: { restraintTrack: "pinned" as const } }
 
 // ============================================================
 // Machine
@@ -303,7 +306,7 @@ export const savageMachine = setup({
                       {
                         guard: and(["exceedsMax", "incapFail"]),
                         target: "#savage.alive.damageTrack.incapacitated.bleedingOut",
-                        actions: ["setWoundsToMax", "appendInjury"]
+                        actions: ["setWoundsToMax"]
                       },
                       {
                         guard: and(["exceedsMax", "incapSuccess"]),
@@ -330,7 +333,7 @@ export const savageMachine = setup({
                       {
                         guard: and(["exceedsMaxShaken", "incapFail"]),
                         target: "#savage.alive.damageTrack.incapacitated.bleedingOut",
-                        actions: ["setWoundsToMax", "appendInjury"]
+                        actions: ["setWoundsToMax"]
                       },
                       {
                         guard: and(["exceedsMaxShaken", "incapSuccess"]),
@@ -371,7 +374,7 @@ export const savageMachine = setup({
                       {
                         guard: and(["exceedsMax", "incapFail"]),
                         target: "#savage.alive.damageTrack.incapacitated.bleedingOut",
-                        actions: ["setWoundsToMax", "appendInjury"]
+                        actions: ["setWoundsToMax"]
                       },
                       {
                         guard: and(["exceedsMax", "incapSuccess"]),
@@ -513,7 +516,12 @@ export const savageMachine = setup({
                     }
                   },
                   always: {
-                    guard: "distractedTimerExpired",
+                    guard: and([
+                      "distractedTimerExpired",
+                      not(stateIn(BOUND_STATE)),
+                      not(stateIn(GRABBED_STATE)),
+                      not(stateIn(PINNED_STATE))
+                    ]),
                     target: "clear"
                   }
                 }
@@ -571,7 +579,12 @@ export const savageMachine = setup({
                     }
                   },
                   always: {
-                    guard: "vulnerableTimerExpired",
+                    guard: and([
+                      "vulnerableTimerExpired",
+                      not(stateIn(BOUND_STATE)),
+                      not(stateIn(GRABBED_STATE)),
+                      not(stateIn(PINNED_STATE))
+                    ]),
                     target: "clear"
                   }
                 }
@@ -742,7 +755,7 @@ export const savageMachine = setup({
                 }
               },
               always: {
-                guard: not(stateIn(DAMAGE_ACTIVE)),
+                guard: not(and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))])),
                 target: "standing"
               }
             }
