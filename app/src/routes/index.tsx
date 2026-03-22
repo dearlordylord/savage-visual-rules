@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- TODO: split this file into smaller components */
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, Link } from "@tanstack/react-router"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createActor } from "xstate"
 
@@ -220,6 +220,12 @@ function App() {
               </button>
             ))}
           </div>
+          <Link
+            to="/cookbook"
+            className="rounded-lg border border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.14)] px-3 py-1.5 text-xs font-semibold text-[var(--lagoon-deep)] transition hover:bg-[rgba(79,184,178,0.24)]"
+          >
+            {m.cookbook_link()}
+          </Link>
           <div className="flex gap-2">
             <button
               onClick={() => reset(true)}
@@ -571,11 +577,8 @@ function StateTree({ snapshot }: { snapshot: SavageSnapshot }) {
 
           <StateRegion title={m.region_turn_phase()}>
             <div className="flex gap-3">
-              <StateLeaf
-                label={m.state_others_turn()}
-                active={snapshot.matches({ alive: { turnPhase: "othersTurn" } })}
-              />
-              <StateLeaf label={m.state_own_turn()} active={snapshot.matches({ alive: { turnPhase: "ownTurn" } })} />
+              <StateLeaf label={m.state_others_turn()} active={snapshot.matches({ alive: { turnPhase: "idle" } })} />
+              <StateLeaf label={m.state_own_turn()} active={snapshot.matches({ alive: { turnPhase: "acting" } })} />
               <StateLeaf label={m.state_on_hold()} active={isOnHold(snapshot)} />
             </div>
           </StateRegion>
@@ -1033,7 +1036,9 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
           <div className="flex flex-wrap gap-2">
             <EventBtn
               disabled={dead}
-              onClick={() => send({ type: "GRAPPLE_ATTEMPT", rollResult: grappleRollResult(grappleRoll) })}
+              onClick={() =>
+                send({ type: "GRAPPLE_ATTEMPT", rollResult: grappleRollResult(grappleRoll), opponent: "opp1" })
+              }
             >
               {m.btn_grapple()}
             </EventBtn>

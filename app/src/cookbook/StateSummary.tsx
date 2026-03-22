@@ -14,6 +14,7 @@ import {
   type SavageSnapshot,
   totalPenalty
 } from "../machine"
+import * as m from "../paraglide/messages"
 
 interface StateSummaryProps {
   snapshot: SavageSnapshot
@@ -35,7 +36,7 @@ export function StateSummary({ snapshot }: StateSummaryProps) {
   if (isDead(snapshot)) {
     return (
       <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
-        МЁРТВ
+        {m.cookbook_dead()}
       </div>
     )
   }
@@ -54,36 +55,40 @@ export function StateSummary({ snapshot }: StateSummaryProps) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-1">
-        <Badge label="Шок" active={isShaken(snapshot)} />
-        <Badge label="Оглушён" active={isStunned(snapshot)} />
-        <Badge label="Отвлечён" active={isDistracted(snapshot)} />
-        <Badge label="Уязвим" active={isVulnerable(snapshot)} />
-        <Badge label="Лежит" active={isProne(snapshot)} />
-        <Badge label="Наготове" active={isOnHold(snapshot)} />
-        <Badge label="Оборона" active={isDefending(snapshot)} />
-        <Badge label="Схвачен" active={isGrabbed(snapshot)} />
-        <Badge label="Обездвижен" active={isPinned(snapshot)} />
+        <Badge label={m.cookbook_badge_shaken()} active={isShaken(snapshot)} />
+        <Badge label={m.cookbook_badge_stunned()} active={isStunned(snapshot)} />
+        <Badge label={m.cookbook_badge_distracted()} active={isDistracted(snapshot)} />
+        <Badge label={m.cookbook_badge_vulnerable()} active={isVulnerable(snapshot)} />
+        <Badge label={m.cookbook_badge_prone()} active={isProne(snapshot)} />
+        <Badge label={m.cookbook_badge_on_hold()} active={isOnHold(snapshot)} />
+        <Badge label={m.cookbook_badge_defending()} active={isDefending(snapshot)} />
+        <Badge label={m.cookbook_badge_grabbed()} active={isGrabbed(snapshot)} />
+        <Badge label={m.cookbook_badge_pinned()} active={isPinned(snapshot)} />
       </div>
       <div className="flex flex-wrap gap-3 text-xs text-[var(--sea-ink-soft)]">
         <span>
-          Ранения: <strong className="text-[var(--sea-ink)]">{wounds}</strong>
+          {m.cookbook_stat_wounds()}: <strong className="text-[var(--sea-ink)]">{wounds}</strong>
         </span>
         {penalty !== 0 && (
           <span>
-            Штраф: <strong className="text-[var(--sea-ink)]">{penalty}</strong>
+            {m.cookbook_stat_penalty()}: <strong className="text-[var(--sea-ink)]">{penalty}</strong>
           </span>
         )}
         {bp !== 0 && (
           <span>
-            Зрение: <strong className="text-[var(--sea-ink)]">{bp}</strong>
+            {m.cookbook_stat_vision()}: <strong className="text-[var(--sea-ink)]">{bp}</strong>
           </span>
         )}
         {aff && (
           <span>
-            Недуг: <strong className="text-[var(--sea-ink)]">{aff}</strong>
+            {m.cookbook_stat_affliction()}: <strong className="text-[var(--sea-ink)]">{aff}</strong>
           </span>
         )}
-        {isIncap && <span className="font-semibold text-red-600">{isBleeding ? "Истекает кровью" : "При смерти"}</span>}
+        {isIncap && (
+          <span className="font-semibold text-red-600">
+            {isBleeding ? m.cookbook_stat_bleeding() : m.cookbook_stat_incap()}
+          </span>
+        )}
       </div>
     </div>
   )

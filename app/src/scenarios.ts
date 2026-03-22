@@ -22,6 +22,7 @@ import {
   isStunned,
   isVulnerable
 } from "./machine"
+import * as m from "./paraglide/messages"
 import {
   afflictionDuration as ad,
   athleticsRollResult as ar,
@@ -43,49 +44,54 @@ import {
 // Types
 // ============================================================
 
+// eslint-disable-next-line functional/no-mixed-types -- data + callbacks naturally mixed
 export interface ScenarioStep {
   event: SavageEvent | null // null for narrative-only steps (e.g. fear table result display)
-  label: string
+  label: () => string
   expect: Array<{
-    desc: string
+    desc: () => string
     check: (snap: SavageSnapshot) => boolean
   }>
 }
 
+// eslint-disable-next-line functional/no-mixed-types -- data + callbacks naturally mixed
 export interface Scenario {
   id: string
-  title: string
-  description: string
-  category: string
+  title: () => string
+  description: () => string
+  category: ScenarioCategory
   characterType: "wildCard" | "extra"
   steps: Array<ScenarioStep>
 }
 
 // ============================================================
-// Category labels (Russian)
+// Category labels
 // ============================================================
 
-export const categoryLabels: Record<string, string> = {
-  damage: "Урон",
-  soak: "Поглощение урона",
-  shaken: "Оправление от шока",
-  incap: "При смерти",
-  bleedingOut: "Истекая кровью",
-  extras: "Статисты и дикие карты",
-  stunned: "Оглушение",
-  conditions: "Отвлечён и уязвим",
-  fatigue: "Усталость",
-  healing: "Лечение",
-  hold: "Наготове и прерывание",
-  prone: "Положение лёжа",
-  restraint: "Путы (схвачен/обездвижен)",
-  grapple: "Захват",
-  blinded: "Ослепление",
-  afflictions: "Недуги",
-  powers: "Мистические силы",
-  defense: "Оборона",
-  fear: "Страх"
-}
+const CATEGORY_LABELS_INTERNAL = {
+  damage: m.cat_damage,
+  soak: m.cat_soak,
+  shaken: m.cat_shaken,
+  incap: m.cat_incap,
+  bleedingOut: m.cat_bleedingOut,
+  extras: m.cat_extras,
+  stunned: m.cat_stunned,
+  conditions: m.cat_conditions,
+  fatigue: m.cat_fatigue,
+  healing: m.cat_healing,
+  hold: m.cat_hold,
+  prone: m.cat_prone,
+  restraint: m.cat_restraint,
+  grapple: m.cat_grapple,
+  blinded: m.cat_blinded,
+  afflictions: m.cat_afflictions,
+  powers: m.cat_powers,
+  defense: m.cat_defense,
+  fear: m.cat_fear
+} as const satisfies Record<string, () => string>
+
+export type ScenarioCategory = keyof typeof CATEGORY_LABELS_INTERNAL
+export const CATEGORY_LABELS: Record<ScenarioCategory, () => string> = CATEGORY_LABELS_INTERNAL
 
 // ============================================================
 // Scenarios
@@ -97,76 +103,76 @@ export const scenarios: Array<Scenario> = [
   // ========================================
   {
     id: "damage-glancing",
-    title: "Скользящий удар — только шок",
-    description: "Урон равен стойкости персонажа (превышение 0). Персонаж оказывается в шоке, но не получает ранений.",
+    title: m.sc_damage_glancing_title,
+    description: m.sc_damage_glancing_desc,
     category: "damage",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Удар проходит впритык (превышение 0)",
+        label: m.sc_damage_glancing_s0,
         expect: [
-          { desc: "Персонаж в шоке", check: isShaken },
-          { desc: "Ранения = 0", check: (s) => s.context.wounds === 0 }
+          { desc: m.sc_chk_shaken, check: isShaken },
+          { desc: m.sc_chk_wounds_0, check: (s) => s.context.wounds === 0 }
         ]
       }
     ]
   },
   {
     id: "damage-solid",
-    title: "Крепкий удар — шок и ранение",
-    description: "Один подъём на броске урона (превышение 4+). Персонаж в шоке и получает одно ранение.",
+    title: m.sc_damage_solid_title,
+    description: m.sc_damage_solid_desc,
     category: "damage",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "TAKE_DAMAGE", margin: dm(5), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Удар с подъёмом (превышение 5)",
+        label: m.sc_damage_solid_s0,
         expect: [
-          { desc: "Персонаж в шоке", check: isShaken },
-          { desc: "Ранения = 1", check: (s) => s.context.wounds === 1 }
+          { desc: m.sc_chk_shaken, check: isShaken },
+          { desc: m.sc_chk_wounds_1, check: (s) => s.context.wounds === 1 }
         ]
       }
     ]
   },
   {
     id: "damage-shaken-on-shaken",
-    title: "Шок на шоке — автоматическое ранение",
-    description: "Персонаж уже в шоке. Повторный шок автоматически наносит ранение.",
+    title: m.sc_damage_shaken_on_shaken_title,
+    description: m.sc_damage_shaken_on_shaken_desc,
     category: "damage",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "TAKE_DAMAGE", margin: dm(2), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Первый удар — персонаж в шоке",
+        label: m.sc_damage_shaken_on_shaken_s0,
         expect: [
-          { desc: "Персонаж в шоке", check: isShaken },
-          { desc: "Ранения = 0", check: (s) => s.context.wounds === 0 }
+          { desc: m.sc_chk_shaken, check: isShaken },
+          { desc: m.sc_chk_wounds_0, check: (s) => s.context.wounds === 0 }
         ]
       },
       {
         event: { type: "TAKE_DAMAGE", margin: dm(1), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Второй удар — шок на шоке",
+        label: m.sc_damage_shaken_on_shaken_s1,
         expect: [
-          { desc: "Персонаж в шоке", check: isShaken },
-          { desc: "Ранения = 1", check: (s) => s.context.wounds === 1 }
+          { desc: m.sc_chk_shaken, check: isShaken },
+          { desc: m.sc_chk_wounds_1, check: (s) => s.context.wounds === 1 }
         ]
       }
     ]
   },
   {
     id: "damage-brutal",
-    title: "Сокрушительный удар — несколько ранений",
-    description: "Превышение 8 = два подъёма = шок и два ранения за один удар.",
+    title: m.sc_damage_brutal_title,
+    description: m.sc_damage_brutal_desc,
     category: "damage",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "TAKE_DAMAGE", margin: dm(8), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Мощный удар (превышение 8)",
+        label: m.sc_damage_brutal_s0,
         expect: [
-          { desc: "Персонаж в шоке", check: isShaken },
-          { desc: "Ранения = 2", check: (s) => s.context.wounds === 2 }
+          { desc: m.sc_chk_shaken, check: isShaken },
+          { desc: m.sc_chk_wounds_2, check: (s) => s.context.wounds === 2 }
         ]
       }
     ]
@@ -177,39 +183,39 @@ export const scenarios: Array<Scenario> = [
   // ========================================
   {
     id: "soak-partial",
-    title: "Проверка на прочность — частичное поглощение",
-    description: "Удар с подъёмом, но персонаж тратит фишку и поглощает одно ранение. Остаётся в шоке, но без ранений.",
+    title: m.sc_soak_partial_title,
+    description: m.sc_soak_partial_desc,
     category: "soak",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "TAKE_DAMAGE", margin: dm(4), soakSuccesses: sk(1), incapRoll: ir(0) },
-        label: "Удар с подъёмом, поглощение 1",
+        label: m.sc_soak_partial_s0,
         expect: [
-          { desc: "Персонаж в шоке", check: isShaken },
-          { desc: "Ранения = 0", check: (s) => s.context.wounds === 0 }
+          { desc: m.sc_chk_shaken, check: isShaken },
+          { desc: m.sc_chk_wounds_0, check: (s) => s.context.wounds === 0 }
         ]
       }
     ]
   },
   {
     id: "soak-clears-shaken",
-    title: "Полное поглощение снимает шок",
-    description: "Персонаж уже в шоке. Новый удар, но все ранения поглощены — шок снимается (особое правило SWADE).",
+    title: m.sc_soak_clears_shaken_title,
+    description: m.sc_soak_clears_shaken_desc,
     category: "soak",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Первый удар — шок",
-        expect: [{ desc: "Персонаж в шоке", check: isShaken }]
+        label: m.sc_soak_clears_shaken_s0,
+        expect: [{ desc: m.sc_chk_shaken, check: isShaken }]
       },
       {
         event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(1), incapRoll: ir(0) },
-        label: "Второй удар — полное поглощение",
+        label: m.sc_soak_clears_shaken_s1,
         expect: [
-          { desc: "Персонаж НЕ в шоке", check: (s) => !isShaken(s) },
-          { desc: "Ранения = 0", check: (s) => s.context.wounds === 0 }
+          { desc: m.sc_chk_not_shaken, check: (s) => !isShaken(s) },
+          { desc: m.sc_chk_wounds_0, check: (s) => s.context.wounds === 0 }
         ]
       }
     ]
@@ -220,65 +226,64 @@ export const scenarios: Array<Scenario> = [
   // ========================================
   {
     id: "shaken-recovery-success",
-    title: "Оправление от шока — успех",
-    description: "В начале хода персонаж проходит проверку характера. Успех — шок снят, можно действовать.",
+    title: m.sc_shaken_recovery_success_title,
+    description: m.sc_shaken_recovery_success_desc,
     category: "shaken",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Персонаж получает шок",
-        expect: [{ desc: "Персонаж в шоке", check: isShaken }]
+        label: m.sc_shaken_recovery_success_s0,
+        expect: [{ desc: m.sc_chk_shaken, check: isShaken }]
       },
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) },
-        label: "Начало хода — проверка характера (успех)",
+        label: m.sc_shaken_recovery_success_s1,
         expect: [
-          { desc: "Персонаж НЕ в шоке", check: (s) => !isShaken(s) },
-          { desc: "Фаза хода: действует", check: (s) => s.matches({ alive: { turnPhase: "acting" } }) }
+          { desc: m.sc_chk_not_shaken, check: (s) => !isShaken(s) },
+          { desc: m.sc_shaken_recovery_success_s1_e1, check: (s) => s.matches({ alive: { turnPhase: "acting" } }) }
         ]
       }
     ]
   },
   {
     id: "shaken-recovery-fail",
-    title: "Оправление от шока — провал",
-    description:
-      "Проверка характера провалена. Персонаж по-прежнему в шоке, может предпринимать только свободные действия.",
+    title: m.sc_shaken_recovery_fail_title,
+    description: m.sc_shaken_recovery_fail_desc,
     category: "shaken",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Персонаж получает шок",
-        expect: [{ desc: "Персонаж в шоке", check: isShaken }]
+        label: m.sc_shaken_recovery_fail_s0,
+        expect: [{ desc: m.sc_chk_shaken, check: isShaken }]
       },
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
-        label: "Начало хода — проверка характера (провал)",
+        label: m.sc_shaken_recovery_fail_s1,
         expect: [
-          { desc: "Персонаж в шоке", check: isShaken },
-          { desc: "Фаза хода: действует", check: (s) => s.matches({ alive: { turnPhase: "acting" } }) }
+          { desc: m.sc_chk_shaken, check: isShaken },
+          { desc: m.sc_shaken_recovery_fail_s1_e1, check: (s) => s.matches({ alive: { turnPhase: "acting" } }) }
         ]
       }
     ]
   },
   {
     id: "shaken-benny",
-    title: "Фишка снимает шок мгновенно",
-    description: "Персонаж тратит фишку, чтобы выйти из шока в любой момент раунда.",
+    title: m.sc_shaken_benny_title,
+    description: m.sc_shaken_benny_desc,
     category: "shaken",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "TAKE_DAMAGE", margin: dm(2), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Персонаж в шоке",
-        expect: [{ desc: "Персонаж в шоке", check: isShaken }]
+        label: m.sc_shaken_benny_s0,
+        expect: [{ desc: m.sc_chk_shaken, check: isShaken }]
       },
       {
         event: { type: "SPEND_BENNY" },
-        label: "Трата фишки",
-        expect: [{ desc: "Персонаж НЕ в шоке", check: (s) => !isShaken(s) }]
+        label: m.sc_shaken_benny_s1,
+        expect: [{ desc: m.sc_chk_not_shaken, check: (s) => !isShaken(s) }]
       }
     ]
   },
@@ -288,44 +293,44 @@ export const scenarios: Array<Scenario> = [
   // ========================================
   {
     id: "incap-crit-fail",
-    title: "При смерти — критический провал = гибель",
-    description: "Ранения превышают максимум. Проверка выносливости — критический провал. Персонаж погибает.",
+    title: m.sc_incap_crit_fail_title,
+    description: m.sc_incap_crit_fail_desc,
     category: "incap",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Тяжёлый удар — 3 ранения, шок",
+        label: m.sc_incap_crit_fail_s0,
         expect: [
-          { desc: "Ранения = 3", check: (s) => s.context.wounds === 3 },
-          { desc: "Персонаж в шоке", check: isShaken }
+          { desc: m.sc_chk_wounds_3, check: (s) => s.context.wounds === 3 },
+          { desc: m.sc_chk_shaken, check: isShaken }
         ]
       },
       {
         event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(-1) },
-        label: "Ещё удар — превышение максимума, крит. провал выносливости",
-        expect: [{ desc: "Персонаж мёртв", check: isDead }]
+        label: m.sc_incap_crit_fail_s1,
+        expect: [{ desc: m.sc_chk_dead, check: isDead }]
       }
     ]
   },
   {
     id: "incap-bleeding-out",
-    title: "При смерти — провал = истекает кровью",
-    description: "Проверка выносливости провалена (не критически). Персонаж истекает кровью.",
+    title: m.sc_incap_bleeding_out_title,
+    description: m.sc_incap_bleeding_out_desc,
     category: "incap",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Тяжёлый удар — 3 ранения, шок",
-        expect: [{ desc: "Ранения = 3", check: (s) => s.context.wounds === 3 }]
+        label: m.sc_incap_bleeding_out_s0,
+        expect: [{ desc: m.sc_chk_wounds_3, check: (s) => s.context.wounds === 3 }]
       },
       {
         event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Ещё удар — провал выносливости",
+        label: m.sc_incap_bleeding_out_s1,
         expect: [
           {
-            desc: "Истекает кровью",
+            desc: m.sc_chk_bleeding_out,
             check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } })
           }
         ]
@@ -334,22 +339,22 @@ export const scenarios: Array<Scenario> = [
   },
   {
     id: "incap-stable",
-    title: "При смерти — успех = стабилен + увечье",
-    description: "Проверка выносливости успешна. Персонаж стабилен, но получает увечье по таблице.",
+    title: m.sc_incap_stable_title,
+    description: m.sc_incap_stable_desc,
     category: "incap",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Тяжёлый удар — 3 ранения, шок",
-        expect: [{ desc: "Ранения = 3", check: (s) => s.context.wounds === 3 }]
+        label: m.sc_incap_stable_s0,
+        expect: [{ desc: m.sc_chk_wounds_3, check: (s) => s.context.wounds === 3 }]
       },
       {
         event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(1), injuryRoll: ij(52) },
-        label: "Ещё удар — успех выносливости, увечье",
+        label: m.sc_incap_stable_s1,
         expect: [
-          { desc: "Стабилен", check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "stable" } } }) },
-          { desc: "Увечье: корпус (сломлен)", check: (s) => s.context.injuries.includes("guts_broken") }
+          { desc: m.sc_chk_stable, check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "stable" } } }) },
+          { desc: m.sc_incap_stable_s1_e1, check: (s) => s.context.injuries.includes("guts_broken") }
         ]
       }
     ]
@@ -360,61 +365,61 @@ export const scenarios: Array<Scenario> = [
   // ========================================
   {
     id: "bleeding-death",
-    title: "Истекая кровью — провал = гибель",
-    description: "Персонаж истекает кровью. В начале хода проверка выносливости провалена — персонаж погибает.",
+    title: m.sc_bleeding_death_title,
+    description: m.sc_bleeding_death_desc,
     category: "bleedingOut",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "3 ранения, шок",
-        expect: [{ desc: "Ранения = 3", check: (s) => s.context.wounds === 3 }]
+        label: m.sc_bleeding_death_s0,
+        expect: [{ desc: m.sc_chk_wounds_3, check: (s) => s.context.wounds === 3 }]
       },
       {
         event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Превышение максимума → истекает кровью",
+        label: m.sc_bleeding_death_s1,
         expect: [
           {
-            desc: "Истекает кровью",
+            desc: m.sc_chk_bleeding_out,
             check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } })
           }
         ]
       },
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
-        label: "Начало хода — выносливость провал",
-        expect: [{ desc: "Персонаж мёртв", check: isDead }]
+        label: m.sc_bleeding_death_s2,
+        expect: [{ desc: m.sc_chk_dead, check: isDead }]
       }
     ]
   },
   {
     id: "bleeding-stabilized",
-    title: "Истекая кровью — подъём = стабилизация",
-    description: "Проверка выносливости с подъёмом — состояние стабилизируется.",
+    title: m.sc_bleeding_stabilized_title,
+    description: m.sc_bleeding_stabilized_desc,
     category: "bleedingOut",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "3 ранения, шок",
-        expect: [{ desc: "Ранения = 3", check: (s) => s.context.wounds === 3 }]
+        label: m.sc_bleeding_stabilized_s0,
+        expect: [{ desc: m.sc_chk_wounds_3, check: (s) => s.context.wounds === 3 }]
       },
       {
         event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Превышение максимума → истекает кровью",
+        label: m.sc_bleeding_stabilized_s1,
         expect: [
           {
-            desc: "Истекает кровью",
+            desc: m.sc_chk_bleeding_out,
             check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } })
           }
         ]
       },
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(2), spiritRoll: sr(0) },
-        label: "Начало хода — выносливость подъём",
+        label: m.sc_bleeding_stabilized_s2,
         expect: [
-          { desc: "Стабилен", check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "stable" } } }) },
-          { desc: "Персонаж жив", check: (s) => !isDead(s) }
+          { desc: m.sc_chk_stable, check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "stable" } } }) },
+          { desc: m.sc_chk_alive, check: (s) => !isDead(s) }
         ]
       }
     ]
@@ -425,35 +430,35 @@ export const scenarios: Array<Scenario> = [
   // ========================================
   {
     id: "extra-dies",
-    title: "Статист гибнет от первого ранения",
-    description: "У статистов максимум ранений = 1. Любое ранение — гибель.",
+    title: m.sc_extra_dies_title,
+    description: m.sc_extra_dies_desc,
     category: "extras",
     characterType: "extra",
     steps: [
       {
         event: { type: "TAKE_DAMAGE", margin: dm(4), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Удар с подъёмом по статисту",
+        label: m.sc_extra_dies_s0,
         expect: [
-          { desc: "Статист мёртв", check: isDead },
-          { desc: "Ранения = 1", check: (s) => s.context.wounds === 1 }
+          { desc: m.sc_chk_extra_dead, check: isDead },
+          { desc: m.sc_chk_wounds_1, check: (s) => s.context.wounds === 1 }
         ]
       }
     ]
   },
   {
     id: "wc-survives",
-    title: "Дикая карта выживает при том же ударе",
-    description: "Тот же урон, но дикая карта получает ранение и остаётся в строю.",
+    title: m.sc_wc_survives_title,
+    description: m.sc_wc_survives_desc,
     category: "extras",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "TAKE_DAMAGE", margin: dm(4), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Удар с подъёмом по дикой карте",
+        label: m.sc_wc_survives_s0,
         expect: [
-          { desc: "Персонаж жив", check: (s) => !isDead(s) },
-          { desc: "Персонаж в шоке", check: isShaken },
-          { desc: "Ранения = 1", check: (s) => s.context.wounds === 1 }
+          { desc: m.sc_chk_alive, check: (s) => !isDead(s) },
+          { desc: m.sc_chk_shaken, check: isShaken },
+          { desc: m.sc_chk_wounds_1, check: (s) => s.context.wounds === 1 }
         ]
       }
     ]
@@ -464,84 +469,87 @@ export const scenarios: Array<Scenario> = [
   // ========================================
   {
     id: "stunned-cascade",
-    title: "Оглушение — каскад состояний",
-    description: "Оглушённый персонаж падает, отвлечён и уязвим. Не может действовать.",
+    title: m.sc_stunned_cascade_title,
+    description: m.sc_stunned_cascade_desc,
     category: "stunned",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "APPLY_STUNNED" },
-        label: "Персонаж оглушён",
+        label: m.sc_stunned_cascade_s0,
         expect: [
-          { desc: "Оглушён", check: isStunned },
-          { desc: "Лежит", check: isProne },
-          { desc: "Отвлечён", check: isDistracted },
-          { desc: "Уязвим", check: isVulnerable }
+          { desc: m.sc_chk_stunned, check: isStunned },
+          { desc: m.sc_chk_prone, check: isProne },
+          { desc: m.sc_chk_distracted, check: isDistracted },
+          { desc: m.sc_chk_vulnerable, check: isVulnerable }
         ]
       }
     ]
   },
   {
     id: "stunned-recovery-success",
-    title: "Оправление от оглушения — успех",
-    description: "Проверка выносливости успешна. Оглушение снято, но персонаж уязвим до конца следующего хода.",
+    title: m.sc_stunned_recovery_success_title,
+    description: m.sc_stunned_recovery_success_desc,
     category: "stunned",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "APPLY_STUNNED" },
-        label: "Персонаж оглушён",
-        expect: [{ desc: "Оглушён", check: isStunned }]
+        label: m.sc_stunned_recovery_success_s0,
+        expect: [{ desc: m.sc_chk_stunned, check: isStunned }]
       },
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(1), spiritRoll: sr(0) },
-        label: "Начало хода — выносливость успех",
+        label: m.sc_stunned_recovery_success_s1,
         expect: [
-          { desc: "НЕ оглушён", check: (s) => !isStunned(s) },
-          { desc: "Уязвим (таймер = 1)", check: (s) => isVulnerable(s) && s.context.vulnerableTimer === 1 }
+          { desc: m.sc_chk_not_stunned, check: (s) => !isStunned(s) },
+          {
+            desc: m.sc_stunned_recovery_success_s1_e1,
+            check: (s) => isVulnerable(s) && s.context.vulnerableTimer === 1
+          }
         ]
       },
       {
         event: { type: "END_OF_TURN", vigorRoll: vr(0) },
-        label: "Конец хода",
-        expect: [{ desc: "Уязвим (таймер = 0)", check: (s) => s.context.vulnerableTimer === 0 }]
+        label: m.sc_stunned_recovery_success_s2,
+        expect: [{ desc: m.sc_stunned_recovery_success_s2_e0, check: (s) => s.context.vulnerableTimer === 0 }]
       },
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
-        label: "Следующий ход",
+        label: m.sc_stunned_recovery_success_s3,
         expect: []
       },
       {
         event: { type: "END_OF_TURN", vigorRoll: vr(0) },
-        label: "Конец следующего хода — уязвимость истекает",
-        expect: [{ desc: "НЕ уязвим", check: (s) => !isVulnerable(s) }]
+        label: m.sc_stunned_recovery_success_s4,
+        expect: [{ desc: m.sc_chk_not_vulnerable, check: (s) => !isVulnerable(s) }]
       }
     ]
   },
   {
     id: "stunned-recovery-raise",
-    title: "Оправление от оглушения — подъём",
-    description: "Подъём на проверке выносливости — уязвимость снимается уже в конце текущего хода.",
+    title: m.sc_stunned_recovery_raise_title,
+    description: m.sc_stunned_recovery_raise_desc,
     category: "stunned",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "APPLY_STUNNED" },
-        label: "Персонаж оглушён",
-        expect: [{ desc: "Оглушён", check: isStunned }]
+        label: m.sc_stunned_recovery_raise_s0,
+        expect: [{ desc: m.sc_chk_stunned, check: isStunned }]
       },
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(2), spiritRoll: sr(0) },
-        label: "Начало хода — выносливость подъём",
+        label: m.sc_stunned_recovery_raise_s1,
         expect: [
-          { desc: "НЕ оглушён", check: (s) => !isStunned(s) },
-          { desc: "Уязвим (таймер = 0)", check: (s) => s.context.vulnerableTimer === 0 }
+          { desc: m.sc_chk_not_stunned, check: (s) => !isStunned(s) },
+          { desc: m.sc_stunned_recovery_raise_s1_e1, check: (s) => s.context.vulnerableTimer === 0 }
         ]
       },
       {
         event: { type: "END_OF_TURN", vigorRoll: vr(0) },
-        label: "Конец хода — уязвимость снята",
-        expect: [{ desc: "НЕ уязвим", check: (s) => !isVulnerable(s) }]
+        label: m.sc_stunned_recovery_raise_s2,
+        expect: [{ desc: m.sc_chk_not_vulnerable, check: (s) => !isVulnerable(s) }]
       }
     ]
   },
@@ -551,68 +559,70 @@ export const scenarios: Array<Scenario> = [
   // ========================================
   {
     id: "distracted-outside-turn",
-    title: "Отвлечён вне своего хода",
-    description: "Персонаж отвлечён между ходами. Состояние длится до конца его следующего хода.",
+    title: m.sc_distracted_outside_turn_title,
+    description: m.sc_distracted_outside_turn_desc,
     category: "conditions",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "APPLY_DISTRACTED" },
-        label: "Персонаж отвлечён (вне хода, idle)",
+        label: m.sc_distracted_outside_turn_s0,
         expect: [
-          { desc: "Отвлечён", check: isDistracted },
-          { desc: "Таймер = 0", check: (s) => s.context.distractedTimer === 0 }
+          { desc: m.sc_chk_distracted, check: isDistracted },
+          { desc: m.sc_distracted_outside_turn_s0_e1, check: (s) => s.context.distractedTimer === 0 }
         ]
       },
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
-        label: "Начало хода",
-        expect: [{ desc: "Отвлечён", check: isDistracted }]
+        label: m.sc_distracted_outside_turn_s1,
+        expect: [{ desc: m.sc_chk_distracted, check: isDistracted }]
       },
       {
         event: { type: "END_OF_TURN", vigorRoll: vr(0) },
-        label: "Конец хода — отвлечение снято",
+        label: m.sc_distracted_outside_turn_s2,
         expect: [
-          { desc: "НЕ отвлечён", check: (s) => !isDistracted(s) },
-          { desc: "Таймер = -1", check: (s) => s.context.distractedTimer === -1 }
+          { desc: m.sc_chk_not_distracted, check: (s) => !isDistracted(s) },
+          { desc: m.sc_distracted_outside_turn_s2_e1, check: (s) => s.context.distractedTimer === -1 }
         ]
       }
     ]
   },
   {
     id: "distracted-during-turn",
-    title: "Отвлечён во время своего хода",
-    description: "Персонаж отвлечён во время собственного хода. Состояние длится до конца следующего хода.",
+    title: m.sc_distracted_during_turn_title,
+    description: m.sc_distracted_during_turn_desc,
     category: "conditions",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
-        label: "Начало хода",
-        expect: [{ desc: "Фаза: действует", check: (s) => s.matches({ alive: { turnPhase: "acting" } }) }]
+        label: m.sc_distracted_during_turn_s0,
+        expect: [
+          { desc: m.sc_distracted_during_turn_s0_e0, check: (s) => s.matches({ alive: { turnPhase: "acting" } }) }
+        ]
       },
       {
         event: { type: "APPLY_DISTRACTED" },
-        label: "Персонаж отвлечён (во время хода)",
+        label: m.sc_distracted_during_turn_s1,
         expect: [
-          { desc: "Отвлечён", check: isDistracted },
-          { desc: "Таймер = 1", check: (s) => s.context.distractedTimer === 1 }
+          { desc: m.sc_chk_distracted, check: isDistracted },
+          { desc: m.sc_distracted_during_turn_s1_e1, check: (s) => s.context.distractedTimer === 1 }
         ]
       },
       {
         event: { type: "END_OF_TURN", vigorRoll: vr(0) },
-        label: "Конец хода (таймер тикает)",
-        expect: [{ desc: "Таймер = 0", check: (s) => s.context.distractedTimer === 0 }]
+        label: m.sc_distracted_during_turn_s2,
+        expect: [{ desc: m.sc_distracted_during_turn_s2_e0, check: (s) => s.context.distractedTimer === 0 }]
       },
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
-        label: "Следующий ход",
-        expect: [{ desc: "Всё ещё отвлечён", check: isDistracted }]
+        label: m.sc_distracted_during_turn_s3,
+        expect: [{ desc: m.sc_distracted_during_turn_s3_e0, check: isDistracted }]
       },
       {
         event: { type: "END_OF_TURN", vigorRoll: vr(0) },
-        label: "Конец следующего хода — снято",
-        expect: [{ desc: "НЕ отвлечён", check: (s) => !isDistracted(s) }]
+        label: m.sc_distracted_during_turn_s4,
+        expect: [{ desc: m.sc_chk_not_distracted, check: (s) => !isDistracted(s) }]
       }
     ]
   },
@@ -622,68 +632,71 @@ export const scenarios: Array<Scenario> = [
   // ========================================
   {
     id: "fatigue-progression",
-    title: "Усталость — нарастание",
-    description: "Три уровня усталости: утомлён (−1), истощён (−2), при смерти.",
+    title: m.sc_fatigue_progression_title,
+    description: m.sc_fatigue_progression_desc,
     category: "fatigue",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "APPLY_FATIGUE" },
-        label: "Первый уровень усталости",
-        expect: [{ desc: "Утомлён", check: (s) => s.matches({ alive: { fatigueTrack: "fatigued" } }) }]
+        label: m.sc_fatigue_progression_s0,
+        expect: [{ desc: m.sc_chk_fatigued, check: (s) => s.matches({ alive: { fatigueTrack: "fatigued" } }) }]
       },
       {
         event: { type: "APPLY_FATIGUE" },
-        label: "Второй уровень усталости",
-        expect: [{ desc: "Истощён", check: (s) => s.matches({ alive: { fatigueTrack: "exhausted" } }) }]
+        label: m.sc_fatigue_progression_s1,
+        expect: [{ desc: m.sc_chk_exhausted, check: (s) => s.matches({ alive: { fatigueTrack: "exhausted" } }) }]
       },
       {
         event: { type: "APPLY_FATIGUE" },
-        label: "Третий уровень усталости",
+        label: m.sc_fatigue_progression_s2,
         expect: [
-          { desc: "При смерти от усталости", check: (s) => s.matches({ alive: { fatigueTrack: "incapByFatigue" } }) }
+          {
+            desc: m.sc_fatigue_progression_s2_e0,
+            check: (s) => s.matches({ alive: { fatigueTrack: "incapByFatigue" } })
+          }
         ]
       }
     ]
   },
   {
     id: "fatigue-recovery",
-    title: "Усталость — восстановление",
-    description: "Уровни усталости снимаются по одному.",
+    title: m.sc_fatigue_recovery_title,
+    description: m.sc_fatigue_recovery_desc,
     category: "fatigue",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "APPLY_FATIGUE" },
-        label: "Утомлён",
-        expect: [{ desc: "Утомлён", check: (s) => s.matches({ alive: { fatigueTrack: "fatigued" } }) }]
+        label: m.sc_fatigue_recovery_s0,
+        expect: [{ desc: m.sc_chk_fatigued, check: (s) => s.matches({ alive: { fatigueTrack: "fatigued" } }) }]
       },
       {
         event: { type: "APPLY_FATIGUE" },
-        label: "Истощён",
-        expect: [{ desc: "Истощён", check: (s) => s.matches({ alive: { fatigueTrack: "exhausted" } }) }]
+        label: m.sc_fatigue_recovery_s1,
+        expect: [{ desc: m.sc_chk_exhausted, check: (s) => s.matches({ alive: { fatigueTrack: "exhausted" } }) }]
       },
       {
         event: { type: "APPLY_FATIGUE" },
-        label: "При смерти",
+        label: m.sc_fatigue_recovery_s2,
         expect: [
-          { desc: "При смерти от усталости", check: (s) => s.matches({ alive: { fatigueTrack: "incapByFatigue" } }) }
+          { desc: m.sc_fatigue_recovery_s2_e0, check: (s) => s.matches({ alive: { fatigueTrack: "incapByFatigue" } }) }
         ]
       },
       {
         event: { type: "RECOVER_FATIGUE" },
-        label: "Восстановление 1",
-        expect: [{ desc: "Истощён", check: (s) => s.matches({ alive: { fatigueTrack: "exhausted" } }) }]
+        label: m.sc_fatigue_recovery_s3,
+        expect: [{ desc: m.sc_chk_exhausted, check: (s) => s.matches({ alive: { fatigueTrack: "exhausted" } }) }]
       },
       {
         event: { type: "RECOVER_FATIGUE" },
-        label: "Восстановление 2",
-        expect: [{ desc: "Утомлён", check: (s) => s.matches({ alive: { fatigueTrack: "fatigued" } }) }]
+        label: m.sc_fatigue_recovery_s4,
+        expect: [{ desc: m.sc_chk_fatigued, check: (s) => s.matches({ alive: { fatigueTrack: "fatigued" } }) }]
       },
       {
         event: { type: "RECOVER_FATIGUE" },
-        label: "Восстановление 3",
-        expect: [{ desc: "Свеж", check: (s) => s.matches({ alive: { fatigueTrack: "fresh" } }) }]
+        label: m.sc_fatigue_recovery_s5,
+        expect: [{ desc: m.sc_chk_fresh, check: (s) => s.matches({ alive: { fatigueTrack: "fresh" } }) }]
       }
     ]
   },
@@ -693,56 +706,56 @@ export const scenarios: Array<Scenario> = [
   // ========================================
   {
     id: "heal-wounds",
-    title: "Лечение ранений",
-    description: "Успешная проверка лечения уменьшает количество ранений.",
+    title: m.sc_heal_wounds_title,
+    description: m.sc_heal_wounds_desc,
     category: "healing",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "TAKE_DAMAGE", margin: dm(8), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Персонаж получает 2 ранения и шок",
-        expect: [{ desc: "Ранения = 2", check: (s) => s.context.wounds === 2 }]
+        label: m.sc_heal_wounds_s0,
+        expect: [{ desc: m.sc_chk_wounds_2, check: (s) => s.context.wounds === 2 }]
       },
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) },
-        label: "Оправление от шока",
-        expect: [{ desc: "НЕ в шоке", check: (s) => !isShaken(s) }]
+        label: m.sc_heal_wounds_s1,
+        expect: [{ desc: m.sc_chk_not_shaken, check: (s) => !isShaken(s) }]
       },
       {
         event: { type: "HEAL", amount: ha(1) },
-        label: "Лечение — 1 ранение",
-        expect: [{ desc: "Ранения = 1", check: (s) => s.context.wounds === 1 }]
+        label: m.sc_heal_wounds_s2,
+        expect: [{ desc: m.sc_chk_wounds_1, check: (s) => s.context.wounds === 1 }]
       }
     ]
   },
   {
     id: "heal-incap",
-    title: "Лечение снимает состояние при смерти",
-    description: "Излечение хотя бы одного ранения у персонажа при смерти возвращает его в строй.",
+    title: m.sc_heal_incap_title,
+    description: m.sc_heal_incap_desc,
     category: "healing",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "3 ранения, шок",
-        expect: [{ desc: "Ранения = 3", check: (s) => s.context.wounds === 3 }]
+        label: m.sc_heal_incap_s0,
+        expect: [{ desc: m.sc_chk_wounds_3, check: (s) => s.context.wounds === 3 }]
       },
       {
         event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Шок на шоке → при смерти, истекает кровью",
+        label: m.sc_heal_incap_s1,
         expect: [
           {
-            desc: "Истекает кровью",
+            desc: m.sc_chk_bleeding_out,
             check: (s) => s.matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } })
           }
         ]
       },
       {
         event: { type: "HEAL", amount: ha(1) },
-        label: "Лечение — 1 ранение",
+        label: m.sc_heal_incap_s2,
         expect: [
-          { desc: "Ранения = 2", check: (s) => s.context.wounds === 2 },
-          { desc: "Снова в строю", check: (s) => s.matches({ alive: { damageTrack: "active" } }) }
+          { desc: m.sc_chk_wounds_2, check: (s) => s.context.wounds === 2 },
+          { desc: m.sc_heal_incap_s2_e1, check: (s) => s.matches({ alive: { damageTrack: "active" } }) }
         ]
       }
     ]
@@ -753,116 +766,116 @@ export const scenarios: Array<Scenario> = [
   // ========================================
   {
     id: "hold-basic",
-    title: "Наготове — ожидание",
-    description: "Персонаж решает не действовать и остаётся наготове.",
+    title: m.sc_hold_basic_title,
+    description: m.sc_hold_basic_desc,
     category: "hold",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
-        label: "Начало хода",
-        expect: [{ desc: "Действует", check: (s) => s.matches({ alive: { turnPhase: "acting" } }) }]
+        label: m.sc_hold_basic_s0,
+        expect: [{ desc: m.sc_chk_acting, check: (s) => s.matches({ alive: { turnPhase: "acting" } }) }]
       },
       {
         event: { type: "GO_ON_HOLD" },
-        label: "Переход в состояние наготове",
+        label: m.sc_hold_basic_s1,
         expect: [
-          { desc: "Наготове", check: isOnHold },
-          { desc: "Не свой ход", check: (s) => !s.context.ownTurn }
+          { desc: m.sc_chk_on_hold, check: isOnHold },
+          { desc: m.sc_hold_basic_s1_e1, check: (s) => !s.context.ownTurn }
         ]
       }
     ]
   },
   {
     id: "hold-interrupt-success",
-    title: "Прерывание — успех",
-    description: "Персонаж наготове прерывает действие другого. Встречная проверка атлетики — успех. Действует первым.",
+    title: m.sc_hold_interrupt_success_title,
+    description: m.sc_hold_interrupt_success_desc,
     category: "hold",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
-        label: "Начало хода",
+        label: m.sc_hold_interrupt_success_s0,
         expect: []
       },
       {
         event: { type: "GO_ON_HOLD" },
-        label: "Наготове",
-        expect: [{ desc: "Наготове", check: isOnHold }]
+        label: m.sc_hold_interrupt_success_s1,
+        expect: [{ desc: m.sc_chk_on_hold, check: isOnHold }]
       },
       {
         event: { type: "INTERRUPT", athleticsRoll: ar(1) },
-        label: "Прерывание — атлетика успех",
+        label: m.sc_hold_interrupt_success_s2,
         expect: [
-          { desc: "Действует", check: (s) => s.matches({ alive: { turnPhase: "acting" } }) },
-          { desc: "Прерывание удалось", check: (s) => s.context.interruptedSuccessfully }
+          { desc: m.sc_chk_acting, check: (s) => s.matches({ alive: { turnPhase: "acting" } }) },
+          { desc: m.sc_hold_interrupt_success_s2_e1, check: (s) => s.context.interruptedSuccessfully }
         ]
       }
     ]
   },
   {
     id: "hold-interrupt-fail",
-    title: "Прерывание — провал",
-    description: "Проверка атлетики провалена. Персонаж действует после того, кого пытался прервать.",
+    title: m.sc_hold_interrupt_fail_title,
+    description: m.sc_hold_interrupt_fail_desc,
     category: "hold",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
-        label: "Начало хода",
+        label: m.sc_hold_interrupt_fail_s0,
         expect: []
       },
       {
         event: { type: "GO_ON_HOLD" },
-        label: "Наготове",
-        expect: [{ desc: "Наготове", check: isOnHold }]
+        label: m.sc_hold_interrupt_fail_s1,
+        expect: [{ desc: m.sc_chk_on_hold, check: isOnHold }]
       },
       {
         event: { type: "INTERRUPT", athleticsRoll: ar(0) },
-        label: "Прерывание — атлетика провал",
+        label: m.sc_hold_interrupt_fail_s2,
         expect: [
-          { desc: "Действует (после соперника)", check: (s) => s.matches({ alive: { turnPhase: "acting" } }) },
-          { desc: "Прерывание не удалось", check: (s) => !s.context.interruptedSuccessfully }
+          { desc: m.sc_hold_interrupt_fail_s2_e0, check: (s) => s.matches({ alive: { turnPhase: "acting" } }) },
+          { desc: m.sc_hold_interrupt_fail_s2_e1, check: (s) => !s.context.interruptedSuccessfully }
         ]
       }
     ]
   },
   {
     id: "hold-persist",
-    title: "Наготове — сохраняется между раундами",
-    description: "Персонаж не действует в этом раунде. Состояние наготове переносится в следующий раунд.",
+    title: m.sc_hold_persist_title,
+    description: m.sc_hold_persist_desc,
     category: "hold",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
-        label: "Начало хода",
+        label: m.sc_hold_persist_s0,
         expect: []
       },
       {
         event: { type: "GO_ON_HOLD" },
-        label: "Наготове",
-        expect: [{ desc: "Наготове", check: isOnHold }]
+        label: m.sc_hold_persist_s1,
+        expect: [{ desc: m.sc_chk_on_hold, check: isOnHold }]
       },
       {
         event: { type: "END_OF_TURN", vigorRoll: vr(0) },
-        label: "Конец раунда",
+        label: m.sc_hold_persist_s2,
         expect: [
-          { desc: "Idle", check: (s) => s.matches({ alive: { turnPhase: "idle" } }) },
-          { desc: "onHold сохраняется", check: (s) => s.context.onHold }
+          { desc: m.sc_hold_persist_s2_e0, check: (s) => s.matches({ alive: { turnPhase: "idle" } }) },
+          { desc: m.sc_hold_persist_s2_e1, check: (s) => s.context.onHold }
         ]
       },
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
-        label: "Новый раунд — снова наготове",
-        expect: [{ desc: "Наготове", check: isOnHold }]
+        label: m.sc_hold_persist_s3,
+        expect: [{ desc: m.sc_chk_on_hold, check: isOnHold }]
       },
       {
         event: { type: "ACT_FROM_HOLD" },
-        label: "Решает действовать",
+        label: m.sc_hold_persist_s4,
         expect: [
-          { desc: "Действует", check: (s) => s.matches({ alive: { turnPhase: "acting" } }) },
-          { desc: "НЕ наготове", check: (s) => !isOnHold(s) }
+          { desc: m.sc_chk_acting, check: (s) => s.matches({ alive: { turnPhase: "acting" } }) },
+          { desc: m.sc_chk_not_on_hold, check: (s) => !isOnHold(s) }
         ]
       }
     ]
@@ -873,20 +886,20 @@ export const scenarios: Array<Scenario> = [
   // ========================================
   {
     id: "prone-cycle",
-    title: "Лечь и встать",
-    description: "Персонаж ложится (свободное действие) и встаёт (свободное действие, −2 к шагу).",
+    title: m.sc_prone_cycle_title,
+    description: m.sc_prone_cycle_desc,
     category: "prone",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "DROP_PRONE" },
-        label: "Персонаж ложится",
-        expect: [{ desc: "Лежит", check: isProne }]
+        label: m.sc_prone_cycle_s0,
+        expect: [{ desc: m.sc_chk_prone, check: isProne }]
       },
       {
         event: { type: "STAND_UP" },
-        label: "Персонаж встаёт",
-        expect: [{ desc: "Стоит", check: (s) => !isProne(s) }]
+        label: m.sc_prone_cycle_s1,
+        expect: [{ desc: m.sc_chk_standing, check: (s) => !isProne(s) }]
       }
     ]
   },
@@ -896,83 +909,83 @@ export const scenarios: Array<Scenario> = [
   // ========================================
   {
     id: "restraint-entangled",
-    title: "Схвачен — уязвим до освобождения",
-    description: "Персонаж схвачен (сетью, путами). Уязвим, пока не освободится.",
+    title: m.sc_restraint_entangled_title,
+    description: m.sc_restraint_entangled_desc,
     category: "restraint",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "APPLY_ENTANGLED" },
-        label: "Персонаж схвачен",
+        label: m.sc_restraint_entangled_s0,
         expect: [
-          { desc: "Схвачен", check: isEntangled },
-          { desc: "Уязвим", check: isVulnerable },
-          { desc: "Уязвимость постоянная (99)", check: (s) => s.context.vulnerableTimer === 99 }
+          { desc: m.sc_chk_entangled, check: isEntangled },
+          { desc: m.sc_chk_vulnerable, check: isVulnerable },
+          { desc: m.sc_restraint_entangled_s0_e2, check: (s) => s.context.vulnerableTimer === 99 }
         ]
       }
     ]
   },
   {
     id: "restraint-escape-entangled",
-    title: "Освобождение из пут (схвачен)",
-    description: "Проверка силы или атлетики — успех. Персонаж свободен, уязвимость снята.",
+    title: m.sc_restraint_escape_entangled_title,
+    description: m.sc_restraint_escape_entangled_desc,
     category: "restraint",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "APPLY_ENTANGLED" },
-        label: "Персонаж схвачен",
-        expect: [{ desc: "Схвачен", check: isEntangled }]
+        label: m.sc_restraint_escape_entangled_s0,
+        expect: [{ desc: m.sc_chk_entangled, check: isEntangled }]
       },
       {
         event: { type: "ESCAPE_ATTEMPT", rollResult: er(1) },
-        label: "Попытка освободиться — успех",
+        label: m.sc_restraint_escape_entangled_s1,
         expect: [
-          { desc: "Свободен", check: (s: SavageSnapshot) => !isRestrained(s) },
-          { desc: "НЕ уязвим", check: (s) => !isVulnerable(s) }
+          { desc: m.sc_chk_free, check: (s: SavageSnapshot) => !isRestrained(s) },
+          { desc: m.sc_chk_not_vulnerable, check: (s) => !isVulnerable(s) }
         ]
       }
     ]
   },
   {
     id: "restraint-bound",
-    title: "Обездвижен — отвлечён и уязвим",
-    description: "Персонаж обездвижен. Может только пытаться вырваться.",
+    title: m.sc_restraint_bound_title,
+    description: m.sc_restraint_bound_desc,
     category: "restraint",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "APPLY_BOUND" },
-        label: "Персонаж обездвижен",
+        label: m.sc_restraint_bound_s0,
         expect: [
-          { desc: "Обездвижен", check: isBound },
-          { desc: "Отвлечён", check: isDistracted },
-          { desc: "Уязвим", check: isVulnerable }
+          { desc: m.sc_chk_bound, check: isBound },
+          { desc: m.sc_chk_distracted, check: isDistracted },
+          { desc: m.sc_chk_vulnerable, check: isVulnerable }
         ]
       }
     ]
   },
   {
     id: "restraint-escape-bound",
-    title: "Освобождение из пут (обездвижен)",
-    description: "Успех — понижение до схвачен. Подъём — полное освобождение.",
+    title: m.sc_restraint_escape_bound_title,
+    description: m.sc_restraint_escape_bound_desc,
     category: "restraint",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "APPLY_BOUND" },
-        label: "Персонаж обездвижен",
-        expect: [{ desc: "Обездвижен", check: isBound }]
+        label: m.sc_restraint_escape_bound_s0,
+        expect: [{ desc: m.sc_chk_bound, check: isBound }]
       },
       {
         event: { type: "ESCAPE_ATTEMPT", rollResult: er(1) },
-        label: "Попытка — успех (понижение)",
-        expect: [{ desc: "Схвачен (не обездвижен)", check: (s) => isEntangled(s) && !isBound(s) }]
+        label: m.sc_restraint_escape_bound_s1,
+        expect: [{ desc: m.sc_restraint_escape_bound_s1_e0, check: (s) => isEntangled(s) && !isBound(s) }]
       },
       {
         event: { type: "ESCAPE_ATTEMPT", rollResult: er(1) },
-        label: "Ещё попытка — успех из схвачен",
-        expect: [{ desc: "Свободен", check: (s: SavageSnapshot) => !isRestrained(s) }]
+        label: m.sc_restraint_escape_bound_s2,
+        expect: [{ desc: m.sc_chk_free, check: (s: SavageSnapshot) => !isRestrained(s) }]
       }
     ]
   },
@@ -982,80 +995,80 @@ export const scenarios: Array<Scenario> = [
   // ========================================
   {
     id: "grapple-grabbed",
-    title: "Захват — успех = схвачен",
-    description: "Встречная проверка атлетики — успех. Цель схвачена и уязвима.",
+    title: m.sc_grapple_grabbed_title,
+    description: m.sc_grapple_grabbed_desc,
     category: "grapple",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(1) },
-        label: "Захват — успех",
+        label: m.sc_grapple_grabbed_s0,
         expect: [
-          { desc: "Схвачен (grabbed)", check: isGrabbed },
-          { desc: "Уязвим", check: isVulnerable },
-          { desc: "НЕ отвлечён", check: (s) => !isDistracted(s) }
+          { desc: m.sc_chk_grabbed, check: isGrabbed },
+          { desc: m.sc_chk_vulnerable, check: isVulnerable },
+          { desc: m.sc_chk_not_distracted, check: (s) => !isDistracted(s) }
         ]
       }
     ]
   },
   {
     id: "grapple-pinned",
-    title: "Захват — подъём = обездвижен",
-    description: "Подъём на проверке захвата. Цель обездвижена, отвлечена и уязвима.",
+    title: m.sc_grapple_pinned_title,
+    description: m.sc_grapple_pinned_desc,
     category: "grapple",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(2) },
-        label: "Захват — подъём",
+        label: m.sc_grapple_pinned_s0,
         expect: [
-          { desc: "Обездвижен (pinned)", check: isPinned },
-          { desc: "Отвлечён", check: isDistracted },
-          { desc: "Уязвим", check: isVulnerable }
+          { desc: m.sc_chk_pinned, check: isPinned },
+          { desc: m.sc_chk_distracted, check: isDistracted },
+          { desc: m.sc_chk_vulnerable, check: isVulnerable }
         ]
       }
     ]
   },
   {
     id: "grapple-pin-from-grabbed",
-    title: "Силовой приём → обездвижен",
-    description: "Персонаж уже держит цель. Дополнительная проверка — обездвиживает.",
+    title: m.sc_grapple_pin_from_grabbed_title,
+    description: m.sc_grapple_pin_from_grabbed_desc,
     category: "grapple",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(1) },
-        label: "Захват — схвачен",
-        expect: [{ desc: "Схвачен", check: isGrabbed }]
+        label: m.sc_grapple_pin_from_grabbed_s0,
+        expect: [{ desc: m.sc_chk_entangled, check: isGrabbed }]
       },
       {
         event: { type: "PIN_ATTEMPT", rollResult: pr(1) },
-        label: "Силовой приём — успех",
-        expect: [{ desc: "Обездвижен", check: isPinned }]
+        label: m.sc_grapple_pin_from_grabbed_s1,
+        expect: [{ desc: m.sc_chk_bound, check: isPinned }]
       }
     ]
   },
   {
     id: "grapple-escape",
-    title: "Вырваться из захвата",
-    description: "Из обездвижен: успех = схвачен, подъём = свободен. Из схвачен: успех = свободен.",
+    title: m.sc_grapple_escape_title,
+    description: m.sc_grapple_escape_desc,
     category: "grapple",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: gr(2) },
-        label: "Захват — обездвижен",
-        expect: [{ desc: "Обездвижен", check: isPinned }]
+        label: m.sc_grapple_escape_s0,
+        expect: [{ desc: m.sc_chk_bound, check: isPinned }]
       },
       {
         event: { type: "GRAPPLE_ESCAPE", rollResult: ger(1) },
-        label: "Побег — успех (понижение)",
-        expect: [{ desc: "Схвачен (не обездвижен)", check: (s) => isGrabbed(s) && !isPinned(s) }]
+        label: m.sc_grapple_escape_s1,
+        expect: [{ desc: m.sc_grapple_escape_s1_e0, check: (s) => isGrabbed(s) && !isPinned(s) }]
       },
       {
         event: { type: "GRAPPLE_ESCAPE", rollResult: ger(1) },
-        label: "Побег из схвачен — успех",
-        expect: [{ desc: "Свободен", check: (s: SavageSnapshot) => !isGrappled(s) }]
+        label: m.sc_grapple_escape_s2,
+        expect: [{ desc: m.sc_chk_free, check: (s: SavageSnapshot) => !isGrappled(s) }]
       }
     ]
   },
@@ -1065,58 +1078,58 @@ export const scenarios: Array<Scenario> = [
   // ========================================
   {
     id: "blinded-levels",
-    title: "Ослепление — два уровня",
-    description: "Частичное (−2) и полное (−4) ослепление.",
+    title: m.sc_blinded_levels_title,
+    description: m.sc_blinded_levels_desc,
     category: "blinded",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "APPLY_BLINDED", severity: bs(2) },
-        label: "Частичное ослепление",
+        label: m.sc_blinded_levels_s0,
         expect: [
-          { desc: "Ослеплён", check: isBlinded },
-          { desc: "НЕ полностью", check: (s) => !isFullyBlinded(s) },
-          { desc: "Штраф = −2", check: (s) => blindedPenalty(s) === -2 }
+          { desc: m.sc_chk_blinded, check: isBlinded },
+          { desc: m.sc_blinded_levels_s0_e1, check: (s) => !isFullyBlinded(s) },
+          { desc: m.sc_blinded_levels_s0_e2, check: (s) => blindedPenalty(s) === -2 }
         ]
       }
     ]
   },
   {
     id: "blinded-recovery",
-    title: "Восстановление зрения",
-    description: "Проверка выносливости в конце хода. Подъём снимает полное ослепление, успех понижает уровень.",
+    title: m.sc_blinded_recovery_title,
+    description: m.sc_blinded_recovery_desc,
     category: "blinded",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "APPLY_BLINDED", severity: bs(4) },
-        label: "Полное ослепление (−4)",
-        expect: [{ desc: "Полностью ослеплён", check: isFullyBlinded }]
+        label: m.sc_blinded_recovery_s0,
+        expect: [{ desc: m.sc_chk_fully_blinded, check: isFullyBlinded }]
       },
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
-        label: "Начало хода",
+        label: m.sc_blinded_recovery_s1,
         expect: []
       },
       {
         event: { type: "END_OF_TURN", vigorRoll: vr(1) },
-        label: "Конец хода — выносливость успех (понижение)",
+        label: m.sc_blinded_recovery_s2,
         expect: [
-          { desc: "Частично ослеплён", check: (s) => isBlinded(s) && !isFullyBlinded(s) },
-          { desc: "Штраф = −2", check: (s) => blindedPenalty(s) === -2 }
+          { desc: m.sc_blinded_recovery_s2_e0, check: (s) => isBlinded(s) && !isFullyBlinded(s) },
+          { desc: m.sc_blinded_recovery_s2_e1, check: (s) => blindedPenalty(s) === -2 }
         ]
       },
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
-        label: "Следующий ход",
+        label: m.sc_blinded_recovery_s3,
         expect: []
       },
       {
         event: { type: "END_OF_TURN", vigorRoll: vr(1) },
-        label: "Конец хода — успех (снято)",
+        label: m.sc_blinded_recovery_s4,
         expect: [
-          { desc: "НЕ ослеплён", check: (s) => !isBlinded(s) },
-          { desc: "Штраф = 0", check: (s) => blindedPenalty(s) === 0 }
+          { desc: m.sc_chk_not_blinded, check: (s) => !isBlinded(s) },
+          { desc: m.sc_blinded_recovery_s4_e1, check: (s) => blindedPenalty(s) === 0 }
         ]
       }
     ]
@@ -1127,106 +1140,106 @@ export const scenarios: Array<Scenario> = [
   // ========================================
   {
     id: "affliction-paralytic",
-    title: "Паралитический яд",
-    description: "Персонаж парализован. Не может оправиться от оглушения, пока действует яд.",
+    title: m.sc_affliction_paralytic_title,
+    description: m.sc_affliction_paralytic_desc,
     category: "afflictions",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "APPLY_AFFLICTION", afflictionType: "paralytic", duration: ad(5) },
-        label: "Паралитический яд (5 раундов)",
+        label: m.sc_affliction_paralytic_s0,
         expect: [
-          { desc: "Недуг: паралитический", check: (s) => afflictionType(s) === "paralytic" },
-          { desc: "Таймер = 5", check: (s) => s.context.afflictionTimer === 5 }
+          { desc: m.sc_affliction_paralytic_s0_e0, check: (s) => afflictionType(s) === "paralytic" },
+          { desc: m.sc_affliction_paralytic_s0_e1, check: (s) => s.context.afflictionTimer === 5 }
         ]
       },
       {
         event: { type: "APPLY_STUNNED" },
-        label: "Персонаж оглушён",
-        expect: [{ desc: "Оглушён", check: isStunned }]
+        label: m.sc_affliction_paralytic_s1,
+        expect: [{ desc: m.sc_chk_stunned, check: isStunned }]
       },
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(2), spiritRoll: sr(0) },
-        label: "Попытка оправиться — подъём выносливости",
-        expect: [{ desc: "Всё ещё оглушён (заблокировано ядом)", check: isStunned }]
+        label: m.sc_affliction_paralytic_s2,
+        expect: [{ desc: m.sc_affliction_paralytic_s2_e0, check: isStunned }]
       }
     ]
   },
   {
     id: "affliction-weak",
-    title: "Ослабляющая болезнь",
-    description: "При заражении персонаж сразу получает уровень усталости.",
+    title: m.sc_affliction_weak_title,
+    description: m.sc_affliction_weak_desc,
     category: "afflictions",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "APPLY_AFFLICTION", afflictionType: "weak", duration: ad(5) },
-        label: "Ослабляющая болезнь (5 раундов)",
+        label: m.sc_affliction_weak_s0,
         expect: [
-          { desc: "Недуг: ослабляющий", check: (s) => afflictionType(s) === "weak" },
-          { desc: "Утомлён", check: (s) => s.matches({ alive: { fatigueTrack: "fatigued" } }) }
+          { desc: m.sc_affliction_weak_s0_e0, check: (s) => afflictionType(s) === "weak" },
+          { desc: m.sc_chk_fatigued, check: (s) => s.matches({ alive: { fatigueTrack: "fatigued" } }) }
         ]
       }
     ]
   },
   {
     id: "affliction-lethal",
-    title: "Смертельный яд",
-    description: "Немедленно: ранение + шок. Если таймер истекает — гибель.",
+    title: m.sc_affliction_lethal_title,
+    description: m.sc_affliction_lethal_desc,
     category: "afflictions",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "APPLY_AFFLICTION", afflictionType: "lethal", duration: ad(1) },
-        label: "Смертельный яд (1 раунд)",
+        label: m.sc_affliction_lethal_s0,
         expect: [
-          { desc: "В шоке", check: isShaken },
-          { desc: "Ранения = 1", check: (s) => s.context.wounds === 1 }
+          { desc: m.sc_chk_shaken, check: isShaken },
+          { desc: m.sc_chk_wounds_1, check: (s) => s.context.wounds === 1 }
         ]
       },
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
-        label: "Ход 1",
+        label: m.sc_affliction_lethal_s1,
         expect: []
       },
       {
         event: { type: "END_OF_TURN", vigorRoll: vr(0) },
-        label: "Конец хода — таймер тикает",
-        expect: [{ desc: "Таймер = 0", check: (s) => s.context.afflictionTimer === 0 }]
+        label: m.sc_affliction_lethal_s2,
+        expect: [{ desc: m.sc_affliction_lethal_s2_e0, check: (s) => s.context.afflictionTimer === 0 }]
       },
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
-        label: "Ход 2",
+        label: m.sc_affliction_lethal_s3,
         expect: []
       },
       {
         event: { type: "END_OF_TURN", vigorRoll: vr(0) },
-        label: "Таймер истёк — гибель",
-        expect: [{ desc: "Персонаж мёртв", check: isDead }]
+        label: m.sc_affliction_lethal_s4,
+        expect: [{ desc: m.sc_chk_dead, check: isDead }]
       }
     ]
   },
   {
     id: "affliction-sleep",
-    title: "Магический сон",
-    description: "Спящий персонаж не может оправиться от шока и оглушения.",
+    title: m.sc_affliction_sleep_title,
+    description: m.sc_affliction_sleep_desc,
     category: "afflictions",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Персонаж в шоке",
-        expect: [{ desc: "В шоке", check: isShaken }]
+        label: m.sc_affliction_sleep_s0,
+        expect: [{ desc: m.sc_chk_shaken, check: isShaken }]
       },
       {
         event: { type: "APPLY_AFFLICTION", afflictionType: "sleep", duration: ad(3) },
-        label: "Магический сон (3 раунда)",
-        expect: [{ desc: "Недуг: сон", check: (s) => afflictionType(s) === "sleep" }]
+        label: m.sc_affliction_sleep_s1,
+        expect: [{ desc: m.sc_affliction_sleep_s1_e0, check: (s) => afflictionType(s) === "sleep" }]
       },
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) },
-        label: "Попытка оправиться от шока — характер успех",
-        expect: [{ desc: "Всё ещё в шоке (заблокировано сном)", check: isShaken }]
+        label: m.sc_affliction_sleep_s2,
+        expect: [{ desc: m.sc_affliction_sleep_s2_e0, check: isShaken }]
       }
     ]
   },
@@ -1236,53 +1249,52 @@ export const scenarios: Array<Scenario> = [
   // ========================================
   {
     id: "power-apply-dismiss",
-    title: "Поддержание и отмена силы",
-    description: "Персонаж активирует мистическую силу. Эффект длится несколько раундов или отменяется досрочно.",
+    title: m.sc_power_apply_dismiss_title,
+    description: m.sc_power_apply_dismiss_desc,
     category: "powers",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "APPLY_POWER_EFFECT", etype: "armor", duration: 3 },
-        label: "Активация силы «доспех» (3 раунда)",
+        label: m.sc_power_apply_dismiss_s0,
         expect: [
-          { desc: "Эффект «armor» активен", check: (s) => hasEffect(s, "armor") },
-          { desc: "1 активный эффект", check: (s) => activeEffectsList(s).length === 1 }
+          { desc: m.sc_power_apply_dismiss_s0_e0, check: (s) => hasEffect(s, "armor") },
+          { desc: m.sc_power_apply_dismiss_s0_e1, check: (s) => activeEffectsList(s).length === 1 }
         ]
       },
       {
         event: { type: "DISMISS_EFFECT", etype: "armor" },
-        label: "Отмена силы",
+        label: m.sc_power_apply_dismiss_s1,
         expect: [
-          { desc: "Эффект «armor» снят", check: (s) => !hasEffect(s, "armor") },
-          { desc: "0 активных эффектов", check: (s) => activeEffectsList(s).length === 0 }
+          { desc: m.sc_power_apply_dismiss_s1_e0, check: (s) => !hasEffect(s, "armor") },
+          { desc: m.sc_power_apply_dismiss_s1_e1, check: (s) => activeEffectsList(s).length === 0 }
         ]
       }
     ]
   },
   {
     id: "power-backlash",
-    title: "Откат — все силы пропадают",
-    description:
-      "Критический провал при колдовстве. Все поддерживаемые силы мгновенно прекращаются, персонаж получает усталость.",
+    title: m.sc_power_backlash_title,
+    description: m.sc_power_backlash_desc,
     category: "powers",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "APPLY_POWER_EFFECT", etype: "armor", duration: 3 },
-        label: "Сила «доспех»",
-        expect: [{ desc: "1 эффект", check: (s) => activeEffectsList(s).length === 1 }]
+        label: m.sc_power_backlash_s0,
+        expect: [{ desc: m.sc_power_backlash_s0_e0, check: (s) => activeEffectsList(s).length === 1 }]
       },
       {
         event: { type: "APPLY_POWER_EFFECT", etype: "boost", duration: 2 },
-        label: "Сила «усиление»",
-        expect: [{ desc: "2 эффекта", check: (s) => activeEffectsList(s).length === 2 }]
+        label: m.sc_power_backlash_s1,
+        expect: [{ desc: m.sc_power_backlash_s1_e0, check: (s) => activeEffectsList(s).length === 2 }]
       },
       {
         event: { type: "BACKLASH" },
-        label: "Откат!",
+        label: m.sc_power_backlash_s2,
         expect: [
-          { desc: "0 эффектов", check: (s) => activeEffectsList(s).length === 0 },
-          { desc: "Утомлён", check: (s) => s.matches({ alive: { fatigueTrack: "fatigued" } }) }
+          { desc: m.sc_power_backlash_s2_e0, check: (s) => activeEffectsList(s).length === 0 },
+          { desc: m.sc_chk_fatigued, check: (s) => s.matches({ alive: { fatigueTrack: "fatigued" } }) }
         ]
       }
     ]
@@ -1293,30 +1305,30 @@ export const scenarios: Array<Scenario> = [
   // ========================================
   {
     id: "defense-basic",
-    title: "Оборона",
-    description: "Персонаж уходит в оборону (+4 к защите). Действует до начала следующего хода.",
+    title: m.sc_defense_basic_title,
+    description: m.sc_defense_basic_desc,
     category: "defense",
     characterType: "wildCard",
     steps: [
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
-        label: "Начало хода",
-        expect: [{ desc: "Действует", check: (s) => s.matches({ alive: { turnPhase: "acting" } }) }]
+        label: m.sc_defense_basic_s0,
+        expect: [{ desc: m.sc_chk_acting, check: (s) => s.matches({ alive: { turnPhase: "acting" } }) }]
       },
       {
         event: { type: "DEFEND" },
-        label: "Оборона",
-        expect: [{ desc: "В обороне", check: isDefending }]
+        label: m.sc_defense_basic_s1,
+        expect: [{ desc: m.sc_chk_defending, check: isDefending }]
       },
       {
         event: { type: "END_OF_TURN", vigorRoll: vr(0) },
-        label: "Конец хода",
-        expect: [{ desc: "Оборона сохраняется", check: isDefending }]
+        label: m.sc_defense_basic_s2,
+        expect: [{ desc: m.sc_chk_still_defending, check: isDefending }]
       },
       {
         event: { type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) },
-        label: "Начало следующего хода — оборона снята",
-        expect: [{ desc: "НЕ в обороне", check: (s) => !isDefending(s) }]
+        label: m.sc_defense_basic_s3,
+        expect: [{ desc: m.sc_chk_not_defending, check: (s) => !isDefending(s) }]
       }
     ]
   },
@@ -1326,63 +1338,63 @@ export const scenarios: Array<Scenario> = [
   // ========================================
   {
     id: "fear-distracted",
-    title: "Страх — отвлечён",
-    description: "Проверка храбрости провалена. Бросок d20 = 5. Персонаж отвлечён до конца следующего хода.",
+    title: m.sc_fear_distracted_title,
+    description: m.sc_fear_distracted_desc,
     category: "fear",
     characterType: "wildCard",
     steps: [
       {
         event: null,
-        label: "Бросок по таблице страха: d20 = 5 → отвлечён",
+        label: m.sc_fear_distracted_s0,
         expect: []
       },
       {
         event: { type: "APPLY_DISTRACTED" },
-        label: "Результат страха: отвлечён",
-        expect: [{ desc: "Отвлечён", check: isDistracted }]
+        label: m.sc_fear_distracted_s1,
+        expect: [{ desc: m.sc_chk_distracted, check: isDistracted }]
       }
     ]
   },
   {
     id: "fear-stunned-cascade",
-    title: "Ужас — оглушение и каскад",
-    description: "Бросок d20 = 13. Персонаж оглушён (падает, отвлечён, уязвим) и получает шрам.",
+    title: m.sc_fear_stunned_cascade_title,
+    description: m.sc_fear_stunned_cascade_desc,
     category: "fear",
     characterType: "wildCard",
     steps: [
       {
         event: null,
-        label: "Бросок по таблице страха: d20 = 13 → оглушение + шрам",
+        label: m.sc_fear_stunned_cascade_s0,
         expect: []
       },
       {
         event: { type: "APPLY_STUNNED" },
-        label: "Результат: оглушение",
+        label: m.sc_fear_stunned_cascade_s1,
         expect: [
-          { desc: "Оглушён", check: isStunned },
-          { desc: "Лежит", check: isProne },
-          { desc: "Отвлечён", check: isDistracted },
-          { desc: "Уязвим", check: isVulnerable }
+          { desc: m.sc_chk_stunned, check: isStunned },
+          { desc: m.sc_chk_prone, check: isProne },
+          { desc: m.sc_chk_distracted, check: isDistracted },
+          { desc: m.sc_chk_vulnerable, check: isVulnerable }
         ]
       }
     ]
   },
   {
     id: "fear-shaken",
-    title: "Страх — в шоке",
-    description: "Бросок d20 = 11. Персонаж оказывается в шоке от ужаса.",
+    title: m.sc_fear_shaken_title,
+    description: m.sc_fear_shaken_desc,
     category: "fear",
     characterType: "wildCard",
     steps: [
       {
         event: null,
-        label: "Бросок по таблице страха: d20 = 11 → в шоке",
+        label: m.sc_fear_shaken_s0,
         expect: []
       },
       {
         event: { type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) },
-        label: "Результат: шок (аналог урона, равного стойкости)",
-        expect: [{ desc: "В шоке", check: isShaken }]
+        label: m.sc_fear_shaken_s1,
+        expect: [{ desc: m.sc_chk_shaken, check: isShaken }]
       }
     ]
   }
