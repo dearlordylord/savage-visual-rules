@@ -25,35 +25,45 @@ Prevent future drift. Must be done FIRST so all subsequent work is covered.
 
 ## Add missing state fields to QuintState schema + snapshotToQuintState
 
-- [ ] `prone`
-- [ ] `onHold`
-- [ ] `holdUsed`
-- [ ] `restrained`
-- [ ] `grappledBy`
-- [ ] `blinded`
-- [ ] `injuries`
-- [ ] `afflictionType`
-- [ ] `afflictionTimer`
-- [ ] `activeEffects`
-- [ ] `defending`
+- [x] `prone`
+- [x] `onHold`
+- [x] `holdUsed`
+- [x] `restrained`
+- [x] `grappledBy`
+- [x] `blinded`
+- [x] `injuries`
+- [x] `afflictionType`
+- [x] `afflictionTimer`
+- [x] `activeEffects`
+- [x] `defending`
 
 ## Add missing driver actions
 
-- [ ] `doDropProne` -> `DROP_PRONE`
-- [ ] `doStandUp` -> `STAND_UP`
-- [ ] `doGoOnHold` -> `GO_ON_HOLD`
-- [ ] `doActFromHold` -> `ACT_FROM_HOLD`
-- [ ] `doInterrupt(athleticsRoll)` -> `INTERRUPT`
-- [ ] `doDefend` -> `DEFEND`
-- [ ] `doApplyEntangled` -> `APPLY_ENTANGLED`
-- [ ] `doApplyBound` -> `APPLY_BOUND`
-- [ ] `doEscapeAttempt(rollResult)` -> `ESCAPE_ATTEMPT`
-- [ ] `doGrappleAttempt(rollResult, opponent)` -> `GRAPPLE_ATTEMPT`
-- [ ] `doGrappleEscape(rollResult)` -> `GRAPPLE_ESCAPE`
-- [ ] `doPinAttempt(rollResult)` -> `PIN_ATTEMPT`
-- [ ] `doApplyBlinded(severity)` -> `APPLY_BLINDED`
-- [ ] `doApplyAffliction(aType, duration)` -> `APPLY_AFFLICTION`
-- [ ] `doCureAffliction` -> `CURE_AFFLICTION`
-- [ ] `doApplyEffect(etype, duration)` -> `APPLY_POWER_EFFECT`
-- [ ] `doDismissEffect(etype)` -> `DISMISS_EFFECT`
-- [ ] `doBacklash` -> `BACKLASH`
+- [x] `doDropProne` -> `DROP_PRONE`
+- [x] `doStandUp` -> `STAND_UP`
+- [x] `doGoOnHold` -> `GO_ON_HOLD`
+- [x] `doActFromHold` -> `ACT_FROM_HOLD`
+- [x] `doInterrupt(athleticsRoll)` -> `INTERRUPT`
+- [x] `doDefend` -> `DEFEND`
+- [x] `doApplyEntangled` -> `APPLY_ENTANGLED`
+- [x] `doApplyBound` -> `APPLY_BOUND`
+- [x] `doEscapeAttempt(rollResult)` -> `ESCAPE_ATTEMPT`
+- [x] `doGrappleAttempt(rollResult, opponent)` -> `GRAPPLE_ATTEMPT`
+- [x] `doGrappleEscape(rollResult)` -> `GRAPPLE_ESCAPE`
+- [x] `doPinAttempt(rollResult)` -> `PIN_ATTEMPT`
+- [x] `doApplyBlinded(severity)` -> `APPLY_BLINDED`
+- [x] `doApplyAffliction(aType, duration)` -> `APPLY_AFFLICTION`
+- [x] `doCureAffliction` -> `CURE_AFFLICTION`
+- [x] `doApplyEffect(etype, duration)` -> `APPLY_POWER_EFFECT`
+- [x] `doDismissEffect(etype)` -> `DISMISS_EFFECT`
+- [x] `doBacklash` -> `BACKLASH`
+
+## Tech debt / design concerns
+
+### turnPhase naming vs Quint semantics
+
+- [x] Renamed: `othersTurn` → `idle`, `ownTurn` → `acting`, `onHold` → `holdingAction`
+
+### context.ownTurn / context.onHold duplicate state path
+
+- [x] `snapshotToQuintState` now derives `ownTurn`/`onHold` from `snap.matches()` instead of context

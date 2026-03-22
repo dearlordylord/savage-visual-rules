@@ -10,12 +10,29 @@ import { describe, expect, it } from "vitest"
 import { createActor } from "xstate"
 import { z } from "zod"
 
-import { isDead, isShaken, isStunned, type SavageEvent, savageMachine, type SavageSnapshot } from "./machine"
 import {
+  afflictionType,
+  blindedPenalty,
+  isDead,
+  isShaken,
+  isStunned,
+  type SavageEvent,
+  savageMachine,
+  type SavageSnapshot
+} from "./machine"
+import {
+  afflictionDuration,
+  type AfflictionType,
+  athleticsRollResult,
+  blindedSeverity,
   damageMargin,
+  escapeRollResult,
+  grappleEscapeRollResult,
+  grappleRollResult,
   healAmount,
   incapRollResult,
   injuryRoll,
+  pinRollResult,
   soakSuccesses,
   spiritRollResult,
   vigorRollResult
@@ -38,15 +55,26 @@ const QuintState = z.object({
   incapByFatigue: z.boolean(),
   isWildCard: z.boolean(),
   maxWounds: z.bigint(),
-  ownTurn: z.boolean()
+  ownTurn: z.boolean(),
+  prone: z.boolean(),
+  onHold: z.boolean(),
+  holdUsed: z.boolean(),
+  restrained: z.bigint(),
+  grappledBy: z.string(),
+  blinded: z.bigint(),
+  injuries: z.array(z.string()),
+  afflictionType: z.string(),
+  afflictionTimer: z.bigint(),
+  activeEffects: z.array(z.object({ etype: z.string(), timer: z.bigint() })),
+  defending: z.boolean()
 })
 
 // ============================================================
 // XState snapshot → flat Quint state
 // ============================================================
 
-function fatigueLevel(snap: SavageSnapshot): number {
-  if (isDead(snap)) return 0
+function fatigueLevel(dead: boolean, snap: SavageSnapshot): number {
+  if (dead) return 0
   if (
     snap.matches({ alive: { fatigueTrack: "exhausted" } }) ||
     snap.matches({ alive: { fatigueTrack: "incapByFatigue" } })
@@ -56,22 +84,42 @@ function fatigueLevel(snap: SavageSnapshot): number {
   return 0
 }
 
+function restrainedLevel(dead: boolean, snap: SavageSnapshot): number {
+  if (dead) return -1
+  if (snap.matches({ alive: { restraintTrack: "pinned" } })) return 3
+  if (snap.matches({ alive: { restraintTrack: "grabbed" } })) return 2
+  if (snap.matches({ alive: { restraintTrack: "bound" } })) return 1
+  if (snap.matches({ alive: { restraintTrack: "entangled" } })) return 0
+  return -1
+}
+
 function snapshotToQuintState(snap: SavageSnapshot) {
   const dead = isDead(snap)
   return {
-    shaken: dead ? false : isShaken(snap),
-    stunned: dead ? false : isStunned(snap),
+    shaken: !dead && isShaken(snap),
+    stunned: !dead && isStunned(snap),
     distracted: BigInt(snap.context.distractedTimer),
     vulnerable: BigInt(snap.context.vulnerableTimer),
     wounds: BigInt(snap.context.wounds),
-    incapacitated: dead ? false : snap.matches({ alive: { damageTrack: "incapacitated" } }),
-    bleedingOut: dead ? false : snap.matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } }),
+    incapacitated: !dead && snap.matches({ alive: { damageTrack: "incapacitated" } }),
+    bleedingOut: !dead && snap.matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } }),
     dead,
-    fatigue: BigInt(fatigueLevel(snap)),
-    incapByFatigue: dead ? false : snap.matches({ alive: { fatigueTrack: "incapByFatigue" } }),
+    fatigue: BigInt(fatigueLevel(dead, snap)),
+    incapByFatigue: !dead && snap.matches({ alive: { fatigueTrack: "incapByFatigue" } }),
     isWildCard: snap.context.isWildCard,
     maxWounds: BigInt(snap.context.maxWounds),
-    ownTurn: snap.context.ownTurn
+    ownTurn: !dead && snap.matches({ alive: { turnPhase: "acting" } }),
+    prone: !dead && snap.matches({ alive: { positionTrack: "prone" } }),
+    onHold: !dead && snap.matches({ alive: { turnPhase: "holdingAction" } }),
+    holdUsed: snap.context.holdUsed,
+    restrained: BigInt(restrainedLevel(dead, snap)),
+    grappledBy: snap.context.grappledBy,
+    blinded: dead ? BigInt(0) : BigInt(-blindedPenalty(snap)),
+    injuries: snap.context.injuries,
+    afflictionType: dead ? "none" : (afflictionType(snap) ?? "none"),
+    afflictionTimer: BigInt(snap.context.afflictionTimer),
+    activeEffects: snap.context.activeEffects.map((e) => ({ etype: e.etype, timer: BigInt(e.timer) })),
+    defending: !dead && snap.matches({ alive: { conditionTrack: { defense: "defending" } } })
   }
 }
 
@@ -130,7 +178,7 @@ const driverSchema = {
   init: { wc: z.boolean() },
   doTakeDamage: { margin: ITFBigInt, soak: ITFBigInt, incapRoll: ITFBigInt, injuryRoll: ITFBigInt },
   doStartOfTurn: { vigorRoll: ITFBigInt, spiritRoll: ITFBigInt },
-  doEndOfTurn: { vigorRoll: ITFBigInt },
+  doEndOfTurn: { endVigorRoll: ITFBigInt },
   doUnshake: {},
   doApplyStunned: {},
   doApplyDistracted: {},
@@ -139,6 +187,24 @@ const driverSchema = {
   doRecoverFatigue: {},
   doHeal: { amount: ITFBigInt },
   doFinishingMove: {},
+  doDropProne: {},
+  doStandUp: {},
+  doGoOnHold: {},
+  doActFromHold: {},
+  doInterrupt: { athleticsRoll: ITFBigInt },
+  doDefend: {},
+  doApplyEntangled: {},
+  doApplyBound: {},
+  doEscapeAttempt: { escapeRoll: ITFBigInt },
+  doGrappleAttempt: { grappleRoll: ITFBigInt },
+  doGrappleEscape: { grappleEscapeRoll: ITFBigInt },
+  doPinAttempt: { pinRoll: ITFBigInt },
+  doApplyBlinded: { blindSev: ITFBigInt },
+  doApplyAffliction: { affType: z.string(), affDuration: ITFBigInt },
+  doCureAffliction: {},
+  doApplyEffect: { effectType: z.string(), effectDuration: ITFBigInt },
+  doDismissEffect: { dismissType: z.string() },
+  doBacklash: {},
   step: {} // dead character no-op (state' = state)
 } as const
 
@@ -172,7 +238,7 @@ const savageDriver = defineDriver(driverSchema, () => {
         spiritRoll: spiritRollResult(Number(sr))
       })
     },
-    doEndOfTurn: ({ vigorRoll: vr }) => {
+    doEndOfTurn: ({ endVigorRoll: vr }) => {
       ensureActor().send({ type: "END_OF_TURN", vigorRoll: vigorRollResult(Number(vr)) })
     },
     doUnshake: () => {
@@ -199,6 +265,68 @@ const savageDriver = defineDriver(driverSchema, () => {
     doFinishingMove: () => {
       ensureActor().send({ type: "FINISHING_MOVE" })
     },
+    doDropProne: () => {
+      ensureActor().send({ type: "DROP_PRONE" })
+    },
+    doStandUp: () => {
+      ensureActor().send({ type: "STAND_UP" })
+    },
+    doGoOnHold: () => {
+      ensureActor().send({ type: "GO_ON_HOLD" })
+    },
+    doActFromHold: () => {
+      ensureActor().send({ type: "ACT_FROM_HOLD" })
+    },
+    doInterrupt: ({ athleticsRoll: ar }) => {
+      ensureActor().send({ type: "INTERRUPT", athleticsRoll: athleticsRollResult(Number(ar)) })
+    },
+    doDefend: () => {
+      ensureActor().send({ type: "DEFEND" })
+    },
+    doApplyEntangled: () => {
+      ensureActor().send({ type: "APPLY_ENTANGLED" })
+    },
+    doApplyBound: () => {
+      ensureActor().send({ type: "APPLY_BOUND" })
+    },
+    doEscapeAttempt: ({ escapeRoll }) => {
+      ensureActor().send({ type: "ESCAPE_ATTEMPT", rollResult: escapeRollResult(Number(escapeRoll)) })
+    },
+    doGrappleAttempt: ({ grappleRoll }) => {
+      ensureActor().send({
+        type: "GRAPPLE_ATTEMPT",
+        rollResult: grappleRollResult(Number(grappleRoll)),
+        opponent: "opp1"
+      })
+    },
+    doGrappleEscape: ({ grappleEscapeRoll }) => {
+      ensureActor().send({ type: "GRAPPLE_ESCAPE", rollResult: grappleEscapeRollResult(Number(grappleEscapeRoll)) })
+    },
+    doPinAttempt: ({ pinRoll }) => {
+      ensureActor().send({ type: "PIN_ATTEMPT", rollResult: pinRollResult(Number(pinRoll)) })
+    },
+    doApplyBlinded: ({ blindSev }) => {
+      ensureActor().send({ type: "APPLY_BLINDED", severity: blindedSeverity(Number(blindSev)) })
+    },
+    doApplyAffliction: ({ affDuration, affType }) => {
+      ensureActor().send({
+        type: "APPLY_AFFLICTION",
+        afflictionType: affType as AfflictionType,
+        duration: afflictionDuration(Number(affDuration))
+      })
+    },
+    doCureAffliction: () => {
+      ensureActor().send({ type: "CURE_AFFLICTION" })
+    },
+    doApplyEffect: ({ effectDuration, effectType }) => {
+      ensureActor().send({ type: "APPLY_POWER_EFFECT", etype: effectType, duration: Number(effectDuration) })
+    },
+    doDismissEffect: ({ dismissType }) => {
+      ensureActor().send({ type: "DISMISS_EFFECT", etype: dismissType })
+    },
+    doBacklash: () => {
+      ensureActor().send({ type: "BACKLASH" })
+    },
     step: () => {}, // dead character no-op
     getState: () => snapshotToQuintState(ensureActor().getSnapshot()),
     config: () => ({ statePath: ["state"] })
@@ -210,19 +338,7 @@ const savageDriver = defineDriver(driverSchema, () => {
 // ============================================================
 
 // Known missing fields. Remove entries as they're added to QuintState.
-const KNOWN_MISSING_FIELDS = new Set([
-  "prone",
-  "onHold",
-  "holdUsed",
-  "restrained",
-  "grappledBy",
-  "blinded",
-  "injuries",
-  "afflictionType",
-  "afflictionTimer",
-  "activeEffects",
-  "defending"
-])
+const KNOWN_MISSING_FIELDS = new Set<string>([])
 
 // Effect Schema for the Quint AST subset needed to extract State field names
 type QuintRow = {
@@ -306,7 +422,19 @@ describe("Savage MBT", () => {
         (spec, impl) => {
           const keys = Object.keys(spec) as Array<keyof typeof spec>
           for (const k of keys) {
-            if (spec[k] !== impl[k]) return false
+            const sv = spec[k]
+            const iv = impl[k]
+            if (Array.isArray(sv) && Array.isArray(iv)) {
+              if (sv.length !== iv.length) return false
+              for (let i = 0; i < sv.length; i++) {
+                const a = sv[i]
+                const b = iv[i]
+                if (typeof a === "object" && typeof b === "object") {
+                  for (const p of Object.keys(a))
+                    if ((a as Record<string, unknown>)[p] !== (b as Record<string, unknown>)[p]) return false
+                } else if (a !== b) return false
+              }
+            } else if (sv !== iv) return false
           }
           return true
         }

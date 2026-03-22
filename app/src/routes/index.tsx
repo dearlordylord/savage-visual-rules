@@ -5,17 +5,20 @@ import { createActor } from "xstate"
 
 import {
   afflictionType,
+  blindedPenalty,
   canAct,
   canMove,
-  isConscious,
+  type FearResult,
+  injuryPenalty,
+  type InjuryType,
   isAfflicted,
+  isBound,
+  isConscious,
   isDead,
   isDefending,
   isDistracted,
-  isFullyBlinded,
-  blindedPenalty,
-  isBound,
   isEntangled,
+  isFullyBlinded,
   isGrabbed,
   isGrappled,
   isOnHold,
@@ -25,32 +28,29 @@ import {
   isShaken,
   isStunned,
   isVulnerable,
-  type InjuryType,
-  injuryPenalty,
-  type SavageEvent,
-  type FearResult,
   resolveFear,
+  type SavageEvent,
   savageMachine,
   type SavageSnapshot,
   totalPenalty
 } from "../machine"
+import type { AfflictionType } from "../types"
 import {
   afflictionDuration,
+  athleticsRollResult,
+  blindedSeverity,
   damageMargin,
-  soakSuccesses,
+  escapeRollResult,
+  grappleEscapeRollResult,
+  grappleRollResult,
+  healAmount as mkHealAmount,
   incapRollResult,
   injuryRoll as mkInjuryRoll,
-  vigorRollResult,
-  spiritRollResult,
-  healAmount as mkHealAmount,
-  athleticsRollResult,
-  escapeRollResult,
-  grappleRollResult,
-  grappleEscapeRollResult,
   pinRollResult,
-  blindedSeverity
+  soakSuccesses,
+  spiritRollResult,
+  vigorRollResult
 } from "../types"
-import type { AfflictionType } from "../types"
 
 export const Route = createFileRoute("/")({ component: App })
 
@@ -307,7 +307,9 @@ const STATUS_DATA: Array<{
     cause: "Ранения сверх максимума; усталость сверх Истощён.",
     effects: "Не может действовать. Может истекать кровью (Выносливость каждый ход).",
     removal: "Лечение ранений / устранение причины усталости.",
-    isActive: (snap) => snap.matches({ alive: { damageTrack: "incapacitated" } }) || snap.matches({ alive: { fatigueTrack: "incapByFatigue" } })
+    isActive: (snap) =>
+      snap.matches({ alive: { damageTrack: "incapacitated" } }) ||
+      snap.matches({ alive: { fatigueTrack: "incapByFatigue" } })
   },
   {
     name: "Утомлён",
@@ -503,14 +505,8 @@ function StateTree({ snapshot }: { snapshot: SavageSnapshot }) {
                 label={`impaired (-2)`}
                 active={snapshot.matches({ alive: { conditionTrack: { vision: "impaired" } } })}
               />
-              <StateLeaf
-                label={`blinded (-4)`}
-                active={isFullyBlinded(snapshot)}
-              />
-              <StateLeaf
-                label="defending (+4 Parry)"
-                active={isDefending(snapshot)}
-              />
+              <StateLeaf label={`blinded (-4)`} active={isFullyBlinded(snapshot)} />
+              <StateLeaf label="defending (+4 Parry)" active={isDefending(snapshot)} />
             </div>
           </StateRegion>
 
@@ -524,9 +520,9 @@ function StateTree({ snapshot }: { snapshot: SavageSnapshot }) {
 
           <StateRegion title="Turn Phase">
             <div className="flex gap-3">
-              <StateLeaf label="othersTurn" active={snapshot.matches({ alive: { turnPhase: "othersTurn" } })} />
-              <StateLeaf label="ownTurn" active={snapshot.matches({ alive: { turnPhase: "ownTurn" } })} />
-              <StateLeaf label="onHold" active={isOnHold(snapshot)} />
+              <StateLeaf label="idle" active={snapshot.matches({ alive: { turnPhase: "idle" } })} />
+              <StateLeaf label="acting" active={snapshot.matches({ alive: { turnPhase: "acting" } })} />
+              <StateLeaf label="holdingAction" active={isOnHold(snapshot)} />
             </div>
           </StateRegion>
 
@@ -604,11 +600,19 @@ function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
     { label: "Distracted", value: isDistracted(snapshot) },
     { label: "Vulnerable", value: isVulnerable(snapshot) },
     { label: "Prone", value: isProne(snapshot) },
-    { label: "Defending", value: isDefending(snapshot), title: "Full Defense: +4 Parry, uses whole turn, lasts until next turn" },
+    {
+      label: "Defending",
+      value: isDefending(snapshot),
+      title: "Full Defense: +4 Parry, uses whole turn, lasts until next turn"
+    },
     { label: "On Hold", value: isOnHold(snapshot) },
     { label: "Restrained", value: isRestrained(snapshot) },
     { label: "Grappled", value: isGrappled(snapshot) },
-    { label: "Blinded Penalty", value: (-blindedPenalty(snapshot)).toString(), title: "Vision penalty: -2 impaired, -4 blinded" },
+    {
+      label: "Blinded Penalty",
+      value: (-blindedPenalty(snapshot)).toString(),
+      title: "Vision penalty: -2 impaired, -4 blinded"
+    },
     { label: "Can Act", value: canAct(snapshot) },
     { label: "Can Move", value: canMove(snapshot) },
     { label: "Conscious", value: isConscious(snapshot) },
@@ -743,7 +747,12 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
       <div className="space-y-3 text-sm">
         {/* TAKE_DAMAGE */}
         <div className="rounded-lg border border-[var(--line)] p-3">
-          <p className="mb-2 font-semibold cursor-help" title="Внешнее воздействие (в любой момент). Урон минус Стойкость = margin.">Take Damage</p>
+          <p
+            className="mb-2 font-semibold cursor-help"
+            title="Внешнее воздействие (в любой момент). Урон минус Стойкость = margin."
+          >
+            Take Damage
+          </p>
           <div className="mb-2 flex gap-3">
             <NumInput
               label="margin"
@@ -780,7 +789,15 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
           </div>
           <EventBtn
             disabled={dead}
-            onClick={() => send({ type: "TAKE_DAMAGE", margin: damageMargin(margin), soakSuccesses: soakSuccesses(soak), incapRoll: incapRollResult(incapRoll), injuryRoll: mkInjuryRoll(injuryRoll) })}
+            onClick={() =>
+              send({
+                type: "TAKE_DAMAGE",
+                margin: damageMargin(margin),
+                soakSuccesses: soakSuccesses(soak),
+                incapRoll: incapRollResult(incapRoll),
+                injuryRoll: mkInjuryRoll(injuryRoll)
+              })
+            }
           >
             Fire
           </EventBtn>
@@ -788,7 +805,12 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
 
         {/* START_OF_TURN */}
         <div className="rounded-lg border border-[var(--line)] p-3">
-          <p className="mb-2 font-semibold cursor-help" title="Начало хода персонажа. Автоматические свободные проверки: Выносливость (оглушение, истекая кровью), Характер (шок).">Start of Turn</p>
+          <p
+            className="mb-2 font-semibold cursor-help"
+            title="Начало хода персонажа. Автоматические свободные проверки: Выносливость (оглушение, истекая кровью), Характер (шок)."
+          >
+            Start of Turn
+          </p>
           <div className="mb-2 flex gap-3">
             <NumInput
               label="vigorRoll"
@@ -807,14 +829,28 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
               title="Spirit check result. Used for Shaken recovery. 0 = fail. 1 = success. 2+ = raise."
             />
           </div>
-          <EventBtn disabled={!snapshot.can({ type: "START_OF_TURN", vigorRoll: vigorRollResult(0), spiritRoll: spiritRollResult(0) })} onClick={() => send({ type: "START_OF_TURN", vigorRoll: vigorRollResult(vigorRoll), spiritRoll: spiritRollResult(spiritRoll) })}>
+          <EventBtn
+            disabled={
+              !snapshot.can({ type: "START_OF_TURN", vigorRoll: vigorRollResult(0), spiritRoll: spiritRollResult(0) })
+            }
+            onClick={() =>
+              send({
+                type: "START_OF_TURN",
+                vigorRoll: vigorRollResult(vigorRoll),
+                spiritRoll: spiritRollResult(spiritRoll)
+              })
+            }
+          >
             Fire
           </EventBtn>
         </div>
 
         {/* Simple events */}
         <div className="flex flex-wrap gap-2">
-          <EventBtn disabled={!snapshot.can({ type: "END_OF_TURN", vigorRoll: vigorRollResult(0) })} onClick={() => send({ type: "END_OF_TURN", vigorRoll: vigorRollResult(vigorRoll) })}>
+          <EventBtn
+            disabled={!snapshot.can({ type: "END_OF_TURN", vigorRoll: vigorRollResult(0) })}
+            onClick={() => send({ type: "END_OF_TURN", vigorRoll: vigorRollResult(vigorRoll) })}
+          >
             End of Turn
           </EventBtn>
           <EventBtn
@@ -827,16 +863,25 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
           <EventBtn disabled={!snapshot.can({ type: "APPLY_STUNNED" })} onClick={() => send({ type: "APPLY_STUNNED" })}>
             Apply Stunned
           </EventBtn>
-          <EventBtn disabled={!snapshot.can({ type: "APPLY_DISTRACTED" })} onClick={() => send({ type: "APPLY_DISTRACTED" })}>
+          <EventBtn
+            disabled={!snapshot.can({ type: "APPLY_DISTRACTED" })}
+            onClick={() => send({ type: "APPLY_DISTRACTED" })}
+          >
             Apply Distracted
           </EventBtn>
-          <EventBtn disabled={!snapshot.can({ type: "APPLY_VULNERABLE" })} onClick={() => send({ type: "APPLY_VULNERABLE" })}>
+          <EventBtn
+            disabled={!snapshot.can({ type: "APPLY_VULNERABLE" })}
+            onClick={() => send({ type: "APPLY_VULNERABLE" })}
+          >
             Apply Vulnerable
           </EventBtn>
           <EventBtn disabled={!snapshot.can({ type: "APPLY_FATIGUE" })} onClick={() => send({ type: "APPLY_FATIGUE" })}>
             Apply Fatigue
           </EventBtn>
-          <EventBtn disabled={!snapshot.can({ type: "RECOVER_FATIGUE" })} onClick={() => send({ type: "RECOVER_FATIGUE" })}>
+          <EventBtn
+            disabled={!snapshot.can({ type: "RECOVER_FATIGUE" })}
+            onClick={() => send({ type: "RECOVER_FATIGUE" })}
+          >
             Recover Fatigue
           </EventBtn>
           <EventBtn disabled={!snapshot.can({ type: "DROP_PRONE" })} onClick={() => send({ type: "DROP_PRONE" })}>
@@ -855,7 +900,10 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
           >
             Defend
           </EventBtn>
-          <EventBtn disabled={!snapshot.can({ type: "APPLY_ENTANGLED" })} onClick={() => send({ type: "APPLY_ENTANGLED" })}>
+          <EventBtn
+            disabled={!snapshot.can({ type: "APPLY_ENTANGLED" })}
+            onClick={() => send({ type: "APPLY_ENTANGLED" })}
+          >
             Apply Entangled
           </EventBtn>
           <EventBtn disabled={!snapshot.can({ type: "APPLY_BOUND" })} onClick={() => send({ type: "APPLY_BOUND" })}>
@@ -867,17 +915,38 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
           <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_BLINDED", severity: blindedSeverity(4) })}>
             Blind
           </EventBtn>
-          {incapacitated && <EventBtn disabled={!snapshot.can({ type: "FINISHING_MOVE" })} onClick={() => send({ type: "FINISHING_MOVE" })}>Finishing Move</EventBtn>}
+          {incapacitated && (
+            <EventBtn
+              disabled={!snapshot.can({ type: "FINISHING_MOVE" })}
+              onClick={() => send({ type: "FINISHING_MOVE" })}
+            >
+              Finishing Move
+            </EventBtn>
+          )}
         </div>
 
         {/* ON HOLD ACTIONS (visible when on hold) */}
         {onHold && (
           <div className="rounded-lg border border-[var(--line)] p-3">
-            <p className="mb-2 font-semibold cursor-help" title="Наготове. Действовать добровольно или прервать чужое действие.">On Hold</p>
-            <EventBtn disabled={!snapshot.can({ type: "ACT_FROM_HOLD" })} onClick={() => send({ type: "ACT_FROM_HOLD" })} title="Voluntarily leave hold and take your turn (no Athletics check needed).">
+            <p
+              className="mb-2 font-semibold cursor-help"
+              title="Наготове. Действовать добровольно или прервать чужое действие."
+            >
+              On Hold
+            </p>
+            <EventBtn
+              disabled={!snapshot.can({ type: "ACT_FROM_HOLD" })}
+              onClick={() => send({ type: "ACT_FROM_HOLD" })}
+              title="Voluntarily leave hold and take your turn (no Athletics check needed)."
+            >
               Act
             </EventBtn>
-            <p className="mt-3 mb-2 font-semibold cursor-help" title="Реакция (наготове). Встречная проверка Атлетики для прерывания чужого действия.">Interrupt</p>
+            <p
+              className="mt-3 mb-2 font-semibold cursor-help"
+              title="Реакция (наготове). Встречная проверка Атлетики для прерывания чужого действия."
+            >
+              Interrupt
+            </p>
             <div className="mb-2 flex gap-3">
               <NumInput
                 label="athleticsRoll"
@@ -888,14 +957,21 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
                 title="Athletics roll to interrupt. 0 = fail (act after interruptee). 1+ = success (act before interruptee)."
               />
             </div>
-            <EventBtn onClick={() => send({ type: "INTERRUPT", athleticsRoll: athleticsRollResult(athleticsRoll) })}>Fire</EventBtn>
+            <EventBtn onClick={() => send({ type: "INTERRUPT", athleticsRoll: athleticsRollResult(athleticsRoll) })}>
+              Fire
+            </EventBtn>
           </div>
         )}
 
         {/* ESCAPE ATTEMPT (visible when restrained) */}
         {restrained && (
           <div className="rounded-lg border border-[var(--line)] p-3">
-            <p className="mb-2 font-semibold cursor-help" title="Действие (в свой ход). Проверка Силы (–2) или Атлетики.">Escape Attempt</p>
+            <p
+              className="mb-2 font-semibold cursor-help"
+              title="Действие (в свой ход). Проверка Силы (–2) или Атлетики."
+            >
+              Escape Attempt
+            </p>
             <div className="mb-2 flex gap-3">
               <NumInput
                 label="rollResult"
@@ -906,13 +982,20 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
                 title="Escape roll. From entangled: 1+ = free. From bound: 1 = entangled, 2+ = free."
               />
             </div>
-            <EventBtn onClick={() => send({ type: "ESCAPE_ATTEMPT", rollResult: escapeRollResult(escapeRoll) })}>Fire</EventBtn>
+            <EventBtn onClick={() => send({ type: "ESCAPE_ATTEMPT", rollResult: escapeRollResult(escapeRoll) })}>
+              Fire
+            </EventBtn>
           </div>
         )}
 
         {/* GRAPPLE */}
         <div className="rounded-lg border border-[var(--line)] p-3">
-          <p className="mb-2 font-semibold cursor-help" title="Действие (в свой ход). Встречная проверка Атлетики. Высвобождение — тоже действие.">Grapple</p>
+          <p
+            className="mb-2 font-semibold cursor-help"
+            title="Действие (в свой ход). Встречная проверка Атлетики. Высвобождение — тоже действие."
+          >
+            Grapple
+          </p>
           <div className="mb-2 flex gap-3">
             <NumInput
               label="rollResult"
@@ -924,12 +1007,19 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
             />
           </div>
           <div className="flex flex-wrap gap-2">
-            <EventBtn disabled={dead} onClick={() => send({ type: "GRAPPLE_ATTEMPT", rollResult: grappleRollResult(grappleRoll) })}>
+            <EventBtn
+              disabled={dead}
+              onClick={() =>
+                send({ type: "GRAPPLE_ATTEMPT", opponent: "opp1", rollResult: grappleRollResult(grappleRoll) })
+              }
+            >
               Grapple
             </EventBtn>
             {grappled && (
               <>
-                <EventBtn onClick={() => send({ type: "GRAPPLE_ESCAPE", rollResult: grappleEscapeRollResult(grappleRoll) })}>
+                <EventBtn
+                  onClick={() => send({ type: "GRAPPLE_ESCAPE", rollResult: grappleEscapeRollResult(grappleRoll) })}
+                >
                   Escape Grapple
                 </EventBtn>
                 <EventBtn onClick={() => send({ type: "PIN_ATTEMPT", rollResult: pinRollResult(grappleRoll) })}>
@@ -942,7 +1032,12 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
 
         {/* HEAL */}
         <div className="rounded-lg border border-[var(--line)] p-3">
-          <p className="mb-2 font-semibold cursor-help" title="Действие (в свой ход). Проверка Лечения (в течение Золотого часа) или естественное исцеление.">Heal</p>
+          <p
+            className="mb-2 font-semibold cursor-help"
+            title="Действие (в свой ход). Проверка Лечения (в течение Золотого часа) или естественное исцеление."
+          >
+            Heal
+          </p>
           <div className="mb-2">
             <NumInput
               label="amount"
@@ -953,7 +1048,10 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
               title="Number of wounds healed (1-3). Healing while incapacitated also removes incapacitation."
             />
           </div>
-          <EventBtn disabled={!snapshot.can({ type: "HEAL", amount: mkHealAmount(1) })} onClick={() => send({ type: "HEAL", amount: mkHealAmount(healAmount) })}>
+          <EventBtn
+            disabled={!snapshot.can({ type: "HEAL", amount: mkHealAmount(1) })}
+            onClick={() => send({ type: "HEAL", amount: mkHealAmount(healAmount) })}
+          >
             Fire
           </EventBtn>
         </div>
@@ -991,10 +1089,10 @@ const FEAR_MACHINE_EVENTS: Partial<Record<FearResult, SavageEvent>> = {
   APPLY_STUNNED: { type: "APPLY_STUNNED" }
 }
 
-function FearPanel({ send, dead }: { send: (e: SavageEvent) => void; dead: boolean }) {
+function FearPanel({ dead, send }: { send: (e: SavageEvent) => void; dead: boolean }) {
   const [fearRoll, setFearRoll] = useState(10)
   const [fearMod, setFearMod] = useState(0)
-  const [lastResults, setLastResults] = useState<FearResult[] | null>(null)
+  const [lastResults, setLastResults] = useState<Array<FearResult> | null>(null)
 
   const handleFear = () => {
     const results = resolveFear(fearRoll, fearMod)
@@ -1007,7 +1105,12 @@ function FearPanel({ send, dead }: { send: (e: SavageEvent) => void; dead: boole
 
   return (
     <div className="rounded-lg border border-[var(--line)] p-3">
-      <p className="mb-2 font-semibold cursor-help" title="Свободное действие (в любой момент). Проверка Характера при встрече с источником страха.">Fear Check</p>
+      <p
+        className="mb-2 font-semibold cursor-help"
+        title="Свободное действие (в любой момент). Проверка Характера при встрече с источником страха."
+      >
+        Fear Check
+      </p>
       <div className="mb-2 flex gap-3">
         <NumInput
           label="d20 roll"
@@ -1034,7 +1137,10 @@ function FearPanel({ send, dead }: { send: (e: SavageEvent) => void; dead: boole
           <p className="mb-1 font-semibold">Result (total {fearRoll + fearMod}):</p>
           <ul className="list-inside list-disc">
             {lastResults.map((r, i) => (
-              <li key={i} className={FEAR_MACHINE_EVENTS[r] ? "text-[var(--lagoon-deep)]" : "text-[var(--sea-ink-soft)]"}>
+              <li
+                key={i}
+                className={FEAR_MACHINE_EVENTS[r] ? "text-[var(--lagoon-deep)]" : "text-[var(--sea-ink-soft)]"}
+              >
                 {FEAR_RESULT_LABELS[r]}
                 {FEAR_MACHINE_EVENTS[r] ? " (applied)" : " (manual)"}
               </li>
@@ -1046,13 +1152,26 @@ function FearPanel({ send, dead }: { send: (e: SavageEvent) => void; dead: boole
   )
 }
 
-function AfflictionPanel({ send, snapshot, afflicted }: { send: (e: SavageEvent) => void; snapshot: SavageSnapshot; afflicted: boolean }) {
+function AfflictionPanel({
+  afflicted,
+  send,
+  snapshot
+}: {
+  send: (e: SavageEvent) => void
+  snapshot: SavageSnapshot
+  afflicted: boolean
+}) {
   const [affType, setAffType] = useState<AfflictionType>("weak")
   const [affDur, setAffDur] = useState(3)
 
   return (
     <div className="rounded-lg border border-[var(--line)] p-3">
-      <p className="mb-2 font-semibold cursor-help" title="Внешнее воздействие (яды, болезни, силы). Эффекты применяются в начале хода персонажа.">Affliction</p>
+      <p
+        className="mb-2 font-semibold cursor-help"
+        title="Внешнее воздействие (яды, болезни, силы). Эффекты применяются в начале хода персонажа."
+      >
+        Affliction
+      </p>
       <div className="mb-2 flex gap-3">
         <label className="flex flex-col text-xs text-[var(--sea-ink-soft)]">
           type
@@ -1080,11 +1199,19 @@ function AfflictionPanel({ send, snapshot, afflicted }: { send: (e: SavageEvent)
         />
       </div>
       <div className="flex gap-2">
-        <EventBtn disabled={isDead(snapshot)} onClick={() => send({ type: "APPLY_AFFLICTION", afflictionType: affType, duration: afflictionDuration(affDur) })}>
+        <EventBtn
+          disabled={isDead(snapshot)}
+          onClick={() =>
+            send({ type: "APPLY_AFFLICTION", afflictionType: affType, duration: afflictionDuration(affDur) })
+          }
+        >
           Apply
         </EventBtn>
         {afflicted && (
-          <EventBtn disabled={!snapshot.can({ type: "CURE_AFFLICTION" })} onClick={() => send({ type: "CURE_AFFLICTION" })}>
+          <EventBtn
+            disabled={!snapshot.can({ type: "CURE_AFFLICTION" })}
+            onClick={() => send({ type: "CURE_AFFLICTION" })}
+          >
             Cure
           </EventBtn>
         )}
@@ -1095,13 +1222,26 @@ function AfflictionPanel({ send, snapshot, afflicted }: { send: (e: SavageEvent)
 
 const EFFECT_TYPES = ["armor", "shield", "smite", "boost", "lower_attribute", "speed", "fly"] as const
 
-function PowerEffectPanel({ send, snapshot, effects }: { send: (e: SavageEvent) => void; snapshot: SavageSnapshot; effects: Array<{ etype: string; timer: number }> }) {
+function PowerEffectPanel({
+  effects,
+  send,
+  snapshot
+}: {
+  send: (e: SavageEvent) => void
+  snapshot: SavageSnapshot
+  effects: Array<{ etype: string; timer: number }>
+}) {
   const [effectType, setEffectType] = useState("armor")
   const [effectDur, setEffectDur] = useState(3)
 
   return (
     <div className="rounded-lg border border-[var(--line)] p-3">
-      <p className="mb-2 font-semibold cursor-help" title="Действие (в свой ход). Активация силы; длительность в раундах. Откат (Backlash) снимает все эффекты + усталость.">Power Effects</p>
+      <p
+        className="mb-2 font-semibold cursor-help"
+        title="Действие (в свой ход). Активация силы; длительность в раундах. Откат (Backlash) снимает все эффекты + усталость."
+      >
+        Power Effects
+      </p>
       <div className="mb-2 flex gap-3">
         <label className="flex flex-col text-xs text-[var(--sea-ink-soft)]">
           type
@@ -1110,7 +1250,11 @@ function PowerEffectPanel({ send, snapshot, effects }: { send: (e: SavageEvent) 
             value={effectType}
             onChange={(e) => setEffectType(e.target.value)}
           >
-            {EFFECT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            {EFFECT_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
           </select>
         </label>
         <NumInput
@@ -1123,7 +1267,10 @@ function PowerEffectPanel({ send, snapshot, effects }: { send: (e: SavageEvent) 
         />
       </div>
       <div className="flex flex-wrap gap-2">
-        <EventBtn disabled={isDead(snapshot)} onClick={() => send({ type: "APPLY_POWER_EFFECT", etype: effectType, duration: effectDur })}>
+        <EventBtn
+          disabled={isDead(snapshot)}
+          onClick={() => send({ type: "APPLY_POWER_EFFECT", etype: effectType, duration: effectDur })}
+        >
           Apply
         </EventBtn>
         <EventBtn disabled={!snapshot.can({ type: "BACKLASH" })} onClick={() => send({ type: "BACKLASH" })}>
@@ -1133,8 +1280,13 @@ function PowerEffectPanel({ send, snapshot, effects }: { send: (e: SavageEvent) 
       {effects.length > 0 && (
         <div className="mt-2 space-y-1">
           {effects.map((eff, i) => (
-            <div key={`${eff.etype}-${i}`} className="flex items-center justify-between rounded border border-[var(--line)] px-2 py-1 text-xs">
-              <span>{eff.etype} <span className="text-[var(--sea-ink-soft)]">({eff.timer} rnd)</span></span>
+            <div
+              key={`${eff.etype}-${i}`}
+              className="flex items-center justify-between rounded border border-[var(--line)] px-2 py-1 text-xs"
+            >
+              <span>
+                {eff.etype} <span className="text-[var(--sea-ink-soft)]">({eff.timer} rnd)</span>
+              </span>
               <button
                 className="text-red-500 hover:text-red-700"
                 onClick={() => send({ type: "DISMISS_EFFECT", etype: eff.etype })}
