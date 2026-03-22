@@ -991,4 +991,98 @@ module savageTest {
     .then(doApplyAffliction("lethal", 5))
     .expect(state.afflictionType == "lethal" and state.afflictionTimer == 5)
   }
+
+  // ============================================================
+  // Power effect tests
+  // ============================================================
+
+  /// Apply and dismiss a power effect
+  run effectApplyAndDismissTest = {
+    initWildCard
+    .then(doApplyEffect("armor", 3))
+    .expect(state.activeEffects.length() == 1 and state.activeEffects[0].etype == "armor" and state.activeEffects[0].timer == 3)
+    .then(doDismissEffect("armor"))
+    .expect(state.activeEffects.length() == 0)
+  }
+
+  /// Effect timer ticks down and expires
+  run effectTimerExpiresTest = {
+    initWildCard
+    .then(doApplyEffect("shield", 1))
+    .expect(state.activeEffects.length() == 1)
+    .then(doStartOfTurn(0, 0))
+    .then(doEndOfTurn)
+    .expect(state.activeEffects.length() == 0)
+  }
+
+  /// Multiple effects stack
+  run multipleEffectsStackTest = {
+    initWildCard
+    .then(doApplyEffect("armor", 3))
+    .then(doApplyEffect("smite", 2))
+    .expect(state.activeEffects.length() == 2)
+    .then(doStartOfTurn(0, 0))
+    .then(doEndOfTurn)
+    .expect(state.activeEffects.length() == 2 and state.activeEffects[0].timer == 2 and state.activeEffects[1].timer == 1)
+    .then(doStartOfTurn(0, 0))
+    .then(doEndOfTurn)
+    .expect(state.activeEffects.length() == 1 and state.activeEffects[0].etype == "armor")
+  }
+
+  /// Backlash clears all effects and adds fatigue
+  run backlashClearsAndAddsFatigueTest = {
+    initWildCard
+    .then(doApplyEffect("armor", 3))
+    .then(doApplyEffect("boost", 2))
+    .expect(state.activeEffects.length() == 2 and state.fatigue == 0)
+    .then(doBacklash)
+    .expect(state.activeEffects.length() == 0 and state.fatigue == 1)
+  }
+
+  /// Backlash fails when no effects
+  run backlashFailsWhenNoEffectsTest = {
+    initWildCard
+    .then(doBacklash)
+    .fail()
+  }
+
+  /// Dismiss removes only first match
+  run dismissRemovesFirstMatchTest = {
+    initWildCard
+    .then(doApplyEffect("armor", 3))
+    .then(doApplyEffect("armor", 5))
+    .expect(state.activeEffects.length() == 2)
+    .then(doDismissEffect("armor"))
+    .expect(state.activeEffects.length() == 1 and state.activeEffects[0].timer == 5)
+  }
+
+  /// Death clears active effects
+  run deathClearsEffectsTest = {
+    initExtra
+    .then(doApplyEffect("shield", 3))
+    .expect(state.activeEffects.length() == 1)
+    .then(doTakeDamage(4, 0, 0, 0))
+    .expect(state.dead and state.activeEffects.length() == 0)
+  }
+
+  /// Apply effect blocked when dead
+  run effectBlockedWhenDeadTest = {
+    all { state' = die(FRESH_WILD_CARD) }
+    .then(doApplyEffect("armor", 3))
+    .fail()
+  }
+
+  /// Zero duration effect rejected
+  run zeroDurationEffectRejectedTest = {
+    initWildCard
+    .then(doApplyEffect("armor", 0))
+    .fail()
+  }
+
+  /// Dismiss non-existent effect fails
+  run dismissNonExistentEffectFailsTest = {
+    initWildCard
+    .then(doDismissEffect("armor"))
+    .fail()
+  }
 }

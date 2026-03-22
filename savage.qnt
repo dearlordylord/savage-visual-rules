@@ -53,7 +53,10 @@ module savage {
 
     // Afflictions (poison/disease)
     afflictionType: str,    // "none", "paralytic", "weak", "lethal", "sleep"
-    afflictionTimer: int    // -1 = none, >= 0 = turns remaining
+    afflictionTimer: int,   // -1 = none, >= 0 = turns remaining
+
+    // Active power effects (buffs/debuffs with duration)
+    activeEffects: List[{etype: str, timer: int}]
   }
 
   // ============================================================
@@ -67,7 +70,8 @@ module savage {
     isWildCard: true, maxWounds: 3, ownTurn: false,
     prone: false, onHold: false, restrained: -1, grappledBy: "",
     blinded: 0, injuries: List(),
-    afflictionType: "none", afflictionTimer: -1
+    afflictionType: "none", afflictionTimer: -1,
+    activeEffects: List()
   }
 
   pure val FRESH_EXTRA: State = {
@@ -77,7 +81,8 @@ module savage {
     isWildCard: false, maxWounds: 1, ownTurn: false,
     prone: false, onHold: false, restrained: -1, grappledBy: "",
     blinded: 0, injuries: List(),
-    afflictionType: "none", afflictionTimer: -1
+    afflictionType: "none", afflictionTimer: -1,
+    activeEffects: List()
   }
 
   // Bounded ranges for nondeterministic exploration
@@ -126,7 +131,8 @@ module savage {
     fatigue: 0, incapByFatigue: false,
     prone: false, onHold: false, restrained: -1, grappledBy: "",
     blinded: 0, injuries: List(),
-    afflictionType: "none", afflictionTimer: -1
+    afflictionType: "none", afflictionTimer: -1,
+    activeEffects: List()
   }
 
   // --- Derived state ---
@@ -325,8 +331,14 @@ module savage {
                         else if (s.afflictionTimer == 0) -1
                         else -1
       val newAffType = if (newAffTimer == -1 and s.afflictionTimer >= 0) "none" else s.afflictionType
+      // Tick power effect timers and remove expired
+      val tickedEffects = s.activeEffects.foldl(List(), (acc, e) =>
+        if (e.timer - 1 > 0) acc.append({etype: e.etype, timer: e.timer - 1})
+        else acc
+      )
       {success: true, newState: {...s, ownTurn: false, distracted: nd, vulnerable: nv,
-        afflictionTimer: newAffTimer, afflictionType: newAffType}}
+        afflictionTimer: newAffTimer, afflictionType: newAffType,
+        activeEffects: tickedEffects}}
     }
   }
 
@@ -604,6 +616,42 @@ module savage {
     }
   }
 
+  /// Apply a power effect (buff/debuff with duration).
+  /// Appends to activeEffects list.
+  pure def pApplyEffect(s: State, etype: str, duration: int): {success: bool, newState: State} = {
+    if (s.dead or duration <= 0) {
+      {success: false, newState: s}
+    } else {
+      {success: true, newState: {...s, activeEffects: s.activeEffects.append({etype: etype, timer: duration})}}
+    }
+  }
+
+  /// Dismiss a specific power effect by type (removes first match).
+  pure def pDismissEffect(s: State, etype: str): {success: bool, newState: State} = {
+    val hasMatch = s.activeEffects.foldl(false, (acc, e) => acc or e.etype == etype)
+    if (not(hasMatch)) {
+      {success: false, newState: s}
+    } else {
+      // Remove first match: collect elements, skip first matching one
+      val result = s.activeEffects.foldl({found: false, kept: List()}, (acc, e) =>
+        if (not(acc.found) and e.etype == etype) {...acc, found: true}
+        else {...acc, kept: acc.kept.append(e)}
+      )
+      {success: true, newState: {...s, activeEffects: result.kept}}
+    }
+  }
+
+  /// Backlash: clear all active effects + apply 1 fatigue.
+  pure def pBacklash(s: State): {success: bool, newState: State} = {
+    if (s.dead or s.activeEffects.length() == 0) {
+      {success: false, newState: s}
+    } else {
+      val cleared = {...s, activeEffects: List()}
+      val r = pApplyFatigue(cleared)
+      {success: true, newState: r.newState}
+    }
+  }
+
   // ============================================================
   // 4. STATE VARIABLE
   // ============================================================
@@ -676,6 +724,16 @@ module savage {
   /// Dead characters have no affliction
   val deadClearsAffliction = state.dead implies (state.afflictionType == "none" and state.afflictionTimer == -1)
 
+  /// All active effects have positive timers (no expired entries linger)
+  val activeEffectsValid = state.activeEffects.foldl(true, (acc, e) => acc and e.timer > 0)
+
+  /// Active effect types are valid
+  val VALID_EFFECT_TYPES = Set("armor", "shield", "smite", "boost", "lower_attribute", "speed", "fly")
+  val activeEffectTypesValid = state.activeEffects.foldl(true, (acc, e) => acc and VALID_EFFECT_TYPES.contains(e.etype))
+
+  /// Dead characters have no active effects
+  val deadClearsEffects = state.dead implies state.activeEffects.length() == 0
+
   /// Combined safety invariant
   val safetyInv = and {
     woundsBounded,
@@ -697,7 +755,10 @@ module savage {
     deadClearsInjuries,
     afflictionTypeValid,
     afflictionTimerConsistent,
-    deadClearsAffliction
+    deadClearsAffliction,
+    activeEffectsValid,
+    activeEffectTypesValid,
+    deadClearsEffects
   }
 
   // Action witnesses (should be VIOLATED = reachable)
@@ -831,6 +892,21 @@ module savage {
     all { r.success, state' = r.newState }
   }
 
+  action doApplyEffect(etype: str, duration: int): bool = {
+    val r = pApplyEffect(state, etype, duration)
+    all { r.success, state' = r.newState }
+  }
+
+  action doDismissEffect(etype: str): bool = {
+    val r = pDismissEffect(state, etype)
+    all { r.success, state' = r.newState }
+  }
+
+  action doBacklash: bool = {
+    val r = pBacklash(state)
+    all { r.success, state' = r.newState }
+  }
+
   // ============================================================
   // 7. INITIALIZATION
   // ============================================================
@@ -915,6 +991,14 @@ module savage {
         nondet affDuration = 0.to(3).oneOf()
         doApplyAffliction(affType, affDuration),
         doCureAffliction,
+
+        // Power effects
+        nondet effectType = VALID_EFFECT_TYPES.oneOf()
+        nondet effectDuration = 1.to(5).oneOf()
+        doApplyEffect(effectType, effectDuration),
+        nondet dismissType = VALID_EFFECT_TYPES.oneOf()
+        doDismissEffect(dismissType),
+        doBacklash,
       }
     }
   }
