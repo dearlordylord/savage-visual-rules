@@ -291,30 +291,8 @@ module savage {
         s3
       }
 
-      // Affliction per-turn effects
-      val s5 = if (s4.afflictionType == "weak") {
-        // Weak: +1 fatigue
-        val r = pApplyFatigue(s4)
-        r.newState
-      } else if (s4.afflictionType == "lethal") {
-        // Lethal: +1 fatigue + shaken + 1 wound (can cascade to incap/death)
-        val sf = pApplyFatigue(s4)
-        val sw = {...sf.newState, shaken: true, wounds: sf.newState.wounds + 1}
-        if (not(sw.isWildCard) and sw.wounds > 0) {
-          // Extra: any wound = eliminated
-          die(sw)
-        } else if (sw.wounds > sw.maxWounds) {
-          // Wild Card: exceeds max — incapacitate (no incapRoll for affliction damage)
-          {...sw, wounds: sw.maxWounds, incapacitated: true, bleedingOut: true,
-           stunned: false, prone: false, onHold: false, restrained: -1, grappledBy: "", blinded: 0}
-        } else {
-          sw
-        }
-      } else {
-        s4
-      }
-
-      {success: true, newState: s5}
+      // No per-turn affliction damage — effects are one-time at application (SWADE)
+      {success: true, newState: s4}
     }
   }
 
@@ -336,19 +314,27 @@ module savage {
                else if (s.vulnerable > 0) s.vulnerable - 1
                else if (s.vulnerable == 0) -1
                else -1
-      // Tick affliction timer
+      // Tick affliction timer; lethal expiry → death
       val newAffTimer = if (s.afflictionTimer > 0) s.afflictionTimer - 1
                         else if (s.afflictionTimer == 0) -1
                         else -1
-      val newAffType = if (newAffTimer == -1 and s.afflictionTimer >= 0) "none" else s.afflictionType
+      val afflictionExpiring = newAffTimer == -1 and s.afflictionTimer >= 0
+      val newAffType = if (afflictionExpiring) "none" else s.afflictionType
       // Tick power effect timers and remove expired
       val tickedEffects = s.activeEffects.foldl(List(), (acc, e) =>
         if (e.timer - 1 > 0) acc.append({etype: e.etype, timer: e.timer - 1})
         else acc
       )
-      {success: true, newState: {...s, ownTurn: false, distracted: nd, vulnerable: nv,
-        afflictionTimer: newAffTimer, afflictionType: newAffType,
-        activeEffects: tickedEffects}}
+      // Lethal timer expiry → death (SWADE: dies in 2d6 rounds if untreated)
+      if (afflictionExpiring and s.afflictionType == "lethal") {
+        {success: true, newState: die({...s, ownTurn: false, distracted: nd, vulnerable: nv,
+          afflictionTimer: newAffTimer, afflictionType: newAffType,
+          activeEffects: tickedEffects})}
+      } else {
+        {success: true, newState: {...s, ownTurn: false, distracted: nd, vulnerable: nv,
+          afflictionTimer: newAffTimer, afflictionType: newAffType,
+          activeEffects: tickedEffects}}
+      }
     }
   }
 
@@ -611,11 +597,36 @@ module savage {
   /// Apply affliction (poison/disease). Guard: not dead.
   /// type: "paralytic", "weak", "lethal", "sleep"
   /// duration: number of turns (>= 0)
+  /// One-time effects per SWADE:
+  ///   weak: +1 fatigue immediately
+  ///   lethal: +1 wound + shaken immediately (can cascade to incap/death)
+  ///   paralytic / sleep: no immediate damage
   pure def pApplyAffliction(s: State, aType: str, duration: int): {success: bool, newState: State} = {
     if (s.dead) {
       {success: false, newState: s}
     } else {
-      {success: true, newState: {...s, afflictionType: aType, afflictionTimer: duration}}
+      val s1 = {...s, afflictionType: aType, afflictionTimer: duration}
+      if (aType == "weak") {
+        // Weak: one-time +1 fatigue
+        val r = pApplyFatigue(s1)
+        {success: true, newState: r.newState}
+      } else if (aType == "lethal") {
+        // Lethal: one-time +1 wound + shaken
+        val sw = {...s1, shaken: true, wounds: s1.wounds + 1}
+        if (not(sw.isWildCard) and sw.wounds > 0) {
+          // Extra: any wound = eliminated
+          {success: true, newState: die(sw)}
+        } else if (sw.wounds > sw.maxWounds) {
+          // Wild Card: exceeds max — incapacitate
+          {success: true, newState: {...sw, wounds: sw.maxWounds, incapacitated: true, bleedingOut: true,
+           stunned: false, prone: false, onHold: false, restrained: -1, grappledBy: "", blinded: 0}}
+        } else {
+          {success: true, newState: sw}
+        }
+      } else {
+        // paralytic, sleep: no immediate damage
+        {success: true, newState: s1}
+      }
     }
   }
 
