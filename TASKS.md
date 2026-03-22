@@ -78,7 +78,7 @@
 
 > Character can be grabbed/pinned, with attacker paying a vulnerability cost.
 
-### Slice 5.1: Quint spec for grapple
+### Slice 5.1: Quint spec for grapple [DONE]
 
 - Extend `restrained` model: values -1 (free), 0 (entangled), 1 (bound), 2 (grabbed), 3 (pinned)
   - Or use separate field `grappled: int` (-1 = free, 0 = grabbed, 1 = pinned) alongside restrained

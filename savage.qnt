@@ -41,8 +41,9 @@ module savage {
     // Hold
     onHold: bool,
 
-    // Restraint
-    restrained: int,        // -1 = free, 0 = entangled, 1 = bound
+    // Restraint / Grapple
+    restrained: int,        // -1 = free, 0 = entangled, 1 = bound, 2 = grabbed, 3 = pinned
+    grappledBy: str,        // opponent identifier ("" = not grappled)
 
     // Injuries (permanent, from Injury Table on incapacitation)
     injuries: List[str]     // list of injury type identifiers
@@ -57,7 +58,7 @@ module savage {
     wounds: 0, incapacitated: false, bleedingOut: false, dead: false,
     fatigue: 0, incapByFatigue: false,
     isWildCard: true, maxWounds: 3, ownTurn: false,
-    prone: false, onHold: false, restrained: -1,
+    prone: false, onHold: false, restrained: -1, grappledBy: "",
     injuries: List()
   }
 
@@ -66,7 +67,7 @@ module savage {
     wounds: 0, incapacitated: false, bleedingOut: false, dead: false,
     fatigue: 0, incapByFatigue: false,
     isWildCard: false, maxWounds: 1, ownTurn: false,
-    prone: false, onHold: false, restrained: -1,
+    prone: false, onHold: false, restrained: -1, grappledBy: "",
     injuries: List()
   }
 
@@ -114,7 +115,7 @@ module savage {
     distracted: -1, vulnerable: -1,
     incapacitated: false, bleedingOut: false,
     fatigue: 0, incapByFatigue: false,
-    prone: false, onHold: false, restrained: -1,
+    prone: false, onHold: false, restrained: -1, grappledBy: "",
     injuries: List()
   }
 
@@ -180,7 +181,7 @@ module savage {
         {success: true, newState: die({...s, wounds: s.maxWounds})}
       } else if (s.isWildCard and newWounds > s.maxWounds) {
         // Wild Card: exceeds max wounds = incapacitated + immediate vigor roll
-        val base = {...s, wounds: s.maxWounds, shaken: false, stunned: false, incapacitated: true, prone: false, onHold: false, restrained: -1}
+        val base = {...s, wounds: s.maxWounds, shaken: false, stunned: false, incapacitated: true, prone: false, onHold: false, restrained: -1, grappledBy: ""}
         if (incapRoll < 0) {
           {success: true, newState: die(base)}
         } else if (incapRoll == 0) {
@@ -267,12 +268,12 @@ module savage {
     } else if (not(s.ownTurn)) {
       {success: false, newState: s}
     } else {
-      // Bound characters keep distracted + vulnerable (conditions don't expire while bound)
-      val nd = if (s.restrained == 1 and s.distracted >= 0) s.distracted
+      // Bound/grabbed/pinned characters keep distracted + vulnerable (conditions don't expire)
+      val nd = if (s.restrained >= 1 and s.distracted >= 0) s.distracted
                else if (s.distracted > 0) s.distracted - 1
                else if (s.distracted == 0) -1
                else -1
-      val nv = if (s.restrained == 1 and s.vulnerable >= 0) s.vulnerable
+      val nv = if (s.restrained >= 1 and s.vulnerable >= 0) s.vulnerable
                else if (s.vulnerable > 0) s.vulnerable - 1
                else if (s.vulnerable == 0) -1
                else -1
@@ -327,7 +328,7 @@ module savage {
       {success: false, newState: s}
     } else if (s.fatigue >= 2) {
       // Already Exhausted, one more = incapacitated by fatigue
-      {success: true, newState: {...s, incapByFatigue: true, prone: false, onHold: false, restrained: -1}}
+      {success: true, newState: {...s, incapByFatigue: true, prone: false, onHold: false, restrained: -1, grappledBy: ""}}
     } else {
       {success: true, newState: {...s, fatigue: s.fatigue + 1}}
     }
@@ -417,7 +418,7 @@ module savage {
   }
 
   /// Apply bound. Guard: isActive. Sets restrained = 1.
-  /// Also cascades: sets distracted + vulnerable timers.
+  /// Also cascades: sets distracted + vulnerable timers. Clears grapple if any.
   pure def pApplyBound(s: State): {success: bool, newState: State} = {
     if (not(s.isActive())) {
       {success: false, newState: s}
@@ -425,17 +426,19 @@ module savage {
       val timer = if (s.ownTurn) 1 else 0
       {success: true, newState: {...s,
         restrained: 1,
+        grappledBy: "",
         distracted: max(s.distracted, timer),
         vulnerable: max(s.vulnerable, timer)
       }}
     }
   }
 
-  /// Escape attempt from restraint.
+  /// Escape attempt from restraint (entangled/bound only, not grapple).
   /// From bound: success (>= 1) → entangled, raise (>= 2) → free
   /// From entangled: success (>= 1) → free
   pure def pEscapeAttempt(s: State, rollResult: int): {success: bool, newState: State} = {
-    if (s.restrained < 0) {
+    if (s.restrained < 0 or s.restrained >= 2) {
+      // Free or grappled — use pGrappleEscape for grapple
       {success: false, newState: s}
     } else if (s.restrained == 1) {
       // Bound
@@ -453,6 +456,55 @@ module savage {
       } else {
         {success: false, newState: s}
       }
+    }
+  }
+
+  /// Grapple attempt by opponent. Guard: isActive, not already grappled.
+  /// Mutual exclusion: grapple replaces any existing restraint (entangled/bound).
+  /// success (>= 1) → grabbed, raise (>= 2) → pinned.
+  /// Sets distracted + vulnerable (like bound).
+  pure def pGrappleAttempt(s: State, rollResult: int, opponent: str): {success: bool, newState: State} = {
+    if (not(s.isActive()) or s.restrained >= 2 or rollResult < 1) {
+      {success: false, newState: s}
+    } else {
+      val timer = if (s.ownTurn) 1 else 0
+      val newRestrained = if (rollResult >= 2) 3 else 2
+      {success: true, newState: {...s,
+        restrained: newRestrained,
+        grappledBy: opponent,
+        distracted: max(s.distracted, timer),
+        vulnerable: max(s.vulnerable, timer)
+      }}
+    }
+  }
+
+  /// Escape from grapple (grabbed/pinned).
+  /// From pinned: success → grabbed, raise → free.
+  /// From grabbed: success → free.
+  pure def pGrappleEscape(s: State, rollResult: int): {success: bool, newState: State} = {
+    if (s.restrained < 2 or rollResult < 1) {
+      {success: false, newState: s}
+    } else if (s.restrained == 3) {
+      // Pinned
+      if (rollResult >= 2) {
+        // Raise: free entirely
+        {success: true, newState: {...s, restrained: -1, grappledBy: ""}}
+      } else {
+        // Success: step down to grabbed
+        {success: true, newState: {...s, restrained: 2}}
+      }
+    } else {
+      // Grabbed: success → free
+      {success: true, newState: {...s, restrained: -1, grappledBy: ""}}
+    }
+  }
+
+  /// Pin attempt: upgrade grabbed → pinned on success.
+  pure def pPinAttempt(s: State, rollResult: int): {success: bool, newState: State} = {
+    if (s.restrained != 2 or rollResult < 1) {
+      {success: false, newState: s}
+    } else {
+      {success: true, newState: {...s, restrained: 3}}
     }
   }
 
@@ -490,14 +542,20 @@ module savage {
   /// Hold only when active, not shaken, not stunned
   val holdImpliesActive = state.onHold implies (state.isActive() and not(state.shaken) and not(state.stunned))
 
-  /// Bound implies distracted and vulnerable
-  val boundImpliesConditions = (state.restrained == 1) implies (state.isDistracted() and state.isVulnerable())
+  /// Bound/grabbed/pinned implies distracted and vulnerable
+  val boundImpliesConditions = (state.restrained >= 1) implies (state.isDistracted() and state.isVulnerable())
 
   /// Restrained implies active
   val restrainedImpliesActive = (state.restrained >= 0) implies state.isActive()
 
-  /// Restrained range valid
-  val restrainedValid = state.restrained >= -1 and state.restrained <= 1
+  /// Restrained range valid (-1 to 3: free, entangled, bound, grabbed, pinned)
+  val restrainedValid = state.restrained >= -1 and state.restrained <= 3
+
+  /// Grabbed/pinned implies grappledBy is set
+  val grappledByConsistent = (state.restrained >= 2) implies (state.grappledBy != "")
+
+  /// grappledBy empty when not grabbed/pinned
+  val grappledByEmpty = (state.restrained < 2) implies (state.grappledBy == "")
 
   /// Injuries are valid strings (all entries are recognized injury types)
   val VALID_INJURIES = Set("unmentionables", "arm", "guts_broken", "guts_battered", "guts_busted", "leg", "head_scar", "head_blinded", "head_brain_damage")
@@ -519,6 +577,8 @@ module savage {
     boundImpliesConditions,
     restrainedImpliesActive,
     restrainedValid,
+    grappledByConsistent,
+    grappledByEmpty,
     injuriesValid,
     deadClearsInjuries
   }
@@ -624,6 +684,21 @@ module savage {
     all { r.success, state' = r.newState }
   }
 
+  action doGrappleAttempt(rollResult: int, opponent: str): bool = {
+    val r = pGrappleAttempt(state, rollResult, opponent)
+    all { r.success, state' = r.newState }
+  }
+
+  action doGrappleEscape(rollResult: int): bool = {
+    val r = pGrappleEscape(state, rollResult)
+    all { r.success, state' = r.newState }
+  }
+
+  action doPinAttempt(rollResult: int): bool = {
+    val r = pPinAttempt(state, rollResult)
+    all { r.success, state' = r.newState }
+  }
+
   // ============================================================
   // 7. INITIALIZATION
   // ============================================================
@@ -690,6 +765,14 @@ module savage {
         doApplyBound,
         nondet escapeRoll = ROLL_RANGE.oneOf()
         doEscapeAttempt(escapeRoll),
+
+        // Grapple
+        nondet grappleRoll = ROLL_RANGE.oneOf()
+        doGrappleAttempt(grappleRoll, "opp1"),
+        nondet grappleEscapeRoll = ROLL_RANGE.oneOf()
+        doGrappleEscape(grappleEscapeRoll),
+        nondet pinRoll = ROLL_RANGE.oneOf()
+        doPinAttempt(pinRoll),
       }
     }
   }

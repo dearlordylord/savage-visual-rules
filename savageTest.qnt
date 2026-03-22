@@ -606,4 +606,99 @@ module savageTest {
     .then(doTakeDamage(16, 0, 1, 110))
     .expect(state.incapacitated and state.injuries.length() == 2 and state.injuries[1] == "leg")
   }
+
+  // ============================================================
+  // Grapple tests
+  // ============================================================
+
+  /// Grapple attempt success → grabbed with distracted + vulnerable
+  run grappleSuccessTest = {
+    initWildCard
+    .then(doGrappleAttempt(1, "opp1"))
+    .expect(state.restrained == 2 and state.grappledBy == "opp1" and state.isDistracted() and state.isVulnerable())
+  }
+
+  /// Grapple attempt raise → pinned
+  run grappleRaisePinnedTest = {
+    initWildCard
+    .then(doGrappleAttempt(2, "opp1"))
+    .expect(state.restrained == 3 and state.grappledBy == "opp1")
+  }
+
+  /// Grapple attempt fail → no change
+  run grappleFailTest = {
+    initWildCard
+    .then(doGrappleAttempt(0, "opp1"))
+    .fail()
+  }
+
+  /// Escape from pinned: success → grabbed (step-down), raise → free
+  run pinnedEscapeStepDownTest = {
+    all { state' = {...FRESH_WILD_CARD, restrained: 3, grappledBy: "opp1", distracted: 0, vulnerable: 0} }
+    .then(doGrappleEscape(1))
+    .expect(state.restrained == 2 and state.grappledBy == "opp1")
+  }
+
+  run pinnedEscapeRaiseFreeTest = {
+    all { state' = {...FRESH_WILD_CARD, restrained: 3, grappledBy: "opp1", distracted: 0, vulnerable: 0} }
+    .then(doGrappleEscape(2))
+    .expect(state.restrained == -1 and state.grappledBy == "")
+  }
+
+  /// Escape from grabbed: success → free
+  run grabbedEscapeFreeTest = {
+    all { state' = {...FRESH_WILD_CARD, restrained: 2, grappledBy: "opp1", distracted: 0, vulnerable: 0} }
+    .then(doGrappleEscape(1))
+    .expect(state.restrained == -1 and state.grappledBy == "")
+  }
+
+  /// Pin attempt upgrades grabbed → pinned
+  run pinAttemptUpgradeTest = {
+    all { state' = {...FRESH_WILD_CARD, restrained: 2, grappledBy: "opp1", distracted: 0, vulnerable: 0} }
+    .then(doPinAttempt(1))
+    .expect(state.restrained == 3)
+  }
+
+  /// Pin attempt blocked when not grabbed
+  run pinAttemptBlockedWhenFreeTest = {
+    initWildCard
+    .then(doPinAttempt(1))
+    .fail()
+  }
+
+  /// Grapple conditions persist across turns (don't expire at endOfTurn)
+  run grappleConditionsPersistTest = {
+    initWildCard
+    .then(doGrappleAttempt(1, "opp1"))
+    .expect(state.distracted >= 0 and state.vulnerable >= 0)
+    .then(doStartOfTurn(0, 0))
+    .then(doEndOfTurn)
+    .expect(state.distracted >= 0 and state.vulnerable >= 0 and state.restrained == 2)
+    .then(doStartOfTurn(0, 0))
+    .then(doEndOfTurn)
+    .expect(state.distracted >= 0 and state.vulnerable >= 0)
+  }
+
+  /// Grapple and restraint are mutually exclusive — grapple replaces entangled
+  run grappleReplacesEntangledTest = {
+    initWildCard
+    .then(doApplyEntangled)
+    .expect(state.restrained == 0)
+    .then(doGrappleAttempt(1, "opp1"))
+    .expect(state.restrained == 2 and state.grappledBy == "opp1")
+  }
+
+  /// Grapple blocked when already grabbed/pinned
+  run grappleBlockedWhenAlreadyGrappledTest = {
+    all { state' = {...FRESH_WILD_CARD, restrained: 2, grappledBy: "opp1", distracted: 0, vulnerable: 0} }
+    .then(doGrappleAttempt(1, "opp2"))
+    .fail()
+  }
+
+  /// Death clears grapple
+  run grappleClearsOnDeathTest = {
+    all { state' = {...FRESH_WILD_CARD, restrained: 3, grappledBy: "opp1", distracted: 0, vulnerable: 0} }
+    .then(doTakeDamage(16, 0, -1, 0))
+    .expect(state.dead and state.restrained == -1 and state.grappledBy == "")
+  }
 }
