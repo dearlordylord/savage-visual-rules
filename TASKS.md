@@ -22,7 +22,7 @@
 
 > Narrow broad `number` and `string` types in `machine.ts` using Effect Schema branded types.
 
-### Slice 0.1: Apply branded types from TYPING_FIX.md
+### Slice 0.1: Apply branded types from TYPING_FIX.md [DONE]
 
 - Read `TYPING_FIX.md` for the full plan and implementation order
 - Define all branded types + clamping constructors in `app/src/types.ts`
@@ -193,7 +193,7 @@
 - [ ] Edge cases (heart attack, phobia) produce appropriate output
 - [ ] Both Quint and TypeScript implementations exist and are tested
 
-### Slice 7.2: UI for fear resolution
+### Slice 7.2: UI for fear resolution [DONE]
 
 - Fear check dialog/button
 - Displays table result and auto-applies events to machine
@@ -207,7 +207,7 @@
 
 > Afflictions auto-generate fatigue/wounds/conditions each turn.
 
-### Slice 8.1: Quint spec for afflictions
+### Slice 8.1: Quint spec for afflictions [DONE]
 
 - Add affliction model to State:
   - `afflictionType: str` ("none", "paralytic", "weak", "lethal", "sleep")
