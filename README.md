@@ -12,7 +12,7 @@ savage.qnt          ──  formal spec (source of truth)
   │                      replays Quint traces against TS implementation
   │
   ├─ machine.ts     ──  XState parallel state machine
-  │                      7 regions: damage, conditions, fatigue, turn phase,
+  │                      damage, conditions, fatigue, turn phase,
   │                      position, restraints, afflictions
   │                      (developing the XState machine provided useful
   │                      feedback for refining the Quint model too)
