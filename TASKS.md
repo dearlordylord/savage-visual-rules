@@ -11,6 +11,13 @@ Prevent future drift. Must be done FIRST so all subsequent work is covered.
 - [x] **Compile-time: exhaustive EventActionMap** — type-level map from every `SavageEvent["type"]` to its Quint `do*` action name. Compile error if a new event exists without a map entry.
 - [x] **Test-time: Quint AST state field check** — parse `savage.qnt` at test time, extract all `State` fields, assert new ones are in `QuintState` zod schema.
 
+## Replace `any` in Quint AST parsing with Effect Schema
+
+`parseQuintStateFields` in `machine.mbt.test.ts` uses `any` for the Quint AST. Define an Effect Schema for the subset of the AST we use (modules, declarations, typedef, row fields) and parse with `Schema.decodeUnknownSync`. No `any` casts.
+
+- [ ] Define Effect Schema for Quint AST (only the parts we traverse)
+- [ ] Replace `JSON.parse` + `any` casts with `Schema.decodeUnknownSync`
+
 ## Fix existing driver bugs
 
 - [ ] `doTakeDamage`: add `injuryRoll` parameter (Quint sends it, driver ignores it)
