@@ -427,14 +427,14 @@ module savageTest {
     .fail()
   }
 
-  /// End of turn (round end) clears hold
-  run holdClearedOnEndOfTurnTest = {
+  /// End of turn (round end) preserves hold (SWADE: hold persists across rounds)
+  run holdPersistsOnEndOfTurnTest = {
     initWildCard
     .then(doStartOfTurn(0, 0))
     .then(doGoOnHold)
     .expect(state.onHold)
     .then(doEndOfTurn)
-    .expect(not(state.onHold) and not(state.ownTurn))
+    .expect(state.onHold and not(state.ownTurn))
   }
 
   /// Interrupt fail still gives turn
@@ -442,6 +442,30 @@ module savageTest {
     all { state' = {...FRESH_WILD_CARD, onHold: true} }
     .then(doInterrupt(-1))
     .expect(state.ownTurn and not(state.onHold))
+  }
+
+  /// Hold persists across multiple rounds (endOfTurn does not clear hold)
+  run holdPersistsAcrossRoundsTest = {
+    initWildCard
+    .then(doStartOfTurn(0, 0))
+    .then(doGoOnHold)
+    .expect(state.onHold)
+    .then(doEndOfTurn)
+    .expect(state.onHold)
+    .then(doEndOfTurn)
+    .expect(state.onHold)
+  }
+
+  /// Distracted timer does NOT tick while on hold (endOfTurn is a no-op)
+  run holdDoesNotTickDistractedTimerTest = {
+    initWildCard
+    .then(doApplyDistracted)
+    .expect(state.distracted == 0)
+    .then(doStartOfTurn(0, 0))
+    .then(doGoOnHold)
+    .expect(state.onHold and state.distracted == 0)
+    .then(doEndOfTurn)
+    .expect(state.onHold and state.distracted == 0)
   }
 
   /// Hold lost when fatigue-incapacitated

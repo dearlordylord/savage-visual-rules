@@ -596,14 +596,42 @@ describe("hold/interrupt", () => {
     expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
   })
 
-  it("end of turn from hold → othersTurn", () => {
+  it("end of turn from hold → still on hold (hold persists across rounds)", () => {
     const a = createWC()
     a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
     a.send({ type: "GO_ON_HOLD" })
 
     a.send({ type: "END_OF_TURN" })
-    expect(snap(a).matches({ alive: { turnPhase: "othersTurn" } })).toBe(true)
-    expect(isOnHold(snap(a))).toBe(false)
+    expect(snap(a).matches({ alive: { turnPhase: "onHold" } })).toBe(true)
+    expect(isOnHold(snap(a))).toBe(true)
+  })
+
+  it("hold persists across multiple rounds", () => {
+    const a = createWC()
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "GO_ON_HOLD" })
+    expect(isOnHold(snap(a))).toBe(true)
+
+    a.send({ type: "END_OF_TURN" })
+    expect(isOnHold(snap(a))).toBe(true)
+
+    a.send({ type: "END_OF_TURN" })
+    expect(isOnHold(snap(a))).toBe(true)
+  })
+
+  it("end of turn from hold does NOT tick distracted timer", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_DISTRACTED" })
+    expect(snap(a).context.distractedTimer).toBe(0)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "GO_ON_HOLD" })
+    expect(isOnHold(snap(a))).toBe(true)
+    expect(snap(a).context.distractedTimer).toBe(0)
+
+    a.send({ type: "END_OF_TURN" })
+    expect(isOnHold(snap(a))).toBe(true)
+    expect(snap(a).context.distractedTimer).toBe(0) // NOT ticked
   })
 })
 

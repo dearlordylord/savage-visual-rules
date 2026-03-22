@@ -827,7 +827,7 @@ export const savageMachine = setup({
                     actions: ["clearOnHold", "setOwnTurnTrue", "setInterruptFail"]
                   }
                 ],
-                END_OF_TURN: { target: "othersTurn", actions: ["clearOnHold", "tickTimers", "tickAfflictionTimer", "tickEffectTimers", "setOwnTurnFalse"] }
+                END_OF_TURN: { target: "onHold" }
               },
               always: [
                 {
