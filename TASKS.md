@@ -37,61 +37,33 @@ Tasks with no shared dependencies can run in parallel.
 
 ---
 
-## Phase 3: Minor fixes (parallel, low priority)
+## Phase 3: Minor fixes — DONE
 
-- [ ] **m1** `{ts}` AFTER: —
-  Extract named event extractors for APPLY_BLINDED, APPLY_POWER_EFFECT, DISMISS_EFFECT.
-
-- [ ] **m2** `{ts}` AFTER: —
-  Deduplicate `raiseBacklashFatigue` / `raiseApplyFatigue` into one action.
-
-- [ ] **m3** `{quint}` AFTER: —
-  Add `canAct`/`canMove` sleep check to Quint spec (or remove from TS if wrong).
-
-- [ ] **m5** `{quint, ts}` AFTER: —
-  Backlash should cause fatigue even with no active effects (per SWADE).
-
-- [ ] **m7** `{ui}` AFTER: —
-  Add parameter info to `formatEvent` for APPLY_AFFLICTION, APPLY_BLINDED, APPLY_POWER_EFFECT.
-
-- [ ] **m8** `{ui}` AFTER: —
-  Replace IIFE in JSX for affliction type display with computed variable.
-
-- [ ] **m10** `{types}` AFTER: —
-  Add validation to `InjuryRoll` constructor (tableRoll 2-12, subRoll 1-6).
-
-- [ ] **m11** `{test}` AFTER: —
-  Replace `brands.ts` test helpers with `types.ts` constructors. Delete `brands.ts`.
+- [x] **m1** `{ts}` Extract named event extractors for APPLY_BLINDED, APPLY_POWER_EFFECT, DISMISS_EFFECT.
+- [x] **m2** `{ts}` Deduplicate `raiseBacklashFatigue` / `raiseApplyFatigue` into `raiseFatigue`.
+- [x] **m3** `{quint}` Add `canAct`/`canMove` sleep check to Quint spec.
+- [x] **m5** `{quint, ts}` Backlash causes fatigue even with no active effects (per SWADE).
+- [x] **m7** `{ui}` Add parameter info to `formatEvent` for APPLY_AFFLICTION, APPLY_BLINDED, APPLY_POWER_EFFECT, DISMISS_EFFECT, END_OF_TURN.
+- [x] **m8** `{ui}` Replace IIFE in JSX for affliction type display with computed variable.
+- [x] **m10** `{types}` Add validation to `InjuryRoll` constructor (tableRoll 2-12, subRoll 1-6).
+- [x] **m11** `{test}` Replace `brands.ts` test helpers with `types.ts` constructors. Deleted `brands.ts`.
 
 ---
 
-## Phase 4: Missing tests (after fixes land)
+## Phase 4: Missing tests — DONE
 
-- [ ] **T1** `{test}` AFTER: —
-  Add 8 injury system tests (entire subsystem untested).
-
-- [ ] **T2** `{test}` AFTER: —
-  Add hold/interrupt edge case tests (startOfTurn on hold, hold from others' turn, hold lost on fatigue incap).
-
-- [ ] **T3** `{test}` AFTER: —
-  Add restraint edge case tests (entangled no-downgrade, bound escape fail).
-
-- [ ] **T4** `{test}` AFTER: —
-  Add grapple edge case tests (blocked when grappled, conditions persist, clears on death).
-
-- [ ] **T5** `{test}` AFTER: —
-  Add blinded edge case tests (impaired no-downgrade, blocked when incap).
-
-- [ ] **T6** `{test}` AFTER: —
-  Add affliction edge case tests (blocked when dead, cure fails when healthy).
-
-- [ ] **T7** `{test}` AFTER: —
-  Add power effects edge case tests (blocked when dead, dismiss non-existent fails).
+- [x] **T1** `{test}` Add 8 injury system tests (resolveInjury, accumulation, penalty).
+- [x] **T2** `{test}` Add hold/interrupt edge case tests (startOfTurn on hold, hold lost on fatigue incap).
+- [x] **T3** `{test}` Add restraint edge case tests (entangled no-downgrade, bound escape fail, death clears).
+- [x] **T4** `{test}` Add grapple edge case tests (blocked when grappled, conditions persist, clears on death).
+- [x] **T5** `{test}` Add blinded edge case tests (impaired no-downgrade, blocked when incap, hold blocks recovery).
+- [x] **T6** `{test}` Add affliction edge case tests (blocked when dead, cure fails when healthy, sleep blocks blinded).
+- [x] **T7** `{test}` Add power effects edge case tests (blocked when dead, dismiss non-existent).
 
 ---
 
 ## Test counts
 
-- Quint: 135 passing (was 120 before review)
-- XState: 115 passing (was 102 before review)
+- Quint: 147 passing (was 120 before review)
+- XState: 155 passing (was 102 before review)
 - TypeScript: compiles clean
