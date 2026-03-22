@@ -319,11 +319,11 @@ module savage {
   }
 
   /// End of turn: expire timed conditions, transition to others' turns.
-  /// Also handles round-end for held characters (hold expires).
+  /// Hold persists across rounds (SWADE p.103): no state changes when held.
   pure def pEndOfTurn(s: State): {success: bool, newState: State} = {
     if (s.onHold) {
-      // Round ends, hold expires
-      {success: true, newState: {...s, onHold: false}}
+      // Hold persists — no timer ticking, no clearing hold
+      {success: true, newState: s}
     } else if (not(s.ownTurn)) {
       {success: false, newState: s}
     } else {
