@@ -23,7 +23,7 @@ The project uses a **Quint-first** workflow. Quint spec slices (X.1) MUST be don
 3. Read `rules/` for Savage Worlds rules reference as needed
 4. Read relevant source files (`savage.qnt` for Quint tasks, `app/src/machine.ts` for XState tasks)
 5. **Start implementing quickly** — max 5 tool calls on exploration before writing code
-6. For Quint slices: write spec first, then tests, then run `quint test` and `quint verify`
+6. For Quint slices: write spec first, then tests, then run `quint test`. Skip `quint verify` — it's slow and often OOMs. Tests are sufficient.
 7. For XState slices: implement machine changes, write vitest tests, run `cd app && npx vitest run src/machine.test.ts`
 8. Commit: `feat(TASK_ID): description`
 9. Mark `[DONE]` in `TASKS.md`
