@@ -67,3 +67,14 @@ Prevent future drift. Must be done FIRST so all subsequent work is covered.
 ### context.ownTurn / context.onHold duplicate state path
 
 - [x] `snapshotToQuintState` now derives `ownTurn`/`onHold` from `snap.matches()` instead of context
+
+## Split index.tsx into components
+
+`app/src/routes/index.tsx` is ~1500 lines — the entire app UI in one file. Split into focused components:
+
+- [ ] Extract `StateTree` / `StateRegion` / `StateNode` / `StateLeaf` → `app/src/components/StateTree.tsx`
+- [ ] Extract `DerivedValues` → `app/src/components/DerivedValues.tsx`
+- [ ] Extract `EventPanel` (including `NumInput`, `EventBtn`, `FearPanel`, `AfflictionPanel`, `PowerEffectPanel`) → `app/src/components/EventPanel.tsx`
+- [ ] Extract `TransitionLog` → `app/src/components/TransitionLog.tsx`
+- [ ] Extract `StatusReference` → `app/src/components/StatusReference.tsx`
+- [ ] Keep `index.tsx` as thin route wiring only

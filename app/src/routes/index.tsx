@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- TODO: split this file into smaller components */
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, Link } from "@tanstack/react-router"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createActor } from "xstate"
 
@@ -187,6 +187,12 @@ function App() {
     <main className="page-wrap px-4 pb-8 pt-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-[var(--sea-ink)]">SWADE Status Machine</h1>
+        <Link
+          to="/cookbook"
+          className="rounded-lg border border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.14)] px-3 py-1.5 text-xs font-semibold text-[var(--lagoon-deep)] transition hover:bg-[rgba(79,184,178,0.24)]"
+        >
+          Примеры механик
+        </Link>
         <div className="flex gap-2">
           <button
             onClick={() => reset(true)}
