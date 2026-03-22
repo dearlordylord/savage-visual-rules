@@ -590,8 +590,8 @@ function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
 
 const AFFLICTION_LABELS: Record<AfflictionType, string> = {
   paralytic: "Paralytic (blocks stun recovery)",
-  weak: "Weak (+1 fatigue/turn)",
-  lethal: "Lethal (+fatigue, shaken, wound/turn)",
+  weak: "Weak (+1 fatigue at start of turn)",
+  lethal: "Lethal (+fatigue, shaken, wound at start of turn)",
   sleep: "Sleep (blocks all recovery)"
 }
 
