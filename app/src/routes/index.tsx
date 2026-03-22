@@ -4,9 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { createActor } from "xstate"
 
 import {
+  afflictionType,
   canAct,
   canMove,
   isActive,
+  isAfflicted,
   isDead,
   isDistracted,
   isBlinded,
@@ -32,6 +34,7 @@ import {
   totalPenalty
 } from "../machine"
 import {
+  afflictionDuration,
   damageMargin,
   soakSuccesses,
   incapRollResult,
@@ -46,6 +49,7 @@ import {
   pinRollResult,
   blindedSeverity
 } from "../types"
+import type { AfflictionType } from "../types"
 
 export const Route = createFileRoute("/")({ component: App })
 
@@ -505,6 +509,7 @@ function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
     { label: "Can Move", value: canMove(snapshot) },
     { label: "Active", value: isActive(snapshot) },
     { label: "Wild Card", value: ctx.isWildCard },
+    { label: "Afflicted", value: isAfflicted(snapshot), title: "Character is affected by poison/disease" },
     { label: "Injuries", value: ctx.injuries.length.toString() },
     {
       label: "Injury Penalty",
@@ -536,6 +541,19 @@ function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
           </div>
         ))}
       </div>
+      {isAfflicted(snapshot) && (
+        <div className="mt-3 border-t border-[var(--line)] pt-2">
+          <p className="mb-1 text-xs font-semibold text-[var(--sea-ink-soft)]">Affliction</p>
+          <div className="flex items-center gap-2">
+            <span className="rounded-md bg-purple-500/15 px-2 py-0.5 text-xs font-medium text-purple-700">
+              {AFFLICTION_LABELS[afflictionType(snapshot)!]}
+            </span>
+            <span className="text-xs text-[var(--sea-ink-soft)]">
+              {ctx.afflictionTimer >= 0 ? `${ctx.afflictionTimer} turn(s) remaining` : ""}
+            </span>
+          </div>
+        </div>
+      )}
       {ctx.injuries.length > 0 && (
         <div className="mt-3 border-t border-[var(--line)] pt-2">
           <p className="mb-1 text-xs font-semibold text-[var(--sea-ink-soft)]">Injuries</p>
@@ -553,6 +571,13 @@ function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
       )}
     </section>
   )
+}
+
+const AFFLICTION_LABELS: Record<AfflictionType, string> = {
+  paralytic: "Paralytic (blocks stun recovery)",
+  weak: "Weak (+1 fatigue/turn)",
+  lethal: "Lethal (+fatigue, shaken, wound/turn)",
+  sleep: "Sleep (blocks all recovery)"
 }
 
 const INJURY_LABELS: Record<InjuryType, string> = {
@@ -805,6 +830,9 @@ function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapsh
 
         {/* FEAR CHECK */}
         <FearPanel send={send} dead={dead} />
+
+        {/* AFFLICTION */}
+        <AfflictionPanel send={send} dead={dead} afflicted={!dead && isAfflicted(snapshot)} />
       </div>
     </section>
   )
@@ -880,6 +908,50 @@ function FearPanel({ send, dead }: { send: (e: SavageEvent) => void; dead: boole
           </ul>
         </div>
       )}
+    </div>
+  )
+}
+
+function AfflictionPanel({ send, dead, afflicted }: { send: (e: SavageEvent) => void; dead: boolean; afflicted: boolean }) {
+  const [affType, setAffType] = useState<AfflictionType>("weak")
+  const [affDur, setAffDur] = useState(3)
+
+  return (
+    <div className="rounded-lg border border-[var(--line)] p-3">
+      <p className="mb-2 font-semibold">Affliction</p>
+      <div className="mb-2 flex gap-3">
+        <label className="flex flex-col text-xs text-[var(--sea-ink-soft)]">
+          type
+          <select
+            className="mt-0.5 rounded border border-[var(--line)] bg-white px-2 py-1 text-sm"
+            value={affType}
+            onChange={(e) => setAffType(e.target.value as AfflictionType)}
+          >
+            <option value="paralytic">Paralytic</option>
+            <option value="weak">Weak</option>
+            <option value="lethal">Lethal</option>
+            <option value="sleep">Sleep</option>
+          </select>
+        </label>
+        <NumInput
+          label="duration"
+          value={affDur}
+          onChange={setAffDur}
+          min={0}
+          max={10}
+          title="Number of turns the affliction lasts."
+        />
+      </div>
+      <div className="flex gap-2">
+        <EventBtn disabled={dead} onClick={() => send({ type: "APPLY_AFFLICTION", afflictionType: affType, duration: afflictionDuration(affDur) })}>
+          Apply
+        </EventBtn>
+        {afflicted && (
+          <EventBtn onClick={() => send({ type: "CURE_AFFLICTION" })}>
+            Cure
+          </EventBtn>
+        )}
+      </div>
     </div>
   )
 }
