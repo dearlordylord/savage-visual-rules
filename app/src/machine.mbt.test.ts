@@ -5,6 +5,7 @@ import * as path from "node:path"
 
 import { defineDriver, run, stateCheck } from "@firfi/quint-connect"
 import { ITFBigInt } from "@firfi/quint-connect/zod"
+import { Schema } from "effect"
 import { describe, expect, it } from "vitest"
 import { createActor } from "xstate"
 import { z } from "zod"
@@ -196,10 +197,6 @@ const savageDriver = defineDriver(driverSchema, () => {
 })
 
 // ============================================================
-// MBT test
-// ============================================================
-
-// ============================================================
 // Sync enforcement tests
 // ============================================================
 
@@ -218,24 +215,42 @@ const KNOWN_MISSING_FIELDS = new Set([
   "defending"
 ])
 
+// Effect Schema for the Quint AST subset needed to extract State field names
+type QuintRow = {
+  readonly kind: "row"
+  readonly fields: ReadonlyArray<{ readonly fieldName: string }>
+  readonly other: QuintRow | { readonly kind: "empty" }
+}
+
+const QuintRow: Schema.Schema<QuintRow, unknown> = Schema.suspend(() =>
+  Schema.Struct({
+    kind: Schema.Literal("row"),
+    fields: Schema.Array(Schema.Struct({ fieldName: Schema.String })),
+    other: Schema.Union(QuintRow, Schema.Struct({ kind: Schema.Literal("empty") }))
+  })
+) as Schema.Schema<QuintRow, unknown>
+
+const QuintTypedef = Schema.Struct({
+  kind: Schema.Literal("typedef"),
+  name: Schema.String,
+  type: Schema.Struct({ fields: QuintRow })
+})
+
 function parseQuintStateFields(): Array<string> {
   const tmpFile = path.join(os.tmpdir(), `quint_ast_${process.pid}.json`)
   try {
     execSync(`quint parse ${path.resolve(import.meta.dirname, "../../savage.qnt")} --out ${tmpFile}`)
-    const ast = JSON.parse(fs.readFileSync(tmpFile, "utf8"))
-    const decls = ast.modules[0].declarations
+    const raw = JSON.parse(fs.readFileSync(tmpFile, "utf8")) as {
+      modules: Array<{ declarations: Array<Record<string, unknown>> }>
+    }
+    const rawDecl = raw.modules[0]?.declarations.find((d) => d.kind === "typedef" && d.name === "State")
+    if (!rawDecl) throw new Error("State typedef not found in Quint AST")
 
-    const stateType = decls.find((d: Record<string, unknown>) => d.kind === "typedef" && d.name === "State")
-    if (!stateType) throw new Error("State typedef not found in Quint AST")
+    const stateType = Schema.decodeUnknownSync(QuintTypedef)(rawDecl)
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Quint AST is untyped JSON
-    function getFields(row: any): Array<string> {
-      if (!row) return []
-      const fields: Array<string> = []
-      if (row.kind === "row" && row.fields) {
-        for (const f of row.fields) fields.push(f.fieldName)
-      }
-      if (row.other) fields.push(...getFields(row.other))
+    function getFields(row: QuintRow): Array<string> {
+      const fields: Array<string> = row.fields.map((f) => f.fieldName)
+      if (row.other.kind === "row") fields.push(...getFields(row.other))
       return fields
     }
     return getFields(stateType.type.fields)

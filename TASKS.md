@@ -15,8 +15,8 @@ Prevent future drift. Must be done FIRST so all subsequent work is covered.
 
 `parseQuintStateFields` in `machine.mbt.test.ts` uses `any` for the Quint AST. Define an Effect Schema for the subset of the AST we use (modules, declarations, typedef, row fields) and parse with `Schema.decodeUnknownSync`. No `any` casts.
 
-- [ ] Define Effect Schema for Quint AST (only the parts we traverse)
-- [ ] Replace `JSON.parse` + `any` casts with `Schema.decodeUnknownSync`
+- [x] Define Effect Schema for Quint AST (only the parts we traverse)
+- [x] Replace `JSON.parse` + `any` casts with `Schema.decodeUnknownSync`
 
 ## Fix existing driver bugs
 
