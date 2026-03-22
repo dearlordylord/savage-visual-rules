@@ -879,9 +879,9 @@ describe("Fear table", () => {
     expect(resolveFear(9, 0)).toEqual(["APPLY_VULNERABLE"])
   })
 
-  it("10-12: stunned", () => {
-    expect(resolveFear(10, 0)).toEqual(["APPLY_STUNNED"])
-    expect(resolveFear(12, 0)).toEqual(["APPLY_STUNNED"])
+  it("10-12: shaken", () => {
+    expect(resolveFear(10, 0)).toEqual(["APPLY_SHAKEN"])
+    expect(resolveFear(12, 0)).toEqual(["APPLY_SHAKEN"])
   })
 
   it("13: fear mark (stunned + scar)", () => {
@@ -893,9 +893,9 @@ describe("Fear table", () => {
     expect(resolveFear(15, 0)).toEqual(["HINDRANCE_SLOWNESS"])
   })
 
-  it("16-17: panic (stunned + flee)", () => {
-    expect(resolveFear(16, 0)).toEqual(["APPLY_STUNNED", "PANIC_FLEE"])
-    expect(resolveFear(17, 0)).toEqual(["APPLY_STUNNED", "PANIC_FLEE"])
+  it("16-17: panic (shaken + flee)", () => {
+    expect(resolveFear(16, 0)).toEqual(["APPLY_SHAKEN", "PANIC_FLEE"])
+    expect(resolveFear(17, 0)).toEqual(["APPLY_SHAKEN", "PANIC_FLEE"])
   })
 
   it("18-19: minor phobia", () => {

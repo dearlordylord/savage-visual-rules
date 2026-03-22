@@ -804,12 +804,12 @@ module savageTest {
     )
   }
 
-  /// 10-12: Stunned
-  run fearStunnedTest = {
+  /// 10-12: Shaken
+  run fearShakenTest = {
     initWildCard
     .expect(
-      fearTableResult(10, 0) == List("APPLY_STUNNED") and
-      fearTableResult(12, 0) == List("APPLY_STUNNED")
+      fearTableResult(10, 0) == List("APPLY_SHAKEN") and
+      fearTableResult(12, 0) == List("APPLY_SHAKEN")
     )
   }
 
@@ -828,12 +828,12 @@ module savageTest {
     )
   }
 
-  /// 16-17: Panic (stunned + flee)
+  /// 16-17: Panic (shaken + flee)
   run fearPanicTest = {
     initWildCard
     .expect(
-      fearTableResult(16, 0) == List("APPLY_STUNNED", "PANIC_FLEE") and
-      fearTableResult(17, 0) == List("APPLY_STUNNED", "PANIC_FLEE")
+      fearTableResult(16, 0) == List("APPLY_SHAKEN", "PANIC_FLEE") and
+      fearTableResult(17, 0) == List("APPLY_SHAKEN", "PANIC_FLEE")
     )
   }
 
