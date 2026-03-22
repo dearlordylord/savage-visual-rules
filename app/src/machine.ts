@@ -315,6 +315,8 @@ export const savageMachine = setup({
       return { injuries: [...context.injuries, resolveInjury(roll)] }
     }),
     clearGrappledBy: assign({ grappledBy: null }),
+    clearVulnerableTimer: assign({ vulnerableTimer: conditionTimer(-1) }),
+    clearDistractedTimer: assign({ distractedTimer: conditionTimer(-1) }),
     setAfflictionTimer: assign(({ event }) => ({
       afflictionTimer: asAffliction(event).duration
     })),
@@ -910,7 +912,8 @@ export const savageMachine = setup({
                 },
                 ESCAPE_ATTEMPT: {
                   guard: "escapeSuccess",
-                  target: "free"
+                  target: "free",
+                  actions: ["clearVulnerableTimer"]
                 },
                 GRAPPLE_ATTEMPT: [
                   {
@@ -931,7 +934,7 @@ export const savageMachine = setup({
             bound: {
               on: {
                 ESCAPE_ATTEMPT: [
-                  { guard: "escapeRaise", target: "free" },
+                  { guard: "escapeRaise", target: "free", actions: ["clearDistractedTimer", "clearVulnerableTimer"] },
                   { guard: "escapeSuccess", target: "entangled" }
                 ],
                 GRAPPLE_ATTEMPT: [
@@ -960,6 +963,11 @@ export const savageMachine = setup({
                   guard: "grappleEscapeSuccess",
                   target: "free",
                   actions: ["clearGrappledBy"]
+                },
+                APPLY_BOUND: {
+                  guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
+                  target: "bound",
+                  actions: ["clearGrappledBy"]
                 }
               },
               always: {
@@ -972,6 +980,11 @@ export const savageMachine = setup({
                 GRAPPLE_ESCAPE: {
                   guard: "grappleEscapeSuccess",
                   target: "free",
+                  actions: ["clearGrappledBy"]
+                },
+                APPLY_BOUND: {
+                  guard: and([stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP))]),
+                  target: "bound",
                   actions: ["clearGrappledBy"]
                 }
               },

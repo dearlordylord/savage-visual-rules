@@ -526,6 +526,20 @@ module savageTest {
     .expect(state.incapacitated and state.restrained == -1)
   }
 
+  /// Escape from bound (raise) clears distracted and vulnerable
+  run boundEscapeRaiseClearsConditionsTest = {
+    all { state' = {...FRESH_WILD_CARD, restrained: 1, distracted: 0, vulnerable: 0} }
+    .then(doEscapeAttempt(2))
+    .expect(state.restrained == -1 and state.distracted == -1 and state.vulnerable == -1)
+  }
+
+  /// Escape from entangled clears vulnerable
+  run entangledEscapeClearsVulnerableTest = {
+    all { state' = {...FRESH_WILD_CARD, restrained: 0, vulnerable: 0} }
+    .then(doEscapeAttempt(1))
+    .expect(state.restrained == -1 and state.vulnerable == -1)
+  }
+
   // ============================================================
   // Injury tests
   // ============================================================
@@ -686,6 +700,20 @@ module savageTest {
     .expect(state.restrained == 0)
     .then(doGrappleAttempt(1, "opp1"))
     .expect(state.restrained == 2 and state.grappledBy == "opp1")
+  }
+
+  /// APPLY_BOUND from grabbed → bound, clears grappledBy
+  run applyBoundFromGrabbedTest = {
+    all { state' = {...FRESH_WILD_CARD, restrained: 2, grappledBy: "opp1", distracted: 0, vulnerable: 0} }
+    .then(doApplyBound)
+    .expect(state.restrained == 1 and state.grappledBy == "" and state.isDistracted() and state.isVulnerable())
+  }
+
+  /// APPLY_BOUND from pinned → bound, clears grappledBy
+  run applyBoundFromPinnedTest = {
+    all { state' = {...FRESH_WILD_CARD, restrained: 3, grappledBy: "opp1", distracted: 0, vulnerable: 0} }
+    .then(doApplyBound)
+    .expect(state.restrained == 1 and state.grappledBy == "" and state.isDistracted() and state.isVulnerable())
   }
 
   /// Grapple blocked when already grabbed/pinned

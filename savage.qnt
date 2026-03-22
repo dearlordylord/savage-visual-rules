@@ -151,6 +151,9 @@ module savage {
   pure def isConscious(s: State): bool =
     not(s.dead) and not(s.incapacitated) and not(s.incapByFatigue)
 
+  /// Active: alias for isConscious — conscious and in the fight.
+  pure def isActive(s: State): bool = s.isConscious()
+
   /// Can take standard actions (not Shaken, not Stunned, and active)
   pure def canAct(s: State): bool =
     s.isConscious() and not(s.shaken) and not(s.stunned)
@@ -511,7 +514,8 @@ module savage {
     } else if (s.restrained == 1) {
       // Bound
       if (rollResult >= 2) {
-        {success: true, newState: {...s, restrained: -1}}
+        // Raise: free entirely, clear conditions that came with the restraint
+        {success: true, newState: {...s, restrained: -1, distracted: -1, vulnerable: -1}}
       } else if (rollResult >= 1) {
         {success: true, newState: {...s, restrained: 0}}
       } else {
@@ -520,7 +524,8 @@ module savage {
     } else {
       // Entangled
       if (rollResult >= 1) {
-        {success: true, newState: {...s, restrained: -1}}
+        // Free: clear vulnerable that came with the restraint
+        {success: true, newState: {...s, restrained: -1, vulnerable: -1}}
       } else {
         {success: false, newState: s}
       }

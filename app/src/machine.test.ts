@@ -695,6 +695,33 @@ describe("restraint", () => {
     expect(isDead(snap(b))).toBe(true)
     expect(isRestrained(snap(b))).toBe(false)
   })
+
+  it("escape from bound (raise) clears distracted and vulnerable", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_BOUND" })
+    expect(isBound(snap(a))).toBe(true)
+    expect(isDistracted(snap(a))).toBe(true)
+    expect(isVulnerable(snap(a))).toBe(true)
+    a.send({ type: "ESCAPE_ATTEMPT", rollResult: er(2) })
+    expect(isRestrained(snap(a))).toBe(false)
+    expect(snap(a).context.distractedTimer).toBe(-1)
+    expect(snap(a).context.vulnerableTimer).toBe(-1)
+    expect(isDistracted(snap(a))).toBe(false)
+    expect(isVulnerable(snap(a))).toBe(false)
+  })
+
+  it("escape from entangled clears vulnerable", () => {
+    const a = createWC()
+    // First apply vulnerable via some means alongside entangled
+    a.send({ type: "APPLY_ENTANGLED" })
+    a.send({ type: "APPLY_VULNERABLE" })
+    expect(isEntangled(snap(a))).toBe(true)
+    expect(isVulnerable(snap(a))).toBe(true)
+    a.send({ type: "ESCAPE_ATTEMPT", rollResult: er(1) })
+    expect(isRestrained(snap(a))).toBe(false)
+    expect(snap(a).context.vulnerableTimer).toBe(-1)
+    expect(isVulnerable(snap(a))).toBe(false)
+  })
 })
 
 // ============================================================
@@ -772,6 +799,26 @@ describe("grapple", () => {
     a.send({ type: "TAKE_DAMAGE", margin: dm(12), soakSuccesses: sk(0), incapRoll: ir(0) })
     a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(1) })
     expect(isGrappled(snap(a))).toBe(false)
+  })
+
+  it("APPLY_BOUND from grabbed → transitions to bound, clears grappledBy", () => {
+    const a = createWC()
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(1) })
+    expect(isGrabbed(snap(a))).toBe(true)
+    a.send({ type: "APPLY_BOUND" })
+    expect(isBound(snap(a))).toBe(true)
+    expect(isGrabbed(snap(a))).toBe(false)
+    expect(snap(a).context.grappledBy).toBeNull()
+  })
+
+  it("APPLY_BOUND from pinned → transitions to bound, clears grappledBy", () => {
+    const a = createWC()
+    a.send({ type: "GRAPPLE_ATTEMPT", rollResult: gr(2) })
+    expect(isPinned(snap(a))).toBe(true)
+    a.send({ type: "APPLY_BOUND" })
+    expect(isBound(snap(a))).toBe(true)
+    expect(isPinned(snap(a))).toBe(false)
+    expect(snap(a).context.grappledBy).toBeNull()
   })
 })
 
