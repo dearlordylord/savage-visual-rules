@@ -2,6 +2,7 @@
 // These bypass validation for test convenience — use exact valid values only.
 // Import as: import * as B from "./test/helpers/brands"
 import type {
+  AfflictionDuration,
   AthleticsRollResult,
   BlindedSeverity,
   DamageMargin,
@@ -30,3 +31,4 @@ export const grapple = (n: number) => n as unknown as GrappleRollResult
 export const grappleEsc = (n: number) => n as unknown as GrappleEscapeRollResult
 export const pin = (n: number) => n as unknown as PinRollResult
 export const severity = (n: number) => n as unknown as BlindedSeverity
+export const affDur = (n: number) => n as unknown as AfflictionDuration

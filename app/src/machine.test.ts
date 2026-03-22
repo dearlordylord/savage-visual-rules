@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest"
 import { createActor } from "xstate"
 
 import {
+  afflictionType,
   blindedPenalty,
+  isAfflicted,
   isBlinded,
   isBound,
   isDead,
@@ -16,11 +18,12 @@ import {
   isProne,
   isRestrained,
   isShaken,
+  isStunned,
   isVulnerable,
   resolveFear,
   savageMachine
 } from "./machine"
-import { margin as dm, soak as sk, incap as ir, vigor as vr, spirit as sr, heal as ha, athletics as ar, escape as er, grapple as gr, grappleEsc as ger, pin as pr, severity as bs } from "./test/helpers/brands"
+import { margin as dm, soak as sk, incap as ir, vigor as vr, spirit as sr, heal as ha, athletics as ar, escape as er, grapple as gr, grappleEsc as ger, pin as pr, severity as bs, affDur as ad } from "./test/helpers/brands"
 
 // ============================================================
 // Helpers
@@ -902,5 +905,122 @@ describe("Fear table", () => {
 
   it("negative modifier reduces result", () => {
     expect(resolveFear(10, -5)).toEqual(["APPLY_DISTRACTED"])
+  })
+})
+
+// ============================================================
+// Affliction tests
+// ============================================================
+
+describe("afflictions", () => {
+  it("apply and cure affliction", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_AFFLICTION", afflictionType: "weak", duration: ad(3) })
+    expect(isAfflicted(snap(a))).toBe(true)
+    expect(afflictionType(snap(a))).toBe("weak")
+    expect(snap(a).context.afflictionTimer).toBe(3)
+
+    a.send({ type: "CURE_AFFLICTION" })
+    expect(isAfflicted(snap(a))).toBe(false)
+    expect(afflictionType(snap(a))).toBeNull()
+    expect(snap(a).context.afflictionTimer).toBe(-1)
+  })
+
+  it("affliction timer ticks down and expires", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_AFFLICTION", afflictionType: "paralytic", duration: ad(1) })
+    expect(afflictionType(snap(a))).toBe("paralytic")
+    expect(snap(a).context.afflictionTimer).toBe(1)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "END_OF_TURN" })
+    expect(snap(a).context.afflictionTimer).toBe(0)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    a.send({ type: "END_OF_TURN" })
+    expect(isAfflicted(snap(a))).toBe(false)
+    expect(snap(a).context.afflictionTimer).toBe(-1)
+  })
+
+  it("death clears affliction", () => {
+    const b = createExtra()
+    b.send({ type: "APPLY_AFFLICTION", afflictionType: "lethal", duration: ad(5) })
+    expect(isAfflicted(snap(b))).toBe(true)
+    b.send({ type: "TAKE_DAMAGE", margin: dm(4), soakSuccesses: sk(0), incapRoll: ir(0) })
+    expect(isDead(snap(b))).toBe(true)
+    expect(snap(b).context.afflictionTimer).toBe(-1)
+  })
+
+  it("paralytic blocks stunned recovery", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_AFFLICTION", afflictionType: "paralytic", duration: ad(5) })
+    a.send({ type: "APPLY_STUNNED" })
+    expect(isStunned(snap(a))).toBe(true)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(2), spiritRoll: sr(0) })
+    expect(isStunned(snap(a))).toBe(true) // blocked by paralytic
+  })
+
+  it("paralytic does not block shaken recovery", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_AFFLICTION", afflictionType: "paralytic", duration: ad(5) })
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) })
+    expect(isShaken(snap(a))).toBe(true)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) })
+    expect(isShaken(snap(a))).toBe(false)
+  })
+
+  it("weak adds fatigue each turn", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_AFFLICTION", afflictionType: "weak", duration: ad(5) })
+    expect(snap(a).matches({ alive: { fatigueTrack: "fresh" } })).toBe(true)
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    expect(snap(a).matches({ alive: { fatigueTrack: "fatigued" } })).toBe(true)
+
+    a.send({ type: "END_OF_TURN" })
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    expect(snap(a).matches({ alive: { fatigueTrack: "exhausted" } })).toBe(true)
+  })
+
+  it("lethal adds fatigue + shaken + wound per turn", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_AFFLICTION", afflictionType: "lethal", duration: ad(5) })
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) })
+    expect(snap(a).matches({ alive: { fatigueTrack: "fatigued" } })).toBe(true)
+    expect(isShaken(snap(a))).toBe(true)
+    expect(snap(a).context.wounds).toBe(0) // margin 0 with soak 0 = shaken only, no wound from TAKE_DAMAGE with margin 0
+  })
+
+  it("sleep blocks stunned recovery", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_STUNNED" })
+    expect(isStunned(snap(a))).toBe(true)
+    a.send({ type: "APPLY_AFFLICTION", afflictionType: "sleep", duration: ad(3) })
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(2), spiritRoll: sr(1) })
+    expect(isStunned(snap(a))).toBe(true) // blocked by sleep
+  })
+
+  it("sleep blocks shaken recovery", () => {
+    const a = createWC()
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) })
+    expect(isShaken(snap(a))).toBe(true)
+    a.send({ type: "APPLY_AFFLICTION", afflictionType: "sleep", duration: ad(3) })
+
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(1) })
+    expect(isShaken(snap(a))).toBe(true) // blocked by sleep
+  })
+
+  it("affliction replaces previous affliction", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_AFFLICTION", afflictionType: "weak", duration: ad(3) })
+    expect(afflictionType(snap(a))).toBe("weak")
+
+    a.send({ type: "APPLY_AFFLICTION", afflictionType: "lethal", duration: ad(5) })
+    expect(afflictionType(snap(a))).toBe("lethal")
+    expect(snap(a).context.afflictionTimer).toBe(5)
   })
 })

@@ -110,9 +110,17 @@ export function blindedSeverity(n: number): BlindedSeverity {
   return BlindedSeverity.make((n >= 4 ? 4 : 2) as 2 | 4)
 }
 
+const AfflictionDuration = Schema.Number.pipe(Schema.brand("AfflictionDuration"))
+type AfflictionDuration = typeof AfflictionDuration.Type
+export function afflictionDuration(n: number): AfflictionDuration {
+  return AfflictionDuration.make(Math.max(0, Math.floor(n)))
+}
+
 // ============================================================
 // Other types
 // ============================================================
+
+export type AfflictionType = "paralytic" | "weak" | "lethal" | "sleep"
 
 export type FearResultType =
   | "ADRENALINE"
@@ -127,6 +135,7 @@ export type FearResultType =
   | "HEART_ATTACK"
 
 export type {
+  AfflictionDuration,
   AthleticsRollResult,
   BlindedSeverity,
   CharacterId,

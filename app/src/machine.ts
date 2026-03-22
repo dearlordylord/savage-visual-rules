@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- xstate machine definition is inherently dense */
-import { and, assign, not, setup, type SnapshotFrom, stateIn } from "xstate"
+import { and, assign, not, raise, setup, type SnapshotFrom, stateIn } from "xstate"
 import type {
   Wounds,
   ConditionTimer,
@@ -18,9 +18,11 @@ import type {
   GrappleEscapeRollResult,
   PinRollResult,
   BlindedSeverity,
-  FearResultType
+  FearResultType,
+  AfflictionType,
+  AfflictionDuration
 } from "./types"
-import { wounds, conditionTimer, maxWounds } from "./types"
+import { wounds, conditionTimer, maxWounds, damageMargin, soakSuccesses, incapRollResult } from "./types"
 
 // ============================================================
 // Types
@@ -49,6 +51,7 @@ export interface SavageContext {
   interruptedSuccessfully: boolean
   injuries: InjuryType[]
   grappledBy: CharacterId | null
+  afflictionTimer: number // -1 = none, >= 0 = turns remaining
 }
 
 export type SavageEvent =
@@ -74,6 +77,8 @@ export type SavageEvent =
   | { type: "GRAPPLE_ESCAPE"; rollResult: GrappleEscapeRollResult }
   | { type: "PIN_ATTEMPT"; rollResult: PinRollResult }
   | { type: "APPLY_BLINDED"; severity: BlindedSeverity }
+  | { type: "APPLY_AFFLICTION"; afflictionType: AfflictionType; duration: AfflictionDuration }
+  | { type: "CURE_AFFLICTION" }
 
 // ============================================================
 // Helpers (mirror Quint spec pure functions)
@@ -138,6 +143,9 @@ function asGrappleEscape(event: SavageEvent) {
 function asPin(event: SavageEvent) {
   return event as Extract<SavageEvent, { type: "PIN_ATTEMPT" }>
 }
+function asAffliction(event: SavageEvent) {
+  return event as Extract<SavageEvent, { type: "APPLY_AFFLICTION" }>
+}
 
 // ============================================================
 // State path constants
@@ -150,6 +158,8 @@ const FATIGUE_INCAP = { alive: { fatigueTrack: "incapByFatigue" as const } }
 const BOUND_STATE = { alive: { restraintTrack: "bound" as const } }
 const GRABBED_STATE = { alive: { restraintTrack: "grabbed" as const } }
 const PINNED_STATE = { alive: { restraintTrack: "pinned" as const } }
+const PARALYTIC_STATE = { alive: { afflictionTrack: { afflicted: "paralytic" as const } } }
+const SLEEP_STATE = { alive: { afflictionTrack: { afflicted: "sleep" as const } } }
 
 // ============================================================
 // Machine
@@ -239,7 +249,14 @@ export const savageMachine = setup({
 
     // --- Blinded guards ---
     blindedSeverityFull: ({ event }) =>
-      (event as Extract<SavageEvent, { type: "APPLY_BLINDED" }>).severity === 4
+      (event as Extract<SavageEvent, { type: "APPLY_BLINDED" }>).severity === 4,
+
+    // --- Affliction guards ---
+    afflictionParalytic: ({ event }) => asAffliction(event).afflictionType === "paralytic",
+    afflictionWeak: ({ event }) => asAffliction(event).afflictionType === "weak",
+    afflictionLethal: ({ event }) => asAffliction(event).afflictionType === "lethal",
+    afflictionSleep: ({ event }) => asAffliction(event).afflictionType === "sleep",
+    afflictionTimerExpired: ({ context }) => context.afflictionTimer === -1
   },
   actions: {
     addWounds: assign(({ context, event }) => {
@@ -283,7 +300,23 @@ export const savageMachine = setup({
       if (roll === undefined) return {}
       return { injuries: [...context.injuries, resolveInjury(roll)] }
     }),
-    clearGrappledBy: assign({ grappledBy: null })
+    clearGrappledBy: assign({ grappledBy: null }),
+    setAfflictionTimer: assign(({ event }) => ({
+      afflictionTimer: asAffliction(event).duration
+    })),
+    clearAfflictionTimer: assign({ afflictionTimer: -1 }),
+    tickAfflictionTimer: assign(({ context }) => {
+      if (context.afflictionTimer > 0) return { afflictionTimer: context.afflictionTimer - 1 }
+      if (context.afflictionTimer === 0) return { afflictionTimer: -1 }
+      return {}
+    }),
+    raiseApplyFatigue: raise({ type: "APPLY_FATIGUE" }),
+    raiseLethalDamage: raise({
+      type: "TAKE_DAMAGE",
+      margin: damageMargin(0),
+      soakSuccesses: soakSuccesses(0),
+      incapRoll: incapRollResult(0)
+    })
   }
 }).createMachine({
   id: "savage",
@@ -298,7 +331,8 @@ export const savageMachine = setup({
     onHold: false,
     interruptedSuccessfully: false,
     injuries: [],
-    grappledBy: null
+    grappledBy: null,
+    afflictionTimer: -1
   }),
   states: {
     alive: {
@@ -366,11 +400,11 @@ export const savageMachine = setup({
                     ],
                     START_OF_TURN: [
                       {
-                        guard: and([stateIn(OTHERS_TURN), not(stateIn(FATIGUE_INCAP)), "spiritSuccess", "hasWounds"]),
+                        guard: and([stateIn(OTHERS_TURN), not(stateIn(FATIGUE_INCAP)), not(stateIn(SLEEP_STATE)), "spiritSuccess", "hasWounds"]),
                         target: "wounded"
                       },
                       {
-                        guard: and([stateIn(OTHERS_TURN), not(stateIn(FATIGUE_INCAP)), "spiritSuccess"]),
+                        guard: and([stateIn(OTHERS_TURN), not(stateIn(FATIGUE_INCAP)), not(stateIn(SLEEP_STATE)), "spiritSuccess"]),
                         target: "unshaken"
                       }
                     ],
@@ -464,6 +498,8 @@ export const savageMachine = setup({
                           stateIn(OTHERS_TURN),
                           stateIn(DAMAGE_ACTIVE),
                           not(stateIn(FATIGUE_INCAP)),
+                          not(stateIn(PARALYTIC_STATE)),
+                          not(stateIn(SLEEP_STATE)),
                           "vigorRaise"
                         ]),
                         target: "normal",
@@ -474,6 +510,8 @@ export const savageMachine = setup({
                           stateIn(OTHERS_TURN),
                           stateIn(DAMAGE_ACTIVE),
                           not(stateIn(FATIGUE_INCAP)),
+                          not(stateIn(PARALYTIC_STATE)),
+                          not(stateIn(SLEEP_STATE)),
                           "vigorSuccessNoRaise"
                         ]),
                         target: "normal",
@@ -636,7 +674,7 @@ export const savageMachine = setup({
                     },
                     START_OF_TURN: [
                       {
-                        guard: and([stateIn(OTHERS_TURN), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "vigorSuccess"]),
+                        guard: and([stateIn(OTHERS_TURN), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), not(stateIn(SLEEP_STATE)), "vigorSuccess"]),
                         target: "clear"
                       }
                     ]
@@ -650,11 +688,11 @@ export const savageMachine = setup({
                   on: {
                     START_OF_TURN: [
                       {
-                        guard: and([stateIn(OTHERS_TURN), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "vigorRaise"]),
+                        guard: and([stateIn(OTHERS_TURN), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), not(stateIn(SLEEP_STATE)), "vigorRaise"]),
                         target: "clear"
                       },
                       {
-                        guard: and([stateIn(OTHERS_TURN), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), "vigorSuccessNoRaise"]),
+                        guard: and([stateIn(OTHERS_TURN), stateIn(DAMAGE_ACTIVE), not(stateIn(FATIGUE_INCAP)), not(stateIn(SLEEP_STATE)), "vigorSuccessNoRaise"]),
                         target: "impaired"
                       }
                     ]
@@ -709,7 +747,7 @@ export const savageMachine = setup({
             },
             ownTurn: {
               on: {
-                END_OF_TURN: { target: "othersTurn", actions: ["tickTimers", "setOwnTurnFalse"] },
+                END_OF_TURN: { target: "othersTurn", actions: ["tickTimers", "tickAfflictionTimer", "setOwnTurnFalse"] },
                 GO_ON_HOLD: {
                   guard: and([
                     stateIn(DAMAGE_ACTIVE),
@@ -735,7 +773,7 @@ export const savageMachine = setup({
                     actions: ["clearOnHold", "setOwnTurnTrue", "setInterruptFail"]
                   }
                 ],
-                END_OF_TURN: { target: "othersTurn", actions: ["clearOnHold", "tickTimers", "setOwnTurnFalse"] }
+                END_OF_TURN: { target: "othersTurn", actions: ["clearOnHold", "tickTimers", "tickAfflictionTimer", "setOwnTurnFalse"] }
               },
               always: [
                 {
@@ -889,6 +927,62 @@ export const savageMachine = setup({
               }
             }
           }
+        },
+
+        // ========================================
+        // AFFLICTION TRACK (poison/disease)
+        // ========================================
+        afflictionTrack: {
+          initial: "healthy",
+          states: {
+            healthy: {
+              on: {
+                APPLY_AFFLICTION: [
+                  { guard: "afflictionParalytic", target: "afflicted.paralytic", actions: ["setAfflictionTimer"] },
+                  { guard: "afflictionWeak", target: "afflicted.weak", actions: ["setAfflictionTimer"] },
+                  { guard: "afflictionLethal", target: "afflicted.lethal", actions: ["setAfflictionTimer"] },
+                  { guard: "afflictionSleep", target: "afflicted.sleep", actions: ["setAfflictionTimer"] }
+                ]
+              }
+            },
+            afflicted: {
+              initial: "paralytic",
+              on: {
+                CURE_AFFLICTION: { target: "healthy", actions: ["clearAfflictionTimer"] },
+                APPLY_AFFLICTION: [
+                  { guard: "afflictionParalytic", target: ".paralytic", actions: ["setAfflictionTimer"] },
+                  { guard: "afflictionWeak", target: ".weak", actions: ["setAfflictionTimer"] },
+                  { guard: "afflictionLethal", target: ".lethal", actions: ["setAfflictionTimer"] },
+                  { guard: "afflictionSleep", target: ".sleep", actions: ["setAfflictionTimer"] }
+                ]
+              },
+              always: {
+                guard: "afflictionTimerExpired",
+                target: "healthy",
+                actions: ["clearAfflictionTimer"]
+              },
+              states: {
+                paralytic: {},
+                weak: {
+                  on: {
+                    START_OF_TURN: {
+                      guard: stateIn(OTHERS_TURN),
+                      actions: ["raiseApplyFatigue"]
+                    }
+                  }
+                },
+                lethal: {
+                  on: {
+                    START_OF_TURN: {
+                      guard: stateIn(OTHERS_TURN),
+                      actions: ["raiseApplyFatigue", "raiseLethalDamage"]
+                    }
+                  }
+                },
+                sleep: {}
+              }
+            }
+          }
         }
       }
     },
@@ -900,7 +994,8 @@ export const savageMachine = setup({
         vulnerableTimer: conditionTimer(-1),
         onHold: false,
         interruptedSuccessfully: false,
-        grappledBy: null
+        grappledBy: null,
+        afflictionTimer: -1
       })
     }
   }
@@ -1010,6 +1105,18 @@ export function injuryPenalty(snap: SavageSnapshot): number {
       i === "guts_busted" ||
       i === "head_brain_damage"
   ).length
+}
+
+export function isAfflicted(snap: SavageSnapshot): boolean {
+  return snap.matches({ alive: { afflictionTrack: "afflicted" } })
+}
+
+export function afflictionType(snap: SavageSnapshot): AfflictionType | null {
+  if (snap.matches({ alive: { afflictionTrack: { afflicted: "paralytic" } } })) return "paralytic"
+  if (snap.matches({ alive: { afflictionTrack: { afflicted: "weak" } } })) return "weak"
+  if (snap.matches({ alive: { afflictionTrack: { afflicted: "lethal" } } })) return "lethal"
+  if (snap.matches({ alive: { afflictionTrack: { afflicted: "sleep" } } })) return "sleep"
+  return null
 }
 
 export function totalPenalty(snap: SavageSnapshot): number {
