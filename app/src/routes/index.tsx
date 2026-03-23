@@ -130,8 +130,8 @@ function App() {
   const toggleHardy = useCallback(() => {
     const next = !hardy
     setHardy(next)
-    initActor({ isWildCard, hardy: next })
-  }, [initActor, isWildCard, hardy])
+    actorRef.current?.send({ type: "SET_HARDY", hardy: next })
+  }, [hardy])
 
   if (!snapshot) return null
 

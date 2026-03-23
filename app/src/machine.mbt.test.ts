@@ -165,7 +165,7 @@ type EventActionMap = {
 
 // Compile error if a SavageEvent type is missing from EventActionMap.
 // Exclude<...> is `never` when complete; any missing event type appears in the union.
-type UnmappedEvents = Exclude<SavageEvent["type"], keyof EventActionMap | "_LETHAL_TICK">
+type UnmappedEvents = Exclude<SavageEvent["type"], keyof EventActionMap | "_LETHAL_TICK" | "SET_HARDY">
 // If UnmappedEvents is not `never`, this line won't compile — the error names the missing events.
 type AssertAllEventsMapped = UnmappedEvents extends never
   ? true

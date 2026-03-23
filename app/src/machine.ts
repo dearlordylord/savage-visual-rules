@@ -114,6 +114,7 @@ export type SavageEvent =
   | { type: "APPLY_POWER_EFFECT"; etype: string; duration: number }
   | { type: "DISMISS_EFFECT"; etype: string }
   | { type: "BACKLASH" }
+  | { type: "SET_HARDY"; hardy: boolean }
 
 // ============================================================
 // Re-exports from machine-queries and machine-helpers
@@ -385,6 +386,9 @@ export const savageMachine = setup({
     afflictionTimer: -1,
     activeEffects: []
   }),
+  on: {
+    SET_HARDY: { actions: [assign(({ event }) => ({ hardy: (event as { hardy: boolean }).hardy }))] }
+  },
   states: {
     alive: {
       type: "parallel",
