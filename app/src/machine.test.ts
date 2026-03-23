@@ -287,6 +287,23 @@ describe("stunned recovery", () => {
     expect(snap(a).matches({ alive: { conditionTrack: { stun: "stunned" } } })).toBe(true)
   })
 
+  // stunnedRecoveryDistractedPersistsTest
+  it("stunned freezes distracted timer until stun clears", () => {
+    const a = createWC()
+    a.send({ type: "APPLY_STUNNED" })
+    expect(snap(a).context.distractedTimer).toBe(0)
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(0), spiritRoll: sr(0) }) // fail → still stunned
+    expect(isStunned(snap(a))).toBe(true)
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) }) // distracted frozen while stunned
+    expect(snap(a).context.distractedTimer).toBe(0)
+    a.send({ type: "START_OF_TURN", vigorRoll: vr(1), spiritRoll: sr(1) }) // stun clears
+    expect(isStunned(snap(a))).toBe(false)
+    expect(snap(a).matches({ alive: { conditionTrack: { distraction: "distracted" } } })).toBe(true)
+    expect(snap(a).context.distractedTimer).toBe(0)
+    a.send({ type: "END_OF_TURN", vigorRoll: vr(0) }) // now distracted expires
+    expect(snap(a).context.distractedTimer).toBe(-1)
+  })
+
   function shakenAndStunned() {
     const a = createWC()
     a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) })

@@ -308,6 +308,9 @@ export const savageMachine = setup({
     tickDistractedOnly: assign(({ context }) => ({
       distractedTimer: tickTimer(context.distractedTimer)
     })),
+    tickVulnerableOnly: assign(({ context }) => ({
+      vulnerableTimer: tickTimer(context.vulnerableTimer)
+    })),
     setOwnTurnTrue: assign({ ownTurn: true }),
     clearHoldUsed: assign({ holdUsed: false }),
     setOwnTurnFalse: assign({ ownTurn: false }),
@@ -668,7 +671,12 @@ export const savageMachine = setup({
                     }
                   },
                   always: {
-                    guard: and(["distractedTimerExpired", not(stateIn(BOUND_STATE)), not(stateIn(PINNED_STATE))]),
+                    guard: and([
+                      "distractedTimerExpired",
+                      not(stateIn(BOUND_STATE)),
+                      not(stateIn(PINNED_STATE)),
+                      not(stateIn(STUNNED_STATE))
+                    ]),
                     target: "clear"
                   }
                 }
@@ -916,6 +924,12 @@ export const savageMachine = setup({
                     guard: or([stateIn(BOUND_STATE), stateIn(PINNED_STATE)]),
                     target: "idle",
                     actions: ["tickAfflictionTimer", "tickEffectTimers", "setOwnTurnFalse"]
+                  },
+                  // Stunned: freeze distracted, tick vulnerable
+                  {
+                    guard: stateIn(STUNNED_STATE),
+                    target: "idle",
+                    actions: ["tickVulnerableOnly", "tickAfflictionTimer", "tickEffectTimers", "setOwnTurnFalse"]
                   },
                   // Entangled/grabbed: tick distracted, freeze vulnerable
                   {

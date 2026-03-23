@@ -307,8 +307,9 @@ module savage {
     } else if (not(s.ownTurn)) {
       {success: false, newState: s}
     } else {
-      // Bound(1)/pinned(3) keep distracted frozen; grabbed(2) does not (M5 fix)
-      val nd = if ((s.restrained == 1 or s.restrained == 3) and s.distracted >= 0) s.distracted
+      // Bound(1)/pinned(3)/stunned keep distracted frozen; grabbed(2) does not (M5 fix)
+      val distractedFrozen = (s.restrained == 1 or s.restrained == 3 or s.stunned) and s.distracted >= 0
+      val nd = if (distractedFrozen) s.distracted
                else if (s.distracted > 0) s.distracted - 1
                else if (s.distracted == 0) -1
                else -1

@@ -158,6 +158,21 @@ module savageTest {
     .expect(state.vulnerable == -1)
   }
 
+  /// Stunned freezes distracted timer: distracted persists after stun clears
+  run stunnedRecoveryDistractedPersistsTest = {
+    initWildCard
+    .then(doApplyStunned)
+    .expect(state.stunned and state.distracted == 0)
+    .then(doStartOfTurn(0, 0))        // vig fails → still stunned
+    .expect(state.stunned)
+    .then(doEndOfTurn(0))              // distracted frozen while stunned → stays 0
+    .expect(state.distracted == 0)
+    .then(doStartOfTurn(1, 1))         // vig succeeds → stun clears
+    .expect(not(state.stunned) and state.isDistracted() and state.distracted == 0)
+    .then(doEndOfTurn(0))              // now distracted ticks: 0 → -1
+    .expect(state.distracted == -1)
+  }
+
   /// Stunned recovery fail: still Stunned
   run stunnedRecoveryFailTest = {
     initWildCard
@@ -420,11 +435,11 @@ module savageTest {
     .expect(state.stunned and not(state.onHold))
   }
 
-  /// Start of turn skipped when on hold
-  run startOfTurnSkippedOnHoldTest = {
+  /// Start of turn while on hold: succeeds but character stays on hold
+  run startOfTurnOnHoldNoOpTest = {
     all { state' = {...FRESH_WILD_CARD, onHold: true} }
     .then(doStartOfTurn(0, 0))
-    .fail()
+    .expect(state.onHold and not(state.ownTurn))
   }
 
   /// Cannot go on hold from others' turn
