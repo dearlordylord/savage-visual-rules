@@ -387,7 +387,7 @@ export const savageMachine = setup({
     activeEffects: []
   }),
   on: {
-    SET_HARDY: { actions: [assign(({ event }) => ({ hardy: (event as { hardy: boolean }).hardy }))] }
+    SET_HARDY: { actions: [assign(({ event }) => ({ hardy: event.hardy }))] }
   },
   states: {
     alive: {
