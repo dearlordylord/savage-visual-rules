@@ -30,7 +30,17 @@ import { FearPanel } from "./FearPanel"
 import { PowerEffectPanel } from "./PowerEffectPanel"
 import { EventBtn, NumInput } from "./ui"
 
-export function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void; snapshot: SavageSnapshot }) {
+export function EventPanel({
+  hardy,
+  onToggleHardy,
+  send,
+  snapshot
+}: {
+  send: (e: SavageEvent) => void
+  snapshot: SavageSnapshot
+  hardy: boolean
+  onToggleHardy: () => void
+}) {
   const [margin, setMargin] = useState(4)
   const [soak, setSoak] = useState(0)
   const [incapRoll, setIncapRoll] = useState(0)
@@ -54,9 +64,18 @@ export function EventPanel({ send, snapshot }: { send: (e: SavageEvent) => void;
       <div className="space-y-3 text-sm">
         {/* TAKE_DAMAGE */}
         <div className="rounded-lg border border-[var(--line)] p-3">
-          <p className="mb-2 font-semibold cursor-help" title={m.tooltip_take_damage()}>
-            {m.event_take_damage()}
-          </p>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="font-semibold cursor-help" title={m.tooltip_take_damage()}>
+              {m.event_take_damage()}
+            </p>
+            <button
+              onClick={onToggleHardy}
+              title={m.tooltip_hardy()}
+              className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition cursor-help ${hardy ? "border-[var(--lagoon)] bg-[rgba(79,184,178,0.2)] text-[var(--lagoon-deep)]" : "border-[var(--line)] text-[var(--sea-ink-soft)]"}`}
+            >
+              {m.hardy()}
+            </button>
+          </div>
           <div className="mb-2 flex gap-3">
             <NumInput
               label={m.label_margin()}

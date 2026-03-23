@@ -17,11 +17,16 @@ export const Route = createFileRoute("/")({ component: App })
 // Replay helper — creates a fresh actor, replays events, returns snapshot
 // ============================================================
 
+interface CharInput {
+  isWildCard: boolean
+  hardy: boolean
+}
+
 function replayEvents(
-  wc: boolean,
+  input: CharInput,
   events: Array<SavageEvent>
 ): { actor: ReturnType<typeof createActor<typeof savageMachine>>; snapshot: SavageSnapshot } {
-  const actor = createActor(savageMachine, { input: { isWildCard: wc } })
+  const actor = createActor(savageMachine, { input })
   actor.start()
   for (const ev of events) {
     actor.send(ev)
@@ -41,6 +46,7 @@ function App() {
   // Cursor: index of the last applied event. -1 = initial state (no events applied).
   const [cursor, setCursor] = useState(-1)
   const [isWildCard, setIsWildCard] = useState(true)
+  const [hardy, setHardy] = useState(false)
   const logIdRef = useRef(0)
   const cursorRef = useRef(-1)
   // Keep ref in sync with state
@@ -50,9 +56,9 @@ function App() {
   }, [])
 
   const initActor = useCallback(
-    (wc: boolean) => {
+    (input: CharInput) => {
       actorRef.current?.stop()
-      const actor = createActor(savageMachine, { input: { isWildCard: wc } })
+      const actor = createActor(savageMachine, { input })
       actor.subscribe(setSnapshot)
       actor.start()
       actorRef.current = actor
@@ -65,7 +71,7 @@ function App() {
   )
 
   useEffect(() => {
-    initActor(isWildCard)
+    initActor({ isWildCard, hardy })
     return () => {
       actorRef.current?.stop()
     }
@@ -90,6 +96,8 @@ function App() {
     [updateCursor]
   )
 
+  const charInput: CharInput = { isWildCard, hardy }
+
   const jumpTo = useCallback(
     (targetIndex: number) => {
       // targetIndex: -1 = initial state, 0..log.length-1 = after that event
@@ -97,7 +105,7 @@ function App() {
         if (targetIndex < -1 || targetIndex >= currentLog.length) return currentLog
         actorRef.current?.stop()
         const eventsToReplay = currentLog.slice(0, targetIndex + 1).map((e) => e.event)
-        const { actor, snapshot: newSnap } = replayEvents(isWildCard, eventsToReplay)
+        const { actor, snapshot: newSnap } = replayEvents(charInput, eventsToReplay)
         actor.subscribe(setSnapshot)
         actorRef.current = actor
         setSnapshot(newSnap)
@@ -105,19 +113,25 @@ function App() {
         return currentLog
       })
     },
-    [isWildCard, updateCursor]
+    [isWildCard, hardy, updateCursor]
   )
 
   const canUndo = cursor >= 0
   const canRedo = cursor < log.length - 1
 
-  const reset = useCallback(
+  const resetType = useCallback(
     (wc: boolean) => {
       setIsWildCard(wc)
-      initActor(wc)
+      initActor({ isWildCard: wc, hardy })
     },
-    [initActor]
+    [initActor, hardy]
   )
+
+  const toggleHardy = useCallback(() => {
+    const next = !hardy
+    setHardy(next)
+    initActor({ isWildCard, hardy: next })
+  }, [initActor, isWildCard, hardy])
 
   if (!snapshot) return null
 
@@ -134,15 +148,15 @@ function App() {
           >
             {m.cookbook_link()}
           </Link>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => reset(true)}
+              onClick={() => resetType(true)}
               className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${isWildCard ? "border-[var(--lagoon)] bg-[rgba(79,184,178,0.2)] text-[var(--lagoon-deep)]" : "border-[var(--line)] text-[var(--sea-ink-soft)]"}`}
             >
               {m.wild_card()}
             </button>
             <button
-              onClick={() => reset(false)}
+              onClick={() => resetType(false)}
               className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${!isWildCard ? "border-[var(--lagoon)] bg-[rgba(79,184,178,0.2)] text-[var(--lagoon-deep)]" : "border-[var(--line)] text-[var(--sea-ink-soft)]"}`}
             >
               {m.extra()}
@@ -161,7 +175,7 @@ function App() {
         </div>
         {/* Right column: events + log */}
         <div className="flex flex-col gap-4">
-          <EventPanel send={send} snapshot={snapshot} />
+          <EventPanel send={send} snapshot={snapshot} hardy={hardy} onToggleHardy={toggleHardy} />
           <TransitionLog
             log={log}
             cursor={cursor}
@@ -170,7 +184,7 @@ function App() {
             onJumpTo={jumpTo}
             onUndo={() => jumpTo(cursor - 1)}
             onRedo={() => jumpTo(cursor + 1)}
-            onClear={() => initActor(isWildCard)}
+            onClear={() => initActor(charInput)}
           />
         </div>
       </div>

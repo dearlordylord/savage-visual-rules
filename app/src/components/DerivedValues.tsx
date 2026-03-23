@@ -71,6 +71,7 @@ export function DerivedValues({ snapshot }: { snapshot: SavageSnapshot }) {
     { label: m.derived_can_move(), value: canMove(snapshot) },
     { label: m.derived_conscious(), value: isConscious(snapshot) },
     { label: m.derived_wild_card(), value: ctx.isWildCard },
+    { label: m.derived_hardy(), value: ctx.hardy },
     { label: m.derived_afflicted(), value: isAfflicted(snapshot), title: m.tooltip_afflicted() },
     { label: m.derived_injuries(), value: ctx.injuries.length.toString() },
     {
