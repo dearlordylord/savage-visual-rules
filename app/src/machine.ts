@@ -1,6 +1,39 @@
 /* eslint-disable max-lines -- xstate machine definition is inherently dense */
-import { and, assign, not, or, raise, setup, type SnapshotFrom, stateIn } from "xstate"
+import { and, assign, not, or, raise, setup, stateIn } from "xstate"
 
+import {
+  ACTING,
+  asAffliction,
+  asBlinded,
+  asDamage,
+  asDismissEffect,
+  asEndOfTurn,
+  asEscape,
+  asGrapple,
+  asGrappleEscape,
+  asHeal,
+  asInterrupt,
+  asPin,
+  asPowerEffect,
+  asRecovery,
+  BOUND_STATE,
+  computeDamage,
+  DAMAGE_ACTIVE,
+  DEFENDING_STATE,
+  ENTANGLED_STATE,
+  FATIGUE_INCAP,
+  GRABBED_STATE,
+  HOLDING_ACTION,
+  IDLE,
+  PARALYTIC_STATE,
+  PINNED_STATE,
+  resolveInjury,
+  SHAKEN_STATE,
+  SLEEP_STATE,
+  STUNNED_STATE,
+  tickTimer
+} from "./machine-helpers"
+import type { InjuryType } from "./machine-queries"
 import type {
   AfflictionDuration,
   AfflictionType,
@@ -9,7 +42,6 @@ import type {
   ConditionTimer,
   DamageMargin,
   EscapeRollResult,
-  FearResultType,
   GrappleEscapeRollResult,
   GrappleRollResult,
   HealAmount,
@@ -27,20 +59,6 @@ import { conditionTimer, maxWounds, wounds } from "./types"
 // ============================================================
 // Types
 // ============================================================
-
-// Injury types per SWADE Injury Table (2d6)
-export type InjuryType =
-  | "unmentionables" // 2
-  | "arm" // 3-4
-  | "guts_broken" // 5-9, sub 1-2: Agility reduced
-  | "guts_battered" // 5-9, sub 3-4: Vigor reduced
-  | "guts_busted" // 5-9, sub 5-6: Strength reduced
-  | "leg" // 10-11
-  | "head_scar" // 12, sub 1-3: Ugly hindrance
-  | "head_blinded" // 12, sub 4-5: One Eye/Blind
-  | "head_brain_damage" // 12, sub 6: Smarts reduced
-
-export { type AfflictionType } from "./types"
 
 export interface SavageContext {
   wounds: Wounds
@@ -97,101 +115,45 @@ export type SavageEvent =
   | { type: "BACKLASH" }
 
 // ============================================================
-// Helpers (mirror Quint spec pure functions)
+// Re-exports from machine-queries and machine-helpers
 // ============================================================
 
-function computeDamage(margin: DamageMargin, soakSuccesses: SoakSuccesses, isShaken: boolean) {
-  const raises = Math.floor(margin / 4)
-  const rawWounds = isShaken ? Math.max(raises, 1) : raises
-  const effectiveSoak = rawWounds > 0 ? soakSuccesses : 0
-  const actualWounds = Math.max(0, rawWounds - effectiveSoak)
-  const allSoaked = actualWounds === 0 && effectiveSoak > 0
-  return { raises, rawWounds, effectiveSoak, actualWounds, allSoaked }
-}
-
-function tickTimer(timer: ConditionTimer): ConditionTimer {
-  if (timer > 0) return conditionTimer(timer - 1)
-  return conditionTimer(-1)
-}
-
-// Type-safe event extractors
-function asDamage(event: SavageEvent) {
-  return event as Extract<SavageEvent, { type: "TAKE_DAMAGE" }>
-}
-function asRecovery(event: SavageEvent) {
-  return event as Extract<SavageEvent, { type: "START_OF_TURN" }>
-}
-function asHeal(event: SavageEvent) {
-  return event as Extract<SavageEvent, { type: "HEAL" }>
-}
-function asInterrupt(event: SavageEvent) {
-  return event as Extract<SavageEvent, { type: "INTERRUPT" }>
-}
-
-// Resolve 2d6 Injury Table roll to InjuryType
-// injuryRoll encodes both 2d6 and sub-roll: tableRoll * 10 + subRoll
-// e.g., 52 = table roll 5, sub roll 2 → guts_broken
-export function resolveInjury(injuryRoll: InjuryRoll): InjuryType {
-  const tableRoll = Math.floor(injuryRoll / 10)
-  const subRoll = injuryRoll % 10
-  if (tableRoll <= 2) return "unmentionables"
-  if (tableRoll <= 4) return "arm"
-  if (tableRoll <= 9) {
-    if (subRoll <= 2) return "guts_broken"
-    if (subRoll <= 4) return "guts_battered"
-    return "guts_busted"
-  }
-  if (tableRoll <= 11) return "leg"
-  // 12
-  if (subRoll <= 3) return "head_scar"
-  if (subRoll <= 5) return "head_blinded"
-  return "head_brain_damage"
-}
-function asEscape(event: SavageEvent) {
-  return event as Extract<SavageEvent, { type: "ESCAPE_ATTEMPT" }>
-}
-function asGrapple(event: SavageEvent) {
-  return event as Extract<SavageEvent, { type: "GRAPPLE_ATTEMPT" }>
-}
-function asGrappleEscape(event: SavageEvent) {
-  return event as Extract<SavageEvent, { type: "GRAPPLE_ESCAPE" }>
-}
-function asPin(event: SavageEvent) {
-  return event as Extract<SavageEvent, { type: "PIN_ATTEMPT" }>
-}
-function asAffliction(event: SavageEvent) {
-  return event as Extract<SavageEvent, { type: "APPLY_AFFLICTION" }>
-}
-function asEndOfTurn(event: SavageEvent) {
-  return event as Extract<SavageEvent, { type: "END_OF_TURN" }>
-}
-function asBlinded(event: SavageEvent) {
-  return event as Extract<SavageEvent, { type: "APPLY_BLINDED" }>
-}
-function asPowerEffect(event: SavageEvent) {
-  return event as Extract<SavageEvent, { type: "APPLY_POWER_EFFECT" }>
-}
-function asDismissEffect(event: SavageEvent) {
-  return event as Extract<SavageEvent, { type: "DISMISS_EFFECT" }>
-}
-
-// ============================================================
-// State path constants
-// ============================================================
-const STUNNED_STATE = { alive: { conditionTrack: { stun: "stunned" as const } } }
-const SHAKEN_STATE = { alive: { damageTrack: { active: "shaken" as const } } }
-const IDLE = { alive: { turnPhase: "idle" as const } }
-const DAMAGE_ACTIVE = { alive: { damageTrack: "active" as const } }
-const FATIGUE_INCAP = { alive: { fatigueTrack: "incapByFatigue" as const } }
-const ENTANGLED_STATE = { alive: { restraintTrack: "entangled" as const } }
-const BOUND_STATE = { alive: { restraintTrack: "bound" as const } }
-const GRABBED_STATE = { alive: { restraintTrack: "grabbed" as const } }
-const PINNED_STATE = { alive: { restraintTrack: "pinned" as const } }
-const HOLDING_ACTION = { alive: { turnPhase: "holdingAction" as const } }
-const PARALYTIC_STATE = { alive: { afflictionTrack: { afflicted: "paralytic" as const } } }
-const SLEEP_STATE = { alive: { afflictionTrack: { afflicted: "sleep" as const } } }
-const ACTING = { alive: { turnPhase: "acting" as const } }
-const DEFENDING_STATE = { alive: { conditionTrack: { defense: "defending" as const } } }
+export { resolveInjury } from "./machine-helpers"
+export type { InjuryType } from "./machine-queries"
+export {
+  activeEffectsList,
+  afflictionType,
+  blindedPenalty,
+  canAct,
+  canMove,
+  type FearResult,
+  hasEffect,
+  hasInjury,
+  injuryPenalty,
+  isAfflicted,
+  isBleedingOut,
+  isBlinded,
+  isBound,
+  isConscious,
+  isDead,
+  isDefending,
+  isDistracted,
+  isEntangled,
+  isFullyBlinded,
+  isGrabbed,
+  isGrappled,
+  isIncapStable,
+  isOnHold,
+  isPinned,
+  isProne,
+  isRestrained,
+  isShaken,
+  isStunned,
+  isVulnerable,
+  resolveFear,
+  type SavageSnapshot,
+  totalPenalty
+} from "./machine-queries"
 
 // ============================================================
 // Machine
@@ -1260,166 +1222,3 @@ export const savageMachine = setup({
     }
   }
 })
-
-// ============================================================
-// Derived state helpers
-// ============================================================
-
-export type SavageSnapshot = SnapshotFrom<typeof savageMachine>
-
-export function isDead(snap: SavageSnapshot): boolean {
-  return snap.matches("dead")
-}
-
-export function isShaken(snap: SavageSnapshot): boolean {
-  return snap.matches({ alive: { damageTrack: { active: "shaken" } } })
-}
-
-export function isStunned(snap: SavageSnapshot): boolean {
-  return snap.matches({ alive: { conditionTrack: { stun: "stunned" } } })
-}
-
-export function isDistracted(snap: SavageSnapshot): boolean {
-  return snap.matches({ alive: { conditionTrack: { distraction: "distracted" } } }) || isStunned(snap)
-}
-
-export function isVulnerable(snap: SavageSnapshot): boolean {
-  return snap.matches({ alive: { conditionTrack: { vulnerability: "vulnerable" } } }) || isStunned(snap)
-}
-
-export function isDefending(snap: SavageSnapshot): boolean {
-  return snap.matches({ alive: { conditionTrack: { defense: "defending" } } })
-}
-
-export function isOnHold(snap: SavageSnapshot): boolean {
-  return snap.matches({ alive: { turnPhase: "holdingAction" } })
-}
-
-export function isProne(snap: SavageSnapshot): boolean {
-  return snap.matches({ alive: { positionTrack: "prone" } })
-}
-
-export function isBound(snap: SavageSnapshot): boolean {
-  return snap.matches({ alive: { restraintTrack: "bound" } })
-}
-
-export function isEntangled(snap: SavageSnapshot): boolean {
-  return snap.matches({ alive: { restraintTrack: "entangled" } })
-}
-
-export function isRestrained(snap: SavageSnapshot): boolean {
-  return isBound(snap) || isEntangled(snap)
-}
-
-export function isGrabbed(snap: SavageSnapshot): boolean {
-  return snap.matches({ alive: { restraintTrack: "grabbed" } })
-}
-
-export function isPinned(snap: SavageSnapshot): boolean {
-  return snap.matches({ alive: { restraintTrack: "pinned" } })
-}
-
-export function isGrappled(snap: SavageSnapshot): boolean {
-  return isGrabbed(snap) || isPinned(snap)
-}
-
-export function isBleedingOut(snap: SavageSnapshot): boolean {
-  return snap.matches({ alive: { damageTrack: { incapacitated: "bleedingOut" } } })
-}
-
-export function isIncapStable(snap: SavageSnapshot): boolean {
-  return snap.matches({ alive: { damageTrack: { incapacitated: "stable" } } })
-}
-
-export function isBlinded(snap: SavageSnapshot): boolean {
-  return (
-    snap.matches({ alive: { conditionTrack: { vision: "blinded" } } }) ||
-    snap.matches({ alive: { conditionTrack: { vision: "impaired" } } })
-  )
-}
-
-export function isFullyBlinded(snap: SavageSnapshot): boolean {
-  return snap.matches({ alive: { conditionTrack: { vision: "blinded" } } })
-}
-
-export function blindedPenalty(snap: SavageSnapshot): 0 | -2 | -4 {
-  if (snap.matches({ alive: { conditionTrack: { vision: "blinded" } } })) return -4
-  if (snap.matches({ alive: { conditionTrack: { vision: "impaired" } } })) return -2
-  return 0
-}
-
-/** Conscious and in the fight: not dead, not incapacitated. Does NOT imply ability to act or move. */
-export function isConscious(snap: SavageSnapshot): boolean {
-  return (
-    snap.matches({ alive: { damageTrack: "active" } }) && !snap.matches({ alive: { fatigueTrack: "incapByFatigue" } })
-  )
-}
-
-export function canAct(snap: SavageSnapshot): boolean {
-  return isConscious(snap) && !isShaken(snap) && !isStunned(snap) && !snap.matches(SLEEP_STATE)
-}
-
-export function canMove(snap: SavageSnapshot): boolean {
-  return isConscious(snap) && !isStunned(snap) && !snap.matches(SLEEP_STATE)
-}
-
-export function hasInjury(snap: SavageSnapshot, type: InjuryType): boolean {
-  return snap.context.injuries.includes(type)
-}
-
-export function injuryPenalty(snap: SavageSnapshot): number {
-  // Each injury that reduces a die type counts as -1 penalty for display purposes
-  // In practice, injuries affect specific attributes, not a global penalty
-  // This counts the number of die-reducing injuries for a summary
-  return snap.context.injuries.filter(
-    (i) => i === "guts_broken" || i === "guts_battered" || i === "guts_busted" || i === "head_brain_damage"
-  ).length
-}
-
-export function isAfflicted(snap: SavageSnapshot): boolean {
-  return snap.matches({ alive: { afflictionTrack: "afflicted" } })
-}
-
-export function afflictionType(snap: SavageSnapshot): AfflictionType | null {
-  if (snap.matches({ alive: { afflictionTrack: { afflicted: "paralytic" } } })) return "paralytic"
-  if (snap.matches({ alive: { afflictionTrack: { afflicted: "weak" } } })) return "weak"
-  if (snap.matches({ alive: { afflictionTrack: { afflicted: "lethal" } } })) return "lethal"
-  if (snap.matches({ alive: { afflictionTrack: { afflicted: "sleep" } } })) return "sleep"
-  return null
-}
-
-export function hasEffect(snap: SavageSnapshot, etype: string): boolean {
-  return snap.context.activeEffects.some((e) => e.etype === etype)
-}
-
-export function activeEffectsList(snap: SavageSnapshot): Array<{ etype: string; timer: number }> {
-  return snap.context.activeEffects
-}
-
-export function totalPenalty(snap: SavageSnapshot): number {
-  const wp = Math.min(snap.context.wounds, 3)
-  const fatigue =
-    snap.matches({ alive: { fatigueTrack: "exhausted" } }) ||
-    snap.matches({ alive: { fatigueTrack: "incapByFatigue" } })
-      ? 2
-      : snap.matches({ alive: { fatigueTrack: "fatigued" } })
-        ? 1
-        : 0
-  return -(wp + fatigue)
-}
-
-export type FearResult = FearResultType
-
-export function resolveFear(tableRoll: number, modifier: number): Array<FearResult> {
-  const total = tableRoll + modifier
-  if (total <= 3) return ["ADRENALINE"]
-  if (total <= 6) return ["APPLY_DISTRACTED"]
-  if (total <= 9) return ["APPLY_VULNERABLE"]
-  if (total <= 12) return ["APPLY_SHAKEN"]
-  if (total === 13) return ["APPLY_STUNNED", "HINDRANCE_SCAR"]
-  if (total <= 15) return ["HINDRANCE_SLOWNESS"]
-  if (total <= 17) return ["APPLY_SHAKEN", "PANIC_FLEE"]
-  if (total <= 19) return ["HINDRANCE_MINOR_PHOBIA"]
-  if (total <= 21) return ["HINDRANCE_MAJOR_PHOBIA"]
-  return ["HEART_ATTACK"]
-}
