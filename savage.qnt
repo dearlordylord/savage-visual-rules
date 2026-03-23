@@ -31,6 +31,7 @@ module savage {
     // Character context (immutable after init)
     isWildCard: bool,
     maxWounds: int,         // 3 for Wild Cards, 1 for Extras
+    hardy: bool,            // Hardy: Shaken-on-Shaken does not cause wound
 
     // Turn phase
     ownTurn: bool,
@@ -71,7 +72,7 @@ module savage {
     shaken: false, stunned: false, distracted: -1, vulnerable: -1,
     wounds: 0, incapacitated: false, bleedingOut: false, dead: false,
     fatigue: 0, incapByFatigue: false,
-    isWildCard: true, maxWounds: 3, ownTurn: false,
+    isWildCard: true, maxWounds: 3, hardy: false, ownTurn: false,
     prone: false, onHold: false, holdUsed: false, restrained: -1, grappledBy: "",
     blinded: 0, injuries: List(),
     afflictionType: "none", afflictionTimer: -1,
@@ -83,7 +84,7 @@ module savage {
     shaken: false, stunned: false, distracted: -1, vulnerable: -1,
     wounds: 0, incapacitated: false, bleedingOut: false, dead: false,
     fatigue: 0, incapByFatigue: false,
-    isWildCard: false, maxWounds: 1, ownTurn: false,
+    isWildCard: false, maxWounds: 1, hardy: false, ownTurn: false,
     prone: false, onHold: false, holdUsed: false, restrained: -1, grappledBy: "",
     blinded: 0, injuries: List(),
     afflictionType: "none", afflictionTimer: -1,
@@ -199,8 +200,8 @@ module savage {
       {success: false, newState: s}
     } else {
       val raises = margin / 4
-      // Shaken-on-Shaken: if already Shaken, at least 1 wound
-      val rawWounds = if (s.shaken) max(raises, 1) else raises
+      // Shaken-on-Shaken: if already Shaken, at least 1 wound (unless Hardy)
+      val rawWounds = if (s.shaken and not(s.hardy)) max(raises, 1) else raises
       // Soak only applies when there are wounds
       val effectiveSoak = if (rawWounds > 0) soakSuccesses else 0
       val actualWounds = max(0, rawWounds - effectiveSoak)

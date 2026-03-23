@@ -39,6 +39,24 @@ module savageTest {
     .expect(state.shaken and state.wounds == 1)
   }
 
+  /// Hardy: Shaken-on-Shaken does NOT cause a wound
+  run hardyShakenOnShakenNoWoundTest = {
+    all { state' = {...FRESH_WILD_CARD, hardy: true} }
+    .then(doTakeDamage(0, 0, 0, 0))
+    .expect(state.shaken and state.wounds == 0)
+    .then(doTakeDamage(0, 0, 0, 0))
+    .expect(state.shaken and state.wounds == 0)
+  }
+
+  /// Hardy: raises still cause wounds even when already Shaken
+  run hardyRaisesStillWoundTest = {
+    all { state' = {...FRESH_WILD_CARD, hardy: true} }
+    .then(doTakeDamage(0, 0, 0, 0))
+    .expect(state.shaken and state.wounds == 0)
+    .then(doTakeDamage(4, 0, 0, 0))
+    .expect(state.shaken and state.wounds == 1)
+  }
+
   /// Shaken character hit with 1 raise: still just 1 wound (not 2)
   run shakenWithRaiseTest = {
     initWildCard

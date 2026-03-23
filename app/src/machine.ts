@@ -65,6 +65,7 @@ export interface SavageContext {
   distractedTimer: ConditionTimer
   vulnerableTimer: ConditionTimer
   isWildCard: boolean
+  hardy: boolean
   maxWounds: MaxWounds
   ownTurn: boolean // mirrors turnPhase "acting" — needed because assign actions can't call stateIn()
   onHold: boolean // persists across idle→holdingAction round boundaries; guards on idle read this to re-enter holdingAction
@@ -166,7 +167,7 @@ export const savageMachine = setup({
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- xstate setup() requires this pattern
     events: {} as SavageEvent,
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- xstate setup() requires this pattern
-    input: {} as { isWildCard?: boolean }
+    input: {} as { isWildCard?: boolean; hardy?: boolean }
   },
   guards: {
     // --- Damage guards (from unshaken / wounded — not currently shaken) ---
@@ -189,19 +190,19 @@ export const savageMachine = setup({
 
     // --- Damage guards (from shaken) ---
     extraDiesShaken: ({ context, event }) => {
-      const { actualWounds } = computeDamage(asDamage(event).margin, asDamage(event).soakSuccesses, true)
+      const { actualWounds } = computeDamage(asDamage(event).margin, asDamage(event).soakSuccesses, true, context.hardy)
       return !context.isWildCard && actualWounds > 0
     },
     exceedsMaxShaken: ({ context, event }) => {
-      const { actualWounds } = computeDamage(asDamage(event).margin, asDamage(event).soakSuccesses, true)
+      const { actualWounds } = computeDamage(asDamage(event).margin, asDamage(event).soakSuccesses, true, context.hardy)
       return context.isWildCard && context.wounds + actualWounds > context.maxWounds
     },
-    allSoakedShaken: ({ event }) => {
-      const { allSoaked } = computeDamage(asDamage(event).margin, asDamage(event).soakSuccesses, true)
+    allSoakedShaken: ({ context, event }) => {
+      const { allSoaked } = computeDamage(asDamage(event).margin, asDamage(event).soakSuccesses, true, context.hardy)
       return allSoaked
     },
     woundsNotExceedMaxShaken: ({ context, event }) => {
-      const { actualWounds } = computeDamage(asDamage(event).margin, asDamage(event).soakSuccesses, true)
+      const { actualWounds } = computeDamage(asDamage(event).margin, asDamage(event).soakSuccesses, true, context.hardy)
       return actualWounds > 0 && context.isWildCard && context.wounds + actualWounds <= context.maxWounds
     },
 
@@ -274,7 +275,7 @@ export const savageMachine = setup({
       return { wounds: wounds(context.wounds + actualWounds) }
     }),
     addWoundsShaken: assign(({ context, event }) => {
-      const { actualWounds } = computeDamage(asDamage(event).margin, asDamage(event).soakSuccesses, true)
+      const { actualWounds } = computeDamage(asDamage(event).margin, asDamage(event).soakSuccesses, true, context.hardy)
       return { wounds: wounds(context.wounds + actualWounds) }
     }),
     setWoundsToMax: assign(({ context }) => ({
@@ -373,6 +374,7 @@ export const savageMachine = setup({
     distractedTimer: conditionTimer(-1),
     vulnerableTimer: conditionTimer(-1),
     isWildCard: input.isWildCard ?? true,
+    hardy: input.hardy ?? false,
     maxWounds: maxWounds((input.isWildCard ?? true) ? 3 : 1),
     ownTurn: false,
     onHold: false,

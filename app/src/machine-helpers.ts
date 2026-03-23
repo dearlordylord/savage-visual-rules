@@ -8,9 +8,9 @@ import { conditionTimer } from "./types"
 // Helpers (mirror Quint spec pure functions)
 // ============================================================
 
-export function computeDamage(margin: DamageMargin, soakSuccesses: SoakSuccesses, isShaken: boolean) {
+export function computeDamage(margin: DamageMargin, soakSuccesses: SoakSuccesses, isShaken: boolean, hardy = false) {
   const raises = Math.floor(margin / 4)
-  const rawWounds = isShaken ? Math.max(raises, 1) : raises
+  const rawWounds = isShaken && !hardy ? Math.max(raises, 1) : raises
   const effectiveSoak = rawWounds > 0 ? soakSuccesses : 0
   const actualWounds = Math.max(0, rawWounds - effectiveSoak)
   const allSoaked = actualWounds === 0 && effectiveSoak > 0

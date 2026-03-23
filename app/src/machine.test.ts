@@ -50,17 +50,15 @@ import {
 // Helpers
 // ============================================================
 
-function createWC() {
-  const actor = createActor(savageMachine, { input: { isWildCard: true } })
+function createChar(input: { isWildCard?: boolean; hardy?: boolean } = {}) {
+  const actor = createActor(savageMachine, { input })
   actor.start()
   return actor
 }
 
-function createExtra() {
-  const actor = createActor(savageMachine, { input: { isWildCard: false } })
-  actor.start()
-  return actor
-}
+const createWC = () => createChar({ isWildCard: true })
+const createExtra = () => createChar({ isWildCard: false })
+const createHardyWC = () => createChar({ isWildCard: true, hardy: true })
 
 function snap(actor: ReturnType<typeof createWC>) {
   return actor.getSnapshot()
@@ -94,6 +92,27 @@ describe("damage", () => {
     expect(isShaken(snap(a))).toBe(true)
     expect(snap(a).context.wounds).toBe(0)
     a.send({ type: "TAKE_DAMAGE", margin: dm(1), soakSuccesses: sk(0), incapRoll: ir(0) })
+    expect(isShaken(snap(a))).toBe(true)
+    expect(snap(a).context.wounds).toBe(1)
+  })
+
+  // hardyShakenOnShakenNoWoundTest
+  it("hardy: shaken-on-shaken does NOT cause wound", () => {
+    const a = createHardyWC()
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) })
+    expect(isShaken(snap(a))).toBe(true)
+    expect(snap(a).context.wounds).toBe(0)
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) })
+    expect(isShaken(snap(a))).toBe(true)
+    expect(snap(a).context.wounds).toBe(0)
+  })
+
+  // hardyRaisesStillWoundTest
+  it("hardy: raises still cause wounds when shaken", () => {
+    const a = createHardyWC()
+    a.send({ type: "TAKE_DAMAGE", margin: dm(0), soakSuccesses: sk(0), incapRoll: ir(0) })
+    expect(isShaken(snap(a))).toBe(true)
+    a.send({ type: "TAKE_DAMAGE", margin: dm(4), soakSuccesses: sk(0), incapRoll: ir(0) })
     expect(isShaken(snap(a))).toBe(true)
     expect(snap(a).context.wounds).toBe(1)
   })
