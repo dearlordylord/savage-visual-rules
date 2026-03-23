@@ -30,7 +30,11 @@ export function StateTree({ snapshot }: { snapshot: SavageSnapshot }) {
                 active={snapshot.matches({ alive: { damageTrack: { active: "unshaken" } } })}
               />
               <StateLeaf
-                label={m.state_shaken()}
+                label={
+                  snapshot.matches({ alive: { damageTrack: { active: "shaken" } } }) && snapshot.context.wounds > 0
+                    ? `${m.state_shaken()} + ${m.state_wounded()} (${snapshot.context.wounds})`
+                    : m.state_shaken()
+                }
                 active={snapshot.matches({ alive: { damageTrack: { active: "shaken" } } })}
               />
               <StateLeaf
